@@ -162,6 +162,9 @@ export async function POST(request: Request) {
           sourcePriority.indexOf(a.source) - sourcePriority.indexOf(b.source)
         )[0]
         
+        // Collect all unique sources from matched events
+        const allSources = [...new Set(matchedEvents.map(e => e.source))]
+        
         aggregatedEvents.push({
           title: primaryEvent.title,
           description: matchedEvents.find(e => e.description)?.description || null,
@@ -175,6 +178,7 @@ export async function POST(request: Request) {
           event_type: determineEventType(primaryEvent),
           source_events: matchedEvents.map(e => e.id),
           primary_source: primaryEvent.source,
+          sources: allSources, // All sources this event appears in
           is_hidden: false,
           has_conflict: false,
           conflict_ok: false,
@@ -228,6 +232,7 @@ export async function POST(request: Request) {
           all_day: event.all_day,
           location: event.location,
           source_events: event.source_events,
+          sources: event.sources,
           updated_at: new Date().toISOString()
         })
       } else {

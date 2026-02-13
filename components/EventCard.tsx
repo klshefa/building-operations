@@ -44,6 +44,11 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
   const startDate = parseISO(event.start_date)
   const hasTeamNeeds = event.needs_program_director || event.needs_office || event.needs_it || event.needs_security || event.needs_facilities
 
+  // Get all sources to display (use sources array if available, otherwise just primary_source)
+  const allSources = event.sources?.length > 0 ? event.sources : [event.primary_source]
+  // Remove duplicates and sort for consistent display
+  const uniqueSources = [...new Set(allSources)]
+
   if (compact) {
     return (
       <motion.div
@@ -59,10 +64,12 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${sourceColors[event.primary_source]}`}>
-                {sourceLabels[event.primary_source]}
-              </span>
+            <div className="flex items-center gap-1 mb-1 flex-wrap">
+              {uniqueSources.map((source) => (
+                <span key={source} className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${sourceColors[source]}`}>
+                  {sourceLabels[source]}
+                </span>
+              ))}
               {event.is_hidden && <EyeSlashIcon className="w-3 h-3 text-slate-400" />}
               {event.has_conflict && !event.conflict_ok && (
                 <ExclamationTriangleIcon className="w-3 h-3 text-red-500" />
@@ -104,10 +111,12 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[event.primary_source]}`}>
-              {sourceLabels[event.primary_source]}
-            </span>
+          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+            {uniqueSources.map((source) => (
+              <span key={source} className={`text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[source]}`}>
+                {sourceLabels[source]}
+              </span>
+            ))}
             {event.is_hidden && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 flex items-center gap-1">
                 <EyeSlashIcon className="w-3 h-3" />

@@ -95,6 +95,7 @@ export interface OpsEvent {
   // Source tracking
   source_events: string[] // Array of raw_event IDs that matched to this event
   primary_source: EventSource
+  sources: EventSource[] // All sources this event appears in
   
   // Metadata
   created_at: string
