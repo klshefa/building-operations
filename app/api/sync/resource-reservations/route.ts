@@ -115,6 +115,14 @@ export async function POST(request: Request) {
 
     console.log(`Fetched ${rows.length} resource reservations from BigQuery`)
 
+    // Helper to extract date value (handles both struct and string formats)
+    const getDateValue = (d: any) => {
+      if (!d) return null
+      if (typeof d === 'string') return d
+      if (d.value) return d.value
+      return String(d)
+    }
+
     if (rows.length === 0) {
       return NextResponse.json({
         success: true,
@@ -131,9 +139,12 @@ export async function POST(request: Request) {
       // Skip class schedules for now (they clutter the calendar)
       if (row.is_class) continue
       
+      const startDateStr = getDateValue(row.start_date)
+      const endDateStr = getDateValue(row.end_date)
+      
       const dates = row.days 
-        ? expandRecurringDates(row.start_date, row.end_date, row.days, schoolYearEnd)
-        : [parseISO(row.start_date)]
+        ? expandRecurringDates(startDateStr, endDateStr, row.days, schoolYearEnd)
+        : [parseISO(startDateStr)]
 
       for (const date of dates) {
         const dateStr = format(date, 'yyyy-MM-dd')

@@ -85,14 +85,22 @@ export async function POST(request: Request) {
       })
     }
 
+    // Helper to extract date value (handles both struct and string formats)
+    const getDateValue = (d: any) => {
+      if (!d) return null
+      if (typeof d === 'string') return d
+      if (d.value) return d.value
+      return String(d)
+    }
+
     // Transform to raw events
     const rawEvents = rows.map((row: any) => ({
       source: 'bigquery_group',
       source_id: row.source_id,
       title: row.title || 'Untitled Event',
       description: null,
-      start_date: row.start_date,
-      end_date: row.end_date,
+      start_date: getDateValue(row.start_date),
+      end_date: getDateValue(row.end_date),
       start_time: row.start_time,
       end_time: row.end_time,
       location: row.location === 'None' ? null : row.location,
