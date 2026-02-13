@@ -3,14 +3,11 @@
 import { useEffect, useState, createContext, useContext } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
-import type { UserRole, TeamType } from '@/lib/types'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   hasAccess: boolean
-  userRole: UserRole | null
-  userTeams: TeamType[]
   signIn: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -29,8 +26,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasAccess, setHasAccess] = useState(false)
-  const [userRole, setUserRole] = useState<UserRole | null>(null)
-  const [userTeams, setUserTeams] = useState<TeamType[]>([])
 
   useEffect(() => {
     checkUser()
@@ -42,8 +37,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkAccess(session.user.email)
       } else {
         setHasAccess(false)
-        setUserRole(null)
-        setUserTeams([])
       }
     })
 
@@ -66,9 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = createClient()
     
     try {
+      // Check if user has access to building operations
       const { data, error } = await supabase
         .from('ops_users')
-        .select('email, role, teams')
+        .select('email')
         .eq('email', email)
         .eq('is_active', true)
         .single()
@@ -76,18 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error || !data) {
         console.log('User not authorized for building operations:', email)
         setHasAccess(false)
-        setUserRole(null)
-        setUserTeams([])
       } else {
         setHasAccess(true)
-        setUserRole(data.role as UserRole)
-        setUserTeams(data.teams as TeamType[] || [])
       }
     } catch (err) {
       console.error('Error checking access:', err)
       setHasAccess(false)
-      setUserRole(null)
-      setUserTeams([])
     }
   }
 
@@ -110,13 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut({ scope: 'global' })
     setUser(null)
     setHasAccess(false)
-    setUserRole(null)
-    setUserTeams([])
     window.location.href = '/'
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, hasAccess, userRole, userTeams, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, hasAccess, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )
