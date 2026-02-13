@@ -2,60 +2,133 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, parseISO, addMonths, subMonths, isSameDay } from 'date-fns'
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval, 
+  isSameMonth, 
+  isToday, 
+  parseISO, 
+  addMonths, 
+  subMonths,
+  addWeeks,
+  subWeeks,
+  addDays,
+  subDays,
+  isSameDay 
+} from 'date-fns'
 import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
-import { createClient } from '@/lib/supabase/client'
-import type { OpsEvent } from '@/lib/types'
+import EventCard from '@/components/EventCard'
+import type { OpsEvent, EventSource } from '@/lib/types'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  CalendarDaysIcon,
+  Squares2X2Icon,
+  ViewColumnsIcon,
 } from '@heroicons/react/24/outline'
+
+type ViewMode = 'month' | 'week' | 'day'
+
+const sourceColors: Record<EventSource, string> = {
+  bigquery_group: 'bg-purple-100 text-purple-700',
+  bigquery_resource: 'bg-blue-100 text-blue-700',
+  calendar_staff: 'bg-amber-100 text-amber-700',
+  calendar_ls: 'bg-green-100 text-green-700',
+  calendar_ms: 'bg-teal-100 text-teal-700',
+  manual: 'bg-slate-100 text-slate-700',
+}
+
+const sourceLabels: Record<EventSource, string> = {
+  bigquery_group: 'VC Event',
+  bigquery_resource: 'VC Resource',
+  calendar_staff: 'Staff Cal',
+  calendar_ls: 'LS Cal',
+  calendar_ms: 'MS Cal',
+  manual: 'Manual',
+}
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   useEffect(() => {
     fetchEvents()
-  }, [currentDate])
+  }, [currentDate, viewMode])
 
   async function fetchEvents() {
     setLoading(true)
-    const supabase = createClient()
-    const start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
-    const end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
-
-    const { data, error } = await supabase
-      .from('ops_events')
-      .select('*')
-      .gte('start_date', start)
-      .lte('start_date', end)
-      .eq('is_hidden', false)
-      .order('start_date', { ascending: true })
-      .order('start_time', { ascending: true })
-
-    if (error) {
-      console.error('Error fetching events:', error)
+    
+    let start: string
+    let end: string
+    
+    if (viewMode === 'month') {
+      start = format(startOfMonth(currentDate), 'yyyy-MM-dd')
+      end = format(endOfMonth(currentDate), 'yyyy-MM-dd')
+    } else if (viewMode === 'week') {
+      start = format(startOfWeek(currentDate), 'yyyy-MM-dd')
+      end = format(endOfWeek(currentDate), 'yyyy-MM-dd')
     } else {
-      setEvents(data || [])
+      start = format(currentDate, 'yyyy-MM-dd')
+      end = format(currentDate, 'yyyy-MM-dd')
+    }
+
+    try {
+      const res = await fetch(`/api/events?startDate=${start}&endDate=${end}&hideHidden=true`)
+      if (res.ok) {
+        const { data } = await res.json()
+        setEvents(data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching events:', err)
     }
     setLoading(false)
   }
 
-  const monthStart = startOfMonth(currentDate)
-  const monthEnd = endOfMonth(currentDate)
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
-
-  // Pad start of month to align with Sunday
-  const startPadding = monthStart.getDay()
-  const paddedDays = Array(startPadding).fill(null).concat(days)
+  function navigate(direction: 'prev' | 'next') {
+    if (viewMode === 'month') {
+      setCurrentDate(direction === 'prev' ? subMonths(currentDate, 1) : addMonths(currentDate, 1))
+    } else if (viewMode === 'week') {
+      setCurrentDate(direction === 'prev' ? subWeeks(currentDate, 1) : addWeeks(currentDate, 1))
+    } else {
+      setCurrentDate(direction === 'prev' ? subDays(currentDate, 1) : addDays(currentDate, 1))
+    }
+  }
 
   function getEventsForDay(date: Date) {
     return events.filter(e => isSameDay(parseISO(e.start_date), date))
   }
+
+  function getHeaderText() {
+    if (viewMode === 'month') {
+      return format(currentDate, 'MMMM yyyy')
+    } else if (viewMode === 'week') {
+      const weekStart = startOfWeek(currentDate)
+      const weekEnd = endOfWeek(currentDate)
+      return `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`
+    } else {
+      return format(currentDate, 'EEEE, MMMM d, yyyy')
+    }
+  }
+
+  // Month view data
+  const monthStart = startOfMonth(currentDate)
+  const monthEnd = endOfMonth(currentDate)
+  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
+  const startPadding = monthStart.getDay()
+  const paddedMonthDays = Array(startPadding).fill(null).concat(monthDays)
+
+  // Week view data
+  const weekStart = startOfWeek(currentDate)
+  const weekEnd = endOfWeek(currentDate)
+  const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd })
 
   const selectedDayEvents = selectedDate ? getEventsForDay(selectedDate) : []
 
@@ -66,57 +139,92 @@ export default function CalendarPage() {
         
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <h1 className="text-3xl font-bold text-slate-800">Calendar</h1>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-              >
-                <ChevronLeftIcon className="w-5 h-5 text-slate-600" />
-              </button>
-              <span className="text-lg font-semibold text-slate-800 min-w-[180px] text-center">
-                {format(currentDate, 'MMMM yyyy')}
-              </span>
-              <button
-                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-              >
-                <ChevronRightIcon className="w-5 h-5 text-slate-600" />
-              </button>
-              <button
-                onClick={() => setCurrentDate(new Date())}
-                className="ml-2 px-3 py-1.5 text-sm bg-shefa-blue-600 text-white rounded-lg hover:bg-shefa-blue-700 transition-colors"
-              >
-                Today
-              </button>
+            
+            <div className="flex items-center gap-4">
+              {/* View Mode Toggle */}
+              <div className="flex items-center bg-white rounded-lg border border-slate-200 p-1">
+                <button
+                  onClick={() => setViewMode('month')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'month' ? 'bg-shefa-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title="Month view"
+                >
+                  <Squares2X2Icon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('week')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'week' ? 'bg-shefa-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title="Week view"
+                >
+                  <ViewColumnsIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('day')}
+                  className={`p-2 rounded-md transition-colors ${
+                    viewMode === 'day' ? 'bg-shefa-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                  title="Day view"
+                >
+                  <CalendarDaysIcon className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Navigation */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate('prev')}
+                  className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  <ChevronLeftIcon className="w-5 h-5 text-slate-600" />
+                </button>
+                <span className="text-lg font-semibold text-slate-800 min-w-[200px] text-center">
+                  {getHeaderText()}
+                </span>
+                <button
+                  onClick={() => navigate('next')}
+                  className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                >
+                  <ChevronRightIcon className="w-5 h-5 text-slate-600" />
+                </button>
+                <button
+                  onClick={() => setCurrentDate(new Date())}
+                  className="ml-2 px-3 py-1.5 text-sm bg-shefa-blue-600 text-white rounded-lg hover:bg-shefa-blue-700 transition-colors"
+                >
+                  Today
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Calendar Grid */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4"
-            >
-              {/* Day headers */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar days */}
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
+            </div>
+          ) : viewMode === 'month' ? (
+            /* Month View */
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4"
+              >
+                {/* Day headers */}
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">
+                      {day}
+                    </div>
+                  ))}
                 </div>
-              ) : (
+
+                {/* Calendar days */}
                 <div className="grid grid-cols-7 gap-1">
-                  {paddedDays.map((day, idx) => {
+                  {paddedMonthDays.map((day, idx) => {
                     if (!day) {
                       return <div key={`pad-${idx}`} className="aspect-square" />
                     }
@@ -159,69 +267,121 @@ export default function CalendarPage() {
                     )
                   })}
                 </div>
-              )}
-            </motion.div>
+              </motion.div>
 
-            {/* Selected Day Events */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-4"
-            >
-              <h2 className="text-lg font-semibold text-slate-800 mb-4">
-                {selectedDate ? format(selectedDate, 'EEEE, MMMM d') : 'Select a day'}
-              </h2>
+              {/* Selected Day Events Sidebar */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="bg-white rounded-xl shadow-sm border border-slate-200 p-4"
+              >
+                <h2 className="text-lg font-semibold text-slate-800 mb-4">
+                  {selectedDate ? format(selectedDate, 'EEEE, MMMM d') : 'Select a day'}
+                </h2>
 
-              {selectedDate ? (
-                selectedDayEvents.length === 0 ? (
-                  <p className="text-slate-500 text-center py-8">No events on this day</p>
+                {selectedDate ? (
+                  selectedDayEvents.length === 0 ? (
+                    <p className="text-slate-500 text-center py-8">No events on this day</p>
+                  ) : (
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                      {selectedDayEvents.map(event => (
+                        <EventCard key={event.id} event={event} compact />
+                      ))}
+                    </div>
+                  )
                 ) : (
-                  <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                    {selectedDayEvents.map(event => (
-                      <div
-                        key={event.id}
-                        className={`p-3 rounded-lg border ${
-                          event.has_conflict && !event.conflict_ok
-                            ? 'bg-red-50 border-red-200'
-                            : 'bg-slate-50 border-slate-200'
-                        }`}
-                      >
-                        <h3 className="font-medium text-slate-800">{event.title}</h3>
-                        <div className="text-sm text-slate-500 mt-1">
-                          {event.start_time && (
-                            <span>{event.start_time}{event.end_time && ` - ${event.end_time}`}</span>
-                          )}
-                          {event.location && (
-                            <span className="ml-2">• {event.location}</span>
-                          )}
-                        </div>
-                        {/* Team indicators */}
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {event.needs_program_director && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">Program</span>
-                          )}
-                          {event.needs_office && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-100 text-pink-700">Office</span>
-                          )}
-                          {event.needs_it && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-700">IT</span>
-                          )}
-                          {event.needs_security && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Security</span>
-                          )}
-                          {event.needs_facilities && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">Facilities</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  <p className="text-slate-500 text-center py-8">Click on a day to see events</p>
+                )}
+              </motion.div>
+            </div>
+          ) : viewMode === 'week' ? (
+            /* Week View */
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+            >
+              {/* Day headers */}
+              <div className="grid grid-cols-7 border-b border-slate-200">
+                {weekDays.map(day => (
+                  <div 
+                    key={day.toISOString()} 
+                    className={`text-center py-3 border-r last:border-r-0 border-slate-200 ${
+                      isToday(day) ? 'bg-shefa-blue-50' : ''
+                    }`}
+                  >
+                    <div className="text-xs font-medium text-slate-500">{format(day, 'EEE')}</div>
+                    <div className={`text-lg font-semibold ${isToday(day) ? 'text-shefa-blue-600' : 'text-slate-800'}`}>
+                      {format(day, 'd')}
+                    </div>
                   </div>
-                )
-              ) : (
-                <p className="text-slate-500 text-center py-8">Click on a day to see events</p>
-              )}
+                ))}
+              </div>
+
+              {/* Events grid */}
+              <div className="grid grid-cols-7 min-h-[500px]">
+                {weekDays.map(day => {
+                  const dayEvents = getEventsForDay(day)
+                  return (
+                    <div 
+                      key={day.toISOString()} 
+                      className={`border-r last:border-r-0 border-slate-200 p-2 ${
+                        isToday(day) ? 'bg-shefa-blue-50/30' : ''
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        {dayEvents.map(event => (
+                          <div
+                            key={event.id}
+                            className={`p-2 rounded-lg text-xs ${
+                              event.has_conflict && !event.conflict_ok
+                                ? 'bg-red-100 border border-red-200'
+                                : 'bg-slate-100 border border-slate-200'
+                            }`}
+                          >
+                            <div className="font-medium text-slate-800 truncate">{event.title}</div>
+                            {event.start_time && (
+                              <div className="text-slate-500 mt-0.5">{event.start_time}</div>
+                            )}
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(event.sources?.length > 0 ? event.sources : [event.primary_source]).map(source => (
+                                <span key={source} className={`text-[9px] px-1 py-0.5 rounded ${sourceColors[source]}`}>
+                                  {sourceLabels[source]}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {dayEvents.length === 0 && (
+                          <div className="text-xs text-slate-400 text-center py-4">No events</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </motion.div>
-          </div>
+          ) : (
+            /* Day View */
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-white rounded-xl shadow-sm border border-slate-200 p-6"
+            >
+              <div className="space-y-4">
+                {events.length === 0 ? (
+                  <div className="text-center py-12">
+                    <CalendarDaysIcon className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500">No events on this day</p>
+                  </div>
+                ) : (
+                  events.map(event => (
+                    <EventCard key={event.id} event={event} />
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
         </main>
       </div>
     </AuthRequired>
