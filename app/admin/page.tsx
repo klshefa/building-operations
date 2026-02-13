@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
+import { StaffLookup, type StaffMember } from '@/components/StaffLookup'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import type { OpsUser, UserRole, TeamType } from '@/lib/types'
@@ -74,8 +75,7 @@ export default function AdminPage() {
   const [syncStatus, setSyncStatus] = useState<Record<string, { success: boolean; message: string }>>({})
   
   // Add user form
-  const [newEmail, setNewEmail] = useState('')
-  const [newName, setNewName] = useState('')
+  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
   const [newRole, setNewRole] = useState<UserRole>('viewer')
   const [newTeams, setNewTeams] = useState<TeamType[]>([])
   const [adding, setAdding] = useState(false)
@@ -266,8 +266,8 @@ export default function AdminPage() {
 
   async function addUser(e: React.FormEvent) {
     e.preventDefault()
-    if (!newEmail.endsWith('@shefaschool.org')) {
-      alert('Email must be @shefaschool.org')
+    if (!selectedStaff) {
+      alert('Please select a staff member')
       return
     }
 
@@ -277,8 +277,8 @@ export default function AdminPage() {
     const { error } = await supabase
       .from('ops_users')
       .insert({
-        email: newEmail.toLowerCase(),
-        name: newName || null,
+        email: selectedStaff.email.toLowerCase().trim(),
+        name: `${selectedStaff.first_name} ${selectedStaff.last_name}`,
         role: newRole,
         teams: newTeams,
         is_active: true,
@@ -286,10 +286,13 @@ export default function AdminPage() {
 
     if (error) {
       console.error('Error adding user:', error)
-      alert('Error adding user: ' + error.message)
+      if (error.message.includes('duplicate')) {
+        alert('This staff member already has access.')
+      } else {
+        alert('Error adding user: ' + error.message)
+      }
     } else {
-      setNewEmail('')
-      setNewName('')
+      setSelectedStaff(null)
       setNewRole('viewer')
       setNewTeams([])
       fetchUsers()
@@ -562,54 +565,71 @@ export default function AdminPage() {
                   {/* Add User Form */}
                   <form onSubmit={addUser} className="mb-6 p-4 bg-slate-50 rounded-lg">
                     <h3 className="text-sm font-medium text-slate-700 mb-3">Add New User</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <input
-                        type="email"
-                        value={newEmail}
-                        onChange={(e) => setNewEmail(e.target.value)}
-                        placeholder="email@shefaschool.org"
-                        required
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
-                      />
-                      <input
-                        type="text"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        placeholder="Name (optional)"
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                      <select
-                        value={newRole}
-                        onChange={(e) => setNewRole(e.target.value as UserRole)}
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
-                      >
-                        {roleOptions.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {teamOptions.map(team => (
+                    
+                    {/* Staff Lookup */}
+                    <div className="mb-3">
+                      <label className="block text-xs text-slate-500 mb-1.5">Search Staff</label>
+                      {selectedStaff ? (
+                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                          <div>
+                            <p className="font-medium text-slate-800">
+                              {selectedStaff.first_name} {selectedStaff.last_name}
+                            </p>
+                            <p className="text-sm text-slate-500">{selectedStaff.email}</p>
+                          </div>
                           <button
-                            key={team.value}
                             type="button"
-                            onClick={() => toggleTeam(team.value)}
-                            className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                              newTeams.includes(team.value)
-                                ? 'bg-shefa-blue-600 text-white'
-                                : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                            }`}
+                            onClick={() => setSelectedStaff(null)}
+                            className="text-slate-400 hover:text-slate-600 p-1"
                           >
-                            {team.label}
+                            <XCircleIcon className="w-5 h-5" />
                           </button>
-                        ))}
+                        </div>
+                      ) : (
+                        <StaffLookup
+                          onSelect={(staff) => setSelectedStaff(staff)}
+                          placeholder="Type to search staff by name or email..."
+                        />
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1.5">Role</label>
+                        <select
+                          value={newRole}
+                          onChange={(e) => setNewRole(e.target.value as UserRole)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                        >
+                          {roleOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1.5">Teams</label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {teamOptions.map(team => (
+                            <button
+                              key={team.value}
+                              type="button"
+                              onClick={() => toggleTeam(team.value)}
+                              className={`text-xs px-2 py-1 rounded-full transition-colors ${
+                                newTeams.includes(team.value)
+                                  ? 'bg-shefa-blue-600 text-white'
+                                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                              }`}
+                            >
+                              {team.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <button
                       type="submit"
-                      disabled={adding}
-                      className="mt-3 bg-shefa-blue-600 hover:bg-shefa-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                      disabled={adding || !selectedStaff}
+                      className="mt-4 bg-shefa-blue-600 hover:bg-shefa-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <UserPlusIcon className="w-4 h-4" />
                       {adding ? 'Adding...' : 'Add User'}
