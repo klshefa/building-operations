@@ -102,7 +102,8 @@ export async function POST(request: Request) {
         Event as event_ref,
         Conflict as has_conflict,
         \`Approval Status\` as approval_status,
-        Class_Schedule as is_class
+        Class_Schedule as is_class,
+        CAST(Reservation_ID AS STRING) as reservation_id
       FROM \`vc_data.resource_reservations\`
       WHERE Start_Date <= @endDate
         AND COALESCE(End_Date, Start_Date) >= @today
@@ -182,6 +183,7 @@ export async function POST(request: Request) {
           location: null,
           resource: row.resource,
           contact_person: row.contact_person === 'None' ? null : row.contact_person,
+          reservation_id: row.reservation_id || null,
           recurring_pattern: row.days || null,
           raw_data: { ...row, expanded_date: dateStr },
           synced_at: new Date().toISOString()

@@ -61,7 +61,8 @@ export async function POST(request: Request) {
         End_Time as end_time,
         Location as location,
         Resource as resource,
-        Contact_Person as contact_person
+        Contact_Person as contact_person,
+        CAST(Reservation_ID AS STRING) as reservation_id
       FROM \`vc_data.group_events\`
       WHERE Start_Date >= @today
         AND Start_Date <= @endDate
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
       location: row.location === 'None' ? null : row.location,
       resource: row.resource === 'None' ? null : row.resource,
       contact_person: row.contact_person === 'None' ? null : row.contact_person,
+      reservation_id: row.reservation_id || null,
       raw_data: row,
       synced_at: new Date().toISOString()
     }))

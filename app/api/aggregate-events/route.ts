@@ -35,6 +35,13 @@ function shouldMatch(event1: any, event2: any): { match: boolean; confidence: nu
     return { match: false, confidence: 0 }
   }
   
+  // Direct match via reservation_id (highest confidence) - for BigQuery sources
+  if (event1.reservation_id && event2.reservation_id && 
+      event1.reservation_id === event2.reservation_id) {
+    return { match: true, confidence: 1.0 }
+  }
+  
+  // Fallback to fuzzy matching for calendars/manual entries
   // Check title similarity
   const titleSim = similarity(event1.title, event2.title)
   

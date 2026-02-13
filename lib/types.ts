@@ -35,6 +35,7 @@ export interface RawEvent {
   location?: string
   resource?: string
   contact_person?: string
+  reservation_id?: string // For matching events across BigQuery sources
   recurring_pattern?: string // e.g., "T,R" for Tuesday/Thursday
   raw_data: Record<string, unknown>
   synced_at: string
