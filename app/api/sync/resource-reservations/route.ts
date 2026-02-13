@@ -88,6 +88,7 @@ export async function POST(request: Request) {
     const supabase = getSupabaseClient()
 
     // Query BigQuery for resource reservations
+    // Note: Use COALESCE for End_Date since single-day reservations may have NULL End_Date
     const query = `
       SELECT
         Description as title,
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
         Class_Schedule as is_class
       FROM \`vc_data.resource_reservations\`
       WHERE Start_Date <= @endDate
-        AND End_Date >= @today
+        AND COALESCE(End_Date, Start_Date) >= @today
     `
 
     const [rows] = await bigquery.query({
