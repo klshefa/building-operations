@@ -31,6 +31,11 @@ import {
   CalendarDaysIcon,
   Squares2X2Icon,
   ViewColumnsIcon,
+  UserGroupIcon,
+  BuildingOfficeIcon,
+  ComputerDesktopIcon,
+  ShieldCheckIcon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline'
 
 type ViewMode = 'month' | 'week' | 'day'
@@ -332,29 +337,41 @@ export default function CalendarPage() {
                       }`}
                     >
                       <div className="space-y-2">
-                        {dayEvents.map(event => (
-                          <div
-                            key={event.id}
-                            onClick={() => router.push(`/event/${event.id}`)}
-                            className={`p-2 rounded-lg text-xs cursor-pointer hover:opacity-80 transition-opacity ${
-                              event.has_conflict && !event.conflict_ok
-                                ? 'bg-red-100 border border-red-200'
-                                : 'bg-slate-100 border border-slate-200 hover:bg-slate-200'
-                            }`}
-                          >
-                            <div className="font-medium text-slate-800 truncate">{event.title}</div>
-                            {event.start_time && (
-                              <div className="text-slate-500 mt-0.5">{event.start_time}</div>
-                            )}
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {(event.sources?.length > 0 ? event.sources : [event.primary_source]).map(source => (
-                                <span key={source} className={`text-[9px] px-1 py-0.5 rounded ${sourceColors[source]}`}>
-                                  {sourceLabels[source]}
-                                </span>
-                              ))}
+                        {dayEvents.map(event => {
+                          const hasTeams = event.needs_program_director || event.needs_office || event.needs_it || event.needs_security || event.needs_facilities
+                          return (
+                            <div
+                              key={event.id}
+                              onClick={() => router.push(`/event/${event.id}`)}
+                              className={`p-2 rounded-lg text-xs cursor-pointer hover:opacity-80 transition-opacity ${
+                                event.has_conflict && !event.conflict_ok
+                                  ? 'bg-red-100 border border-red-200'
+                                  : 'bg-slate-100 border border-slate-200 hover:bg-slate-200'
+                              }`}
+                            >
+                              <div className="font-medium text-slate-800 truncate">{event.title}</div>
+                              {event.start_time && (
+                                <div className="text-slate-500 mt-0.5">{event.start_time}</div>
+                              )}
+                              <div className="flex flex-wrap gap-0.5 mt-1">
+                                {(event.sources?.length > 0 ? event.sources : [event.primary_source]).map(source => (
+                                  <span key={source} className={`text-[8px] px-1 py-0.5 rounded ${sourceColors[source]}`}>
+                                    {sourceLabels[source]}
+                                  </span>
+                                ))}
+                              </div>
+                              {hasTeams && (
+                                <div className="flex flex-wrap gap-0.5 mt-1">
+                                  {event.needs_program_director && <UserGroupIcon className="w-3 h-3 text-indigo-600" title="Program" />}
+                                  {event.needs_office && <BuildingOfficeIcon className="w-3 h-3 text-pink-600" title="Office" />}
+                                  {event.needs_it && <ComputerDesktopIcon className="w-3 h-3 text-cyan-600" title="IT" />}
+                                  {event.needs_security && <ShieldCheckIcon className="w-3 h-3 text-amber-600" title="Security" />}
+                                  {event.needs_facilities && <WrenchScrewdriverIcon className="w-3 h-3 text-emerald-600" title="Facilities" />}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                         {dayEvents.length === 0 && (
                           <div className="text-xs text-slate-400 text-center py-4">No events</div>
                         )}

@@ -352,6 +352,42 @@ export default function EventDetailPage() {
                 rows={2}
                 className="mt-2 text-slate-600 w-full border-0 border-b-2 border-transparent hover:border-slate-200 focus:border-shefa-blue-500 focus:outline-none transition-colors bg-transparent resize-none"
               />
+              
+              {/* Team indicators at top */}
+              {assignedTeams.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {event.needs_program_director && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 flex items-center gap-1">
+                      <UserGroupIcon className="w-3 h-3" />
+                      Program
+                    </span>
+                  )}
+                  {event.needs_office && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-pink-100 text-pink-700 flex items-center gap-1">
+                      <BuildingOfficeIcon className="w-3 h-3" />
+                      Office
+                    </span>
+                  )}
+                  {event.needs_it && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-cyan-100 text-cyan-700 flex items-center gap-1">
+                      <ComputerDesktopIcon className="w-3 h-3" />
+                      IT
+                    </span>
+                  )}
+                  {event.needs_security && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">
+                      <ShieldCheckIcon className="w-3 h-3" />
+                      Security
+                    </span>
+                  )}
+                  {event.needs_facilities && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                      <WrenchScrewdriverIcon className="w-3 h-3" />
+                      Facilities
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="text-center bg-shefa-blue-50 rounded-lg px-4 py-3 shrink-0">

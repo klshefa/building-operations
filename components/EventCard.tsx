@@ -100,6 +100,41 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
                 </span>
               )}
             </div>
+            {/* Team indicators */}
+            {hasTeamNeeds && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {event.needs_program_director && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 flex items-center gap-0.5">
+                    <UserGroupIcon className="w-2.5 h-2.5" />
+                    Program
+                  </span>
+                )}
+                {event.needs_office && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 flex items-center gap-0.5">
+                    <BuildingOfficeIcon className="w-2.5 h-2.5" />
+                    Office
+                  </span>
+                )}
+                {event.needs_it && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-700 flex items-center gap-0.5">
+                    <ComputerDesktopIcon className="w-2.5 h-2.5" />
+                    IT
+                  </span>
+                )}
+                {event.needs_security && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                    <ShieldCheckIcon className="w-2.5 h-2.5" />
+                    Security
+                  </span>
+                )}
+                {event.needs_facilities && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 flex items-center gap-0.5">
+                    <WrenchScrewdriverIcon className="w-2.5 h-2.5" />
+                    Facilities
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
