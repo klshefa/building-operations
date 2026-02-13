@@ -6,7 +6,6 @@ import { format, parseISO, isToday, isTomorrow, addDays } from 'date-fns'
 import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/hooks/useAuth'
 import type { OpsEvent, TeamType } from '@/lib/types'
 import {
@@ -45,23 +44,19 @@ export default function MyTasksPage() {
 
   async function fetchEvents() {
     setLoading(true)
-    const supabase = createClient()
     const today = format(new Date(), 'yyyy-MM-dd')
     const nextMonth = format(addDays(new Date(), 30), 'yyyy-MM-dd')
 
-    const { data, error } = await supabase
-      .from('ops_events')
-      .select('*')
-      .gte('start_date', today)
-      .lte('start_date', nextMonth)
-      .eq('is_hidden', false)
-      .order('start_date', { ascending: true })
-      .order('start_time', { ascending: true })
-
-    if (error) {
-      console.error('Error fetching events:', error)
-    } else {
-      setEvents(data || [])
+    try {
+      const res = await fetch(`/api/events?startDate=${today}&endDate=${nextMonth}&hideHidden=true`)
+      if (res.ok) {
+        const { data } = await res.json()
+        setEvents(data || [])
+      } else {
+        console.error('Error fetching events')
+      }
+    } catch (err) {
+      console.error('Error fetching events:', err)
     }
     setLoading(false)
   }

@@ -63,34 +63,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function checkAccess(email: string) {
-    // Hardcoded admin access
-    if (email === 'keith.lowry@shefaschool.org') {
-      setHasAccess(true)
-      setUserRole('admin')
-      setUserTeams(['program_director', 'office', 'it', 'security', 'facilities'])
-      return
-    }
-    
-    const supabase = createClient()
-    
     try {
-      // Check if user has access to building operations
-      const { data, error } = await supabase
-        .from('ops_users')
-        .select('email, role, teams')
-        .eq('email', email)
-        .eq('is_active', true)
-        .single()
+      // Use API route to check access (bypasses RLS)
+      const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(email.toLowerCase())}`)
+      const data = await response.json()
 
-      if (error || !data) {
+      if (data.hasAccess) {
+        setHasAccess(true)
+        setUserRole(data.role as UserRole)
+        setUserTeams((data.teams || []) as TeamType[])
+      } else {
         console.log('User not authorized for building operations:', email)
         setHasAccess(false)
         setUserRole(null)
         setUserTeams([])
-      } else {
-        setHasAccess(true)
-        setUserRole(data.role as UserRole)
-        setUserTeams((data.teams || []) as TeamType[])
       }
     } catch (err) {
       console.error('Error checking access:', err)
