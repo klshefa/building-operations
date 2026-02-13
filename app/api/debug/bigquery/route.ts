@@ -26,6 +26,7 @@ export async function GET(request: Request) {
           Description,
           Resource,
           Start_Date,
+          End_Date,
           Start_Time,
           End_Time,
           Days,
