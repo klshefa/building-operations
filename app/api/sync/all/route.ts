@@ -59,6 +59,25 @@ export async function POST(request: Request) {
     }
   }
 
+  // Apply event filters to hide matching events
+  try {
+    const filterResponse = await fetch(`${baseUrl}/api/filters/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const filterData = await filterResponse.json()
+    results['filters'] = {
+      success: filterData.success,
+      message: filterData.message || filterData.error || 'Unknown',
+      records: filterData.hidden_count
+    }
+  } catch (error: any) {
+    results['filters'] = {
+      success: false,
+      message: error.message || 'Failed to apply filters'
+    }
+  }
+
   const totalRecords = Object.values(results)
     .filter(r => r.success)
     .reduce((sum, r) => sum + (r.records || 0), 0)
