@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import type { OpsEvent, EventSource, EventType } from '@/lib/types'
 import {
   ArrowLeftIcon,
@@ -11,8 +11,6 @@ import {
   ClockIcon,
   UsersIcon,
   CalendarIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   CheckIcon,
   ExclamationTriangleIcon,
   EyeSlashIcon,
@@ -60,11 +58,13 @@ const eventTypes: { value: EventType; label: string }[] = [
 interface TeamSection {
   id: string
   title: string
+  shortTitle: string
   icon: React.ElementType
   needsKey: keyof OpsEvent
   notesKey: keyof OpsEvent
   color: string
   bgColor: string
+  borderColor: string
   extraFields?: { key: keyof OpsEvent; label: string; type: 'text' | 'number' | 'textarea' | 'checkbox' }[]
 }
 
@@ -72,29 +72,35 @@ const teamSections: TeamSection[] = [
   {
     id: 'program',
     title: 'Program Director',
+    shortTitle: 'Program',
     icon: UserGroupIcon,
     needsKey: 'needs_program_director',
     notesKey: 'program_director_notes',
     color: 'text-indigo-600',
-    bgColor: 'bg-indigo-50 border-indigo-200',
+    bgColor: 'bg-indigo-50',
+    borderColor: 'border-indigo-500',
   },
   {
     id: 'office',
     title: 'Office',
+    shortTitle: 'Office',
     icon: BuildingOfficeIcon,
     needsKey: 'needs_office',
     notesKey: 'office_notes',
     color: 'text-pink-600',
-    bgColor: 'bg-pink-50 border-pink-200',
+    bgColor: 'bg-pink-50',
+    borderColor: 'border-pink-500',
   },
   {
     id: 'it',
     title: 'IT / A/V',
+    shortTitle: 'IT',
     icon: ComputerDesktopIcon,
     needsKey: 'needs_it',
     notesKey: 'it_notes',
     color: 'text-cyan-600',
-    bgColor: 'bg-cyan-50 border-cyan-200',
+    bgColor: 'bg-cyan-50',
+    borderColor: 'border-cyan-500',
     extraFields: [
       { key: 'techs_needed', label: 'Techs Needed', type: 'number' },
       { key: 'av_equipment', label: 'A/V Equipment', type: 'text' },
@@ -104,11 +110,13 @@ const teamSections: TeamSection[] = [
   {
     id: 'security',
     title: 'Security',
+    shortTitle: 'Security',
     icon: ShieldCheckIcon,
     needsKey: 'needs_security',
     notesKey: 'security_notes',
     color: 'text-amber-600',
-    bgColor: 'bg-amber-50 border-amber-200',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-500',
     extraFields: [
       { key: 'security_personnel_needed', label: 'Personnel Needed', type: 'number' },
       { key: 'building_open', label: 'Building Open After Hours', type: 'checkbox' },
@@ -118,16 +126,25 @@ const teamSections: TeamSection[] = [
   {
     id: 'facilities',
     title: 'Facilities',
+    shortTitle: 'Facilities',
     icon: WrenchScrewdriverIcon,
     needsKey: 'needs_facilities',
     notesKey: 'facilities_notes',
     color: 'text-emerald-600',
-    bgColor: 'bg-emerald-50 border-emerald-200',
+    bgColor: 'bg-emerald-50',
+    borderColor: 'border-emerald-500',
     extraFields: [
       { key: 'setup_instructions', label: 'Setup Instructions', type: 'textarea' },
     ],
   },
 ]
+
+// Clean location string - remove numeric prefixes like "2 Music Room" -> "Music Room"
+function cleanLocation(location: string | null | undefined): string {
+  if (!location) return ''
+  // Remove leading numbers and spaces (e.g., "2 Music Room" -> "Music Room")
+  return location.replace(/^\d+\s*/, '').trim()
+}
 
 export default function EventDetailPage() {
   const params = useParams()
@@ -136,8 +153,8 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [hasChanges, setHasChanges] = useState(false)
+  const [activeTeamTab, setActiveTeamTab] = useState<string | null>(null)
 
   useEffect(() => {
     fetchEvent()
@@ -155,14 +172,11 @@ export default function EventDetailPage() {
       
       setEvent(result.data)
       
-      // Auto-expand sections that are assigned
-      const autoExpand = new Set<string>()
-      teamSections.forEach(section => {
-        if (result.data[section.needsKey]) {
-          autoExpand.add(section.id)
-        }
-      })
-      setExpandedSections(autoExpand)
+      // Set active tab to first assigned team
+      const firstAssigned = teamSections.find(s => result.data[s.needsKey])
+      if (firstAssigned) {
+        setActiveTeamTab(firstAssigned.id)
+      }
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -177,16 +191,22 @@ export default function EventDetailPage() {
     setSaveStatus('idle')
   }
 
-  function toggleSection(sectionId: string) {
-    setExpandedSections(prev => {
-      const next = new Set(prev)
-      if (next.has(sectionId)) {
-        next.delete(sectionId)
-      } else {
-        next.add(sectionId)
-      }
-      return next
-    })
+  function toggleTeam(sectionId: string) {
+    if (!event) return
+    const section = teamSections.find(s => s.id === sectionId)
+    if (!section) return
+    
+    const isCurrentlyAssigned = event[section.needsKey] as boolean
+    updateField(section.needsKey, !isCurrentlyAssigned)
+    
+    // If assigning, switch to that tab
+    if (!isCurrentlyAssigned) {
+      setActiveTeamTab(sectionId)
+    } else if (activeTeamTab === sectionId) {
+      // If unassigning the active tab, switch to another assigned team
+      const otherAssigned = teamSections.find(s => s.id !== sectionId && event[s.needsKey])
+      setActiveTeamTab(otherAssigned?.id || null)
+    }
   }
 
   async function saveEvent() {
@@ -246,6 +266,8 @@ export default function EventDetailPage() {
 
   const startDate = parseISO(event.start_date)
   const uniqueSources = [...new Set(event.sources?.length > 0 ? event.sources : [event.primary_source])]
+  const assignedTeams = teamSections.filter(s => event[s.needsKey])
+  const activeSection = teamSections.find(s => s.id === activeTeamTab)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -332,7 +354,7 @@ export default function EventDetailPage() {
               />
             </div>
             
-            <div className="text-center bg-shefa-blue-50 rounded-lg px-4 py-3">
+            <div className="text-center bg-shefa-blue-50 rounded-lg px-4 py-3 shrink-0">
               <div className="text-3xl font-bold text-shefa-blue-600">
                 {format(startDate, 'd')}
               </div>
@@ -387,7 +409,7 @@ export default function EventDetailPage() {
               </label>
               <input
                 type="text"
-                value={event.location || ''}
+                value={cleanLocation(event.location)}
                 onChange={(e) => updateField('location', e.target.value)}
                 placeholder="Location"
                 className="mt-1 w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
@@ -411,16 +433,16 @@ export default function EventDetailPage() {
           </div>
         </motion.div>
 
-        {/* General Info Card */}
+        {/* General Info & Notes Card */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="bg-white rounded-xl border border-slate-200 p-6"
         >
-          <h2 className="text-lg font-semibold text-slate-800 mb-4">General Information</h2>
+          <h2 className="text-lg font-semibold text-slate-800 mb-4">Event Details</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="text-sm text-slate-600 font-medium flex items-center gap-1">
                 <UsersIcon className="w-4 h-4" />
@@ -463,11 +485,24 @@ export default function EventDetailPage() {
             </div>
           </div>
 
+          {/* General Notes - moved up */}
+          <div>
+            <label className="text-sm text-slate-600 font-medium">General Notes</label>
+            <p className="text-xs text-slate-400 mb-2">Notes that apply to the entire event</p>
+            <textarea
+              value={event.general_notes || ''}
+              onChange={(e) => updateField('general_notes', e.target.value)}
+              placeholder="Add general notes about this event..."
+              rows={4}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none resize-none"
+            />
+          </div>
+
           {/* Conflict section */}
           {event.has_conflict && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-start gap-3">
-                <ExclamationTriangleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <h3 className="font-medium text-red-700">Conflict Detected</h3>
                   <label className="flex items-center gap-2 mt-2">
@@ -492,184 +527,146 @@ export default function EventDetailPage() {
           )}
         </motion.div>
 
-        {/* Team Assignments */}
+        {/* Team Assignments - Tabbed Interface */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl border border-slate-200 p-6"
+          className="bg-white rounded-xl border border-slate-200 overflow-hidden"
         >
-          <h2 className="text-lg font-semibold text-slate-800 mb-4">Team Assignments</h2>
-          <p className="text-sm text-slate-500 mb-4">Select which teams need to be involved with this event</p>
-          
-          <div className="flex flex-wrap gap-2">
-            {teamSections.map(section => {
-              const isAssigned = event[section.needsKey] as boolean
-              const Icon = section.icon
-              
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => {
-                    updateField(section.needsKey, !isAssigned)
-                    if (!isAssigned) {
-                      setExpandedSections(prev => new Set([...prev, section.id]))
-                    }
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all ${
-                    isAssigned
-                      ? section.bgColor
-                      : 'bg-white border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <Icon className={`w-5 h-5 ${isAssigned ? section.color : 'text-slate-400'}`} />
-                  <span className={`font-medium ${isAssigned ? section.color : 'text-slate-600'}`}>
-                    {section.title}
-                  </span>
-                </button>
-              )
-            })}
+          {/* Team Toggle Buttons */}
+          <div className="p-4 bg-slate-50 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-800 mb-2">Team Assignments</h2>
+            <p className="text-sm text-slate-500 mb-3">Select which teams need to be involved</p>
+            
+            <div className="flex flex-wrap gap-2">
+              {teamSections.map(section => {
+                const isAssigned = event[section.needsKey] as boolean
+                const Icon = section.icon
+                
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => toggleTeam(section.id)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                      isAssigned
+                        ? `${section.bgColor} ${section.borderColor} ${section.color}`
+                        : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {section.shortTitle}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </motion.div>
 
-        {/* Team-Specific Sections */}
-        <div className="space-y-4">
-          {teamSections.map((section, index) => {
-            const isAssigned = event[section.needsKey] as boolean
-            const isExpanded = expandedSections.has(section.id)
-            const Icon = section.icon
-            
-            if (!isAssigned) return null
-            
-            return (
-              <motion.div
-                key={section.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 + index * 0.05 }}
-                className={`bg-white rounded-xl border ${isExpanded ? section.bgColor : 'border-slate-200'}`}
-              >
-                <button
-                  onClick={() => toggleSection(section.id)}
-                  className="w-full flex items-center justify-between p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${isExpanded ? 'bg-white' : 'bg-slate-100'}`}>
-                      <Icon className={`w-5 h-5 ${section.color}`} />
-                    </div>
-                    <div className="text-left">
-                      <h3 className={`font-semibold ${section.color}`}>{section.title}</h3>
-                      <p className="text-xs text-slate-500">
-                        {(event[section.notesKey] as string)?.substring(0, 50) || 'No notes yet'}
-                        {(event[section.notesKey] as string)?.length > 50 && '...'}
-                      </p>
+          {/* Team Tabs (only show if teams are assigned) */}
+          {assignedTeams.length > 0 && (
+            <>
+              {/* Tab Headers */}
+              <div className="flex border-b border-slate-200 overflow-x-auto">
+                {assignedTeams.map(section => {
+                  const Icon = section.icon
+                  const isActive = activeTeamTab === section.id
+                  
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => setActiveTeamTab(section.id)}
+                      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                        isActive
+                          ? `${section.color} ${section.borderColor}`
+                          : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {section.title}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Tab Content */}
+              {activeSection && (
+                <div className={`p-6 ${activeSection.bgColor}`}>
+                  <div className="space-y-4">
+                    {/* Extra fields specific to this team */}
+                    {activeSection.extraFields && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {activeSection.extraFields.map(field => (
+                          <div key={field.key} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
+                            {field.type === 'checkbox' ? (
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={(event[field.key] as boolean) || false}
+                                  onChange={(e) => updateField(field.key, e.target.checked)}
+                                  className="rounded border-slate-300 text-shefa-blue-600 focus:ring-shefa-blue-500"
+                                />
+                                <span className="text-sm text-slate-700">{field.label}</span>
+                              </label>
+                            ) : field.type === 'textarea' ? (
+                              <>
+                                <label className="text-sm text-slate-700 font-medium">{field.label}</label>
+                                <textarea
+                                  value={(event[field.key] as string) || ''}
+                                  onChange={(e) => updateField(field.key, e.target.value)}
+                                  placeholder={`Enter ${field.label.toLowerCase()}...`}
+                                  rows={3}
+                                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm bg-white"
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <label className="text-sm text-slate-700 font-medium">{field.label}</label>
+                                <input
+                                  type={field.type}
+                                  value={(event[field.key] as string | number) || ''}
+                                  onChange={(e) => updateField(field.key, field.type === 'number' ? (e.target.value ? parseInt(e.target.value) : null) : e.target.value)}
+                                  placeholder={field.label}
+                                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm bg-white"
+                                />
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Team notes */}
+                    <div>
+                      <label className="text-sm text-slate-700 font-medium">
+                        {activeSection.title} Notes
+                      </label>
+                      <textarea
+                        value={(event[activeSection.notesKey] as string) || ''}
+                        onChange={(e) => updateField(activeSection.notesKey, e.target.value)}
+                        placeholder={`Add notes for ${activeSection.title.toLowerCase()}...`}
+                        rows={4}
+                        className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm bg-white"
+                      />
                     </div>
                   </div>
-                  {isExpanded ? (
-                    <ChevronUpIcon className={`w-5 h-5 ${section.color}`} />
-                  ) : (
-                    <ChevronDownIcon className="w-5 h-5 text-slate-400" />
-                  )}
-                </button>
-                
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-4 pb-4 space-y-4">
-                        {/* Extra fields specific to this team */}
-                        {section.extraFields && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {section.extraFields.map(field => (
-                              <div key={field.key} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>
-                                {field.type === 'checkbox' ? (
-                                  <label className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={(event[field.key] as boolean) || false}
-                                      onChange={(e) => updateField(field.key, e.target.checked)}
-                                      className="rounded border-slate-300 text-shefa-blue-600 focus:ring-shefa-blue-500"
-                                    />
-                                    <span className="text-sm text-slate-600">{field.label}</span>
-                                  </label>
-                                ) : field.type === 'textarea' ? (
-                                  <>
-                                    <label className="text-sm text-slate-600 font-medium">{field.label}</label>
-                                    <textarea
-                                      value={(event[field.key] as string) || ''}
-                                      onChange={(e) => updateField(field.key, e.target.value)}
-                                      placeholder={`Enter ${field.label.toLowerCase()}...`}
-                                      rows={3}
-                                      className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm"
-                                    />
-                                  </>
-                                ) : (
-                                  <>
-                                    <label className="text-sm text-slate-600 font-medium">{field.label}</label>
-                                    <input
-                                      type={field.type}
-                                      value={(event[field.key] as string | number) || ''}
-                                      onChange={(e) => updateField(field.key, field.type === 'number' ? (e.target.value ? parseInt(e.target.value) : null) : e.target.value)}
-                                      placeholder={field.label}
-                                      className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm"
-                                    />
-                                  </>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {/* Team notes */}
-                        <div>
-                          <label className="text-sm text-slate-600 font-medium">
-                            {section.title} Notes
-                          </label>
-                          <textarea
-                            value={(event[section.notesKey] as string) || ''}
-                            onChange={(e) => updateField(section.notesKey, e.target.value)}
-                            placeholder={`Add notes for ${section.title.toLowerCase()}...`}
-                            rows={4}
-                            className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm"
-                          />
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )
-          })}
-        </div>
+                </div>
+              )}
+            </>
+          )}
 
-        {/* General Notes */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="bg-white rounded-xl border border-slate-200 p-6"
-        >
-          <h2 className="text-lg font-semibold text-slate-800 mb-2">General Notes</h2>
-          <p className="text-sm text-slate-500 mb-4">Add any additional notes or comments about this event</p>
-          <textarea
-            value={event.general_notes || ''}
-            onChange={(e) => updateField('general_notes', e.target.value)}
-            placeholder="Add general notes about this event..."
-            rows={5}
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none resize-none"
-          />
+          {/* Empty state when no teams assigned */}
+          {assignedTeams.length === 0 && (
+            <div className="p-8 text-center text-slate-500">
+              <p>No teams assigned yet. Click the buttons above to assign teams.</p>
+            </div>
+          )}
         </motion.div>
 
         {/* Hidden Event Toggle */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.3 }}
           className="bg-white rounded-xl border border-slate-200 p-6"
         >
           <label className="flex items-center justify-between">
