@@ -27,6 +27,7 @@ export async function GET(request: Request) {
           Resource,
           Start_Date,
           End_Date,
+          IFNULL(CAST(End_Date AS STRING), 'NULL') as end_date_check,
           Start_Time,
           End_Time,
           Days,

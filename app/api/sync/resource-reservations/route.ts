@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       if (row.is_class) continue
       
       const startDateStr = getDateValue(row.start_date)
-      const endDateStr = getDateValue(row.end_date)
+      const endDateStr = getDateValue(row.end_date) || startDateStr // Default end_date to start_date if null
       
       const dates = row.days 
         ? expandRecurringDates(startDateStr, endDateStr, row.days, schoolYearEnd)
