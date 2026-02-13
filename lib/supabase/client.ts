@@ -1,13 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
-
-function getCookieDomain(): string | undefined {
-  if (typeof window === 'undefined') return undefined
-  const hostname = window.location.hostname
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return undefined
-  if (hostname.endsWith('.vercel.app')) return '.vercel.app'
-  if (hostname.endsWith('.shefaschool.org')) return '.shefaschool.org'
-  return undefined
-}
+import { getCookieDomain } from '@/lib/utils/cookieDomain'
 
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rkfwphowryckqkozscfi.supabase.co'
@@ -33,6 +25,7 @@ export function createClient() {
             path: '/',
           }
           
+          // Build cookie string
           let cookieString = `${name}=${value}`
           if (cookieOptions.domain) cookieString += `; domain=${cookieOptions.domain}`
           if (cookieOptions.path) cookieString += `; path=${cookieOptions.path}`
