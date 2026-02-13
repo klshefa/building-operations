@@ -136,6 +136,11 @@ export async function POST(request: Request) {
     const rawEvents: any[] = []
     
     for (const row of rows) {
+      // Log Keith Test events for debugging
+      if (row.title?.toLowerCase().includes('keith')) {
+        console.log('Found Keith reservation:', JSON.stringify(row))
+      }
+      
       // Skip class schedules for now (they clutter the calendar)
       if (row.is_class) continue
       
