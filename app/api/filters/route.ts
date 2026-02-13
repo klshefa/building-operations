@@ -9,9 +9,33 @@ function createAdminClient() {
   )
 }
 
+// Ensure the table exists by trying to create it via RPC
+async function ensureTableExists(supabase: ReturnType<typeof createAdminClient>) {
+  // Try to select from the table - if it doesn't exist, we'll get a specific error
+  const { error } = await supabase.from('ops_event_filters').select('id').limit(1)
+  
+  if (error && (error.code === 'PGRST116' || error.code === 'PGRST205' || error.message.includes('does not exist'))) {
+    console.log('ops_event_filters table does not exist, attempting to create via RPC...')
+    // Table doesn't exist - we need to create it manually via SQL Editor
+    // Return a flag indicating the table needs to be created
+    return false
+  }
+  return true
+}
+
 // GET - List all filters
 export async function GET() {
   const supabase = createAdminClient()
+  
+  const tableExists = await ensureTableExists(supabase)
+  if (!tableExists) {
+    // Return empty array but with a flag indicating table needs creation
+    return NextResponse.json({ 
+      data: [], 
+      tableExists: false,
+      message: 'The ops_event_filters table does not exist. Please run the migration SQL in Supabase SQL Editor.'
+    })
+  }
   
   const { data, error } = await supabase
     .from('ops_event_filters')
@@ -23,7 +47,7 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
   
-  return NextResponse.json({ data })
+  return NextResponse.json({ data, tableExists: true })
 }
 
 // POST - Create a new filter
