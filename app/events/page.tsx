@@ -6,8 +6,7 @@ import { format, parseISO, addDays } from 'date-fns'
 import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
-import { createClient } from '@/lib/supabase/client'
-import type { OpsEvent, EventSource, EventType } from '@/lib/types'
+import type { OpsEvent, EventSource } from '@/lib/types'
 import {
   FunnelIcon,
   MagnifyingGlassIcon,
@@ -39,36 +38,38 @@ export default function EventsPage() {
 
   async function fetchEvents() {
     setLoading(true)
-    const supabase = createClient()
     const today = format(new Date(), 'yyyy-MM-dd')
-
-    let query = supabase
-      .from('ops_events')
-      .select('*')
-      .gte('start_date', today)
-      .order('start_date', { ascending: true })
-      .order('start_time', { ascending: true })
-
-    if (!showHidden) {
-      query = query.eq('is_hidden', false)
-    }
-
-    if (sourceFilter !== 'all') {
-      query = query.eq('primary_source', sourceFilter)
-    }
-
+    
+    // Build query params
+    const params = new URLSearchParams()
+    params.set('startDate', today)
+    
     if (dateRange === 'week') {
-      query = query.lte('start_date', format(addDays(new Date(), 7), 'yyyy-MM-dd'))
+      params.set('endDate', format(addDays(new Date(), 7), 'yyyy-MM-dd'))
     } else if (dateRange === 'month') {
-      query = query.lte('start_date', format(addDays(new Date(), 30), 'yyyy-MM-dd'))
+      params.set('endDate', format(addDays(new Date(), 30), 'yyyy-MM-dd'))
+    }
+    
+    if (sourceFilter !== 'all') {
+      params.set('source', sourceFilter)
+    }
+    
+    if (!showHidden) {
+      params.set('hideHidden', 'true')
     }
 
-    const { data, error } = await query
-
-    if (error) {
-      console.error('Error fetching events:', error)
-    } else {
-      setEvents(data || [])
+    try {
+      const res = await fetch(`/api/events?${params.toString()}`)
+      if (res.ok) {
+        const { data } = await res.json()
+        setEvents(data || [])
+      } else {
+        console.error('Error fetching events:', await res.text())
+        setEvents([])
+      }
+    } catch (err) {
+      console.error('Error fetching events:', err)
+      setEvents([])
     }
     setLoading(false)
   }

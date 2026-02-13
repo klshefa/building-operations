@@ -6,7 +6,6 @@ import { format, isToday, isTomorrow, isThisWeek, addDays, parseISO } from 'date
 import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
-import { createClient } from '@/lib/supabase/client'
 import type { OpsEvent } from '@/lib/types'
 import {
   CalendarDaysIcon,
@@ -26,24 +25,20 @@ export default function DashboardPage() {
   }, [])
 
   async function fetchEvents() {
-    const supabase = createClient()
     const today = format(new Date(), 'yyyy-MM-dd')
     const weekEnd = format(addDays(new Date(), 7), 'yyyy-MM-dd')
 
-    const { data, error } = await supabase
-      .from('ops_events')
-      .select('*')
-      .gte('start_date', today)
-      .lte('start_date', weekEnd)
-      .eq('is_hidden', false)
-      .order('start_date', { ascending: true })
-      .order('start_time', { ascending: true })
-
-    if (error) {
-      console.error('Error fetching events:', error)
-    } else {
-      setEvents(data || [])
-      setConflictCount(data?.filter(e => e.has_conflict && !e.conflict_ok).length || 0)
+    try {
+      const res = await fetch(`/api/events?startDate=${today}&endDate=${weekEnd}&hideHidden=true`)
+      if (res.ok) {
+        const { data } = await res.json()
+        setEvents(data || [])
+        setConflictCount(data?.filter((e: OpsEvent) => e.has_conflict && !e.conflict_ok).length || 0)
+      } else {
+        console.error('Error fetching events:', await res.text())
+      }
+    } catch (err) {
+      console.error('Error fetching events:', err)
     }
     setLoading(false)
   }
