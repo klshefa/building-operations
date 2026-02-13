@@ -109,16 +109,17 @@ export default function AdminPage() {
   }, [userRole])
 
   async function fetchUsers() {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('ops_users')
-      .select('*')
-      .order('email')
-
-    if (error) {
-      console.error('Error fetching users:', error)
-    } else {
-      setUsers(data || [])
+    try {
+      const res = await fetch('/api/users')
+      const { data, error } = await res.json()
+      
+      if (error) {
+        console.error('Error fetching users:', error)
+      } else {
+        setUsers(data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err)
     }
     setLoading(false)
   }
@@ -272,45 +273,53 @@ export default function AdminPage() {
     }
 
     setAdding(true)
-    const supabase = createClient()
     
-    const { error } = await supabase
-      .from('ops_users')
-      .insert({
-        email: selectedStaff.email.toLowerCase().trim(),
-        name: `${selectedStaff.first_name} ${selectedStaff.last_name}`,
-        role: newRole,
-        teams: newTeams,
-        is_active: true,
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: selectedStaff.email.toLowerCase().trim(),
+          name: `${selectedStaff.first_name} ${selectedStaff.last_name}`,
+          role: newRole,
+          teams: newTeams,
+        }),
       })
+      
+      const { error } = await res.json()
 
-    if (error) {
-      console.error('Error adding user:', error)
-      if (error.message.includes('duplicate')) {
-        alert('This staff member already has access.')
+      if (error) {
+        alert(error)
       } else {
-        alert('Error adding user: ' + error.message)
+        setSelectedStaff(null)
+        setNewRole('viewer')
+        setNewTeams([])
+        fetchUsers()
       }
-    } else {
-      setSelectedStaff(null)
-      setNewRole('viewer')
-      setNewTeams([])
-      fetchUsers()
+    } catch (err) {
+      console.error('Error adding user:', err)
+      alert('Error adding user')
     }
+    
     setAdding(false)
   }
 
   async function toggleUserActive(userId: string, isActive: boolean) {
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('ops_users')
-      .update({ is_active: !isActive })
-      .eq('id', userId)
-
-    if (error) {
-      console.error('Error updating user:', error)
-    } else {
-      fetchUsers()
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, is_active: !isActive }),
+      })
+      
+      const { error } = await res.json()
+      if (error) {
+        console.error('Error updating user:', error)
+      } else {
+        fetchUsers()
+      }
+    } catch (err) {
+      console.error('Error updating user:', err)
     }
   }
 
@@ -322,16 +331,19 @@ export default function AdminPage() {
     
     if (!confirm(`Delete user ${email}?`)) return
 
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('ops_users')
-      .delete()
-      .eq('id', userId)
-
-    if (error) {
-      console.error('Error deleting user:', error)
-    } else {
-      fetchUsers()
+    try {
+      const res = await fetch(`/api/users?id=${userId}`, {
+        method: 'DELETE',
+      })
+      
+      const { error } = await res.json()
+      if (error) {
+        console.error('Error deleting user:', error)
+      } else {
+        fetchUsers()
+      }
+    } catch (err) {
+      console.error('Error deleting user:', err)
     }
   }
 
