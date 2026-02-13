@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 
 export interface StaffMember {
@@ -33,18 +32,21 @@ export function StaffLookup({ onSelect, placeholder = 'Search staff...', classNa
       }
 
       setLoading(true)
-      const supabase = createClient()
       
-      const { data, error } = await supabase
-        .from('staff')
-        .select('person_id, first_name, last_name, email')
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
-        .order('last_name')
-        .limit(10)
-
-      if (!error && data) {
-        setResults(data)
+      try {
+        const response = await fetch(`/api/staff/search?q=${encodeURIComponent(query)}`)
+        const { data, error } = await response.json()
+        
+        if (!error && data) {
+          setResults(data)
+        } else {
+          setResults([])
+        }
+      } catch (err) {
+        console.error('Staff search error:', err)
+        setResults([])
       }
+      
       setLoading(false)
     }
 
