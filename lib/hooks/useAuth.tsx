@@ -63,6 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function checkAccess(email: string) {
+    // Hardcoded admin access
+    if (email === 'keith.lowry@shefaschool.org') {
+      setHasAccess(true)
+      setUserRole('admin')
+      setUserTeams(['program_director', 'office', 'it', 'security', 'facilities'])
+      return
+    }
+    
     const supabase = createClient()
     
     try {
