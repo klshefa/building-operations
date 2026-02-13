@@ -323,6 +323,7 @@ VALUES
   ('c_vk1n1cdvov22evuq77t4cehn68@group.calendar.google.com', 'Middle School Calendar')
 ON CONFLICT (calendar_id) DO NOTHING;
 
--- Add initial admin user (replace with actual email)
--- INSERT INTO ops_users (email, name, role, teams)
--- VALUES ('keith.lowry@shefaschool.org', 'Keith Lowry', 'admin', ARRAY['it']);
+-- Add initial admin user
+INSERT INTO ops_users (email, name, role, teams)
+VALUES ('keith.lowry@shefaschool.org', 'Keith Lowry', 'admin', ARRAY['it'])
+ON CONFLICT (email) DO NOTHING;
