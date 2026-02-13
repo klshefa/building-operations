@@ -92,8 +92,8 @@ export async function POST(request: Request) {
       SELECT
         Description as title,
         Resource as resource,
-        Start_Date.value as start_date,
-        End_Date.value as end_date,
+        Start_Date as start_date,
+        End_Date as end_date,
         Start_Time as start_time,
         End_Time as end_time,
         Days as days,
@@ -103,8 +103,8 @@ export async function POST(request: Request) {
         \`Approval Status\` as approval_status,
         Class_Schedule as is_class
       FROM \`vc_data.resource_reservations\`
-      WHERE Start_Date.value <= @endDate
-        AND End_Date.value >= @today
+      WHERE Start_Date <= @endDate
+        AND End_Date >= @today
     `
 
     const [rows] = await bigquery.query({

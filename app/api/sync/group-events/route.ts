@@ -55,17 +55,17 @@ export async function POST(request: Request) {
         CAST(Event_ID AS STRING) as source_id,
         Description as title,
         Event_Type as event_type,
-        Start_Date.value as start_date,
-        End_Date.value as end_date,
+        Start_Date as start_date,
+        End_Date as end_date,
         Start_Time as start_time,
         End_Time as end_time,
         Location as location,
         Resource as resource,
         Contact_Person as contact_person
       FROM \`vc_data.group_events\`
-      WHERE Start_Date.value >= @today
-        AND Start_Date.value <= @endDate
-      ORDER BY Start_Date.value
+      WHERE Start_Date >= @today
+        AND Start_Date <= @endDate
+      ORDER BY Start_Date
     `
 
     const [rows] = await bigquery.query({
