@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         Conflict as has_conflict,
         \`Approval Status\` as approval_status,
         Class_Schedule as is_class,
-        CAST(Reservation_ID AS STRING) as reservation_id
+        CAST(Reservtion_ID AS STRING) as reservation_id
       FROM \`vc_data.resource_reservations\`
       WHERE Start_Date <= @endDate
         AND COALESCE(End_Date, Start_Date) >= @today

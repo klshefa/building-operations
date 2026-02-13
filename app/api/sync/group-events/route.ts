@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         Location as location,
         Resource as resource,
         Contact_Person as contact_person,
-        CAST(Reservation_ID AS STRING) as reservation_id
+        CAST(Reservtion_ID AS STRING) as reservation_id
       FROM \`vc_data.group_events\`
       WHERE Start_Date >= @today
         AND Start_Date <= @endDate
