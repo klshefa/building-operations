@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  
+  /* Shefa Blue color palette */
+  --color-shefa-blue-50: #eff6ff;
+  --color-shefa-blue-100: #dbeafe;
+  --color-shefa-blue-200: #bfdbfe;
+  --color-shefa-blue-300: #93c5fd;
+  --color-shefa-blue-400: #60a5fa;
+  --color-shefa-blue-500: #3b82f6;
+  --color-shefa-blue-600: #1d4ed8;
+  --color-shefa-blue-700: #1e40af;
+  --color-shefa-blue-800: #1e3a8a;
+  --color-shefa-blue-900: #1e3a6e;
+}
+
+body {
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  color: var(--foreground);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

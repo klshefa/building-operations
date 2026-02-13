@@ -1,0 +1,147 @@
+// Event sources
+export type EventSource = 'bigquery_group' | 'bigquery_resource' | 'calendar_staff' | 'calendar_ls' | 'calendar_ms' | 'manual'
+
+// Event types
+export type EventType = 
+  | 'program_event'
+  | 'meeting'
+  | 'assembly'
+  | 'field_trip'
+  | 'performance'
+  | 'athletic'
+  | 'parent_event'
+  | 'professional_development'
+  | 'religious_observance'
+  | 'fundraiser'
+  | 'other'
+
+// Team types
+export type TeamType = 'program_director' | 'office' | 'it' | 'security' | 'facilities'
+
+// User roles
+export type UserRole = 'admin' | 'program_director' | 'office' | 'it' | 'security' | 'facilities' | 'viewer'
+
+// Raw event from sync sources before aggregation
+export interface RawEvent {
+  id: string
+  source: EventSource
+  source_id: string
+  title: string
+  description?: string
+  start_date: string
+  end_date?: string
+  start_time?: string
+  end_time?: string
+  location?: string
+  resource?: string
+  contact_person?: string
+  recurring_pattern?: string // e.g., "T,R" for Tuesday/Thursday
+  raw_data: Record<string, unknown>
+  synced_at: string
+}
+
+// Aggregated event (main table)
+export interface OpsEvent {
+  id: string
+  title: string
+  description?: string
+  start_date: string
+  end_date?: string
+  start_time?: string
+  end_time?: string
+  all_day: boolean
+  location?: string
+  resource_id?: number
+  event_type: EventType
+  
+  // General info
+  expected_attendees?: number
+  food_served: boolean
+  food_provider?: string
+  
+  // Team assignments
+  needs_program_director: boolean
+  needs_office: boolean
+  needs_it: boolean
+  needs_security: boolean
+  needs_facilities: boolean
+  
+  // Team notes
+  program_director_notes?: string
+  office_notes?: string
+  it_notes?: string
+  security_notes?: string
+  facilities_notes?: string
+  
+  // Facilities details
+  setup_instructions?: string
+  
+  // Security details
+  security_personnel_needed?: number
+  building_open: boolean
+  elevator_notes?: string
+  
+  // IT details
+  techs_needed?: number
+  av_equipment?: string
+  tech_notes?: string
+  
+  // Status
+  is_hidden: boolean
+  has_conflict: boolean
+  conflict_ok: boolean
+  conflict_notes?: string
+  
+  // Source tracking
+  source_events: string[] // Array of raw_event IDs that matched to this event
+  primary_source: EventSource
+  
+  // Metadata
+  created_at: string
+  updated_at: string
+  created_by?: string
+  updated_by?: string
+}
+
+// Resource from BigQuery
+export interface Resource {
+  id: number
+  resource_type: string
+  description: string
+  abbreviation?: string
+  capacity?: number
+  responsible_person?: string
+}
+
+// User
+export interface OpsUser {
+  id: string
+  email: string
+  name?: string
+  role: UserRole
+  teams: TeamType[] // Which teams they belong to
+  is_active: boolean
+  created_at: string
+}
+
+// Conflict
+export interface EventConflict {
+  id: string
+  event_a_id: string
+  event_b_id: string
+  conflict_type: 'time_overlap' | 'resource_conflict' | 'personnel_conflict'
+  is_resolved: boolean
+  resolution_notes?: string
+  resolved_by?: string
+  resolved_at?: string
+}
+
+// Calendar sync metadata
+export interface CalendarSyncMeta {
+  calendar_id: string
+  calendar_name: string
+  last_sync: string
+  next_sync_token?: string
+  error_count: number
+  last_error?: string
+}
