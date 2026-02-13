@@ -136,20 +136,32 @@ export async function POST(request: Request) {
     const rawEvents: any[] = []
     
     for (const row of rows) {
-      // Log Keith Test events for debugging
-      if (row.title?.toLowerCase().includes('keith')) {
-        console.log('Found Keith reservation:', JSON.stringify(row))
-      }
-      
       // Skip class schedules for now (they clutter the calendar)
       if (row.is_class) continue
       
       const startDateStr = getDateValue(row.start_date)
       const endDateStr = getDateValue(row.end_date) || startDateStr // Default end_date to start_date if null
       
-      const dates = row.days 
-        ? expandRecurringDates(startDateStr, endDateStr, row.days, schoolYearEnd)
-        : [parseISO(startDateStr)]
+      // Log Keith Test events for debugging
+      if (row.title?.toLowerCase().includes('keith')) {
+        console.log('Found Keith reservation:', {
+          title: row.title,
+          startDate: startDateStr,
+          endDate: endDateStr,
+          days: row.days,
+          is_class: row.is_class
+        })
+      }
+      
+      let dates: Date[]
+      if (row.days) {
+        dates = expandRecurringDates(startDateStr, endDateStr, row.days, schoolYearEnd)
+        if (row.title?.toLowerCase().includes('keith')) {
+          console.log('Keith expanded dates:', dates.map(d => format(d, 'yyyy-MM-dd')))
+        }
+      } else {
+        dates = [parseISO(startDateStr)]
+      }
 
       for (const date of dates) {
         const dateStr = format(date, 'yyyy-MM-dd')
