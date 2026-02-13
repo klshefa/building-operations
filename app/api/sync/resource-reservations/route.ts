@@ -191,12 +191,20 @@ export async function POST(request: Request) {
 
     console.log(`Expanded to ${rawEvents.length} individual reservation events`)
 
+    // Deduplicate by source_id before inserting
+    const uniqueEvents = new Map<string, any>()
+    for (const event of rawEvents) {
+      uniqueEvents.set(event.source_id, event)
+    }
+    const dedupedEvents = Array.from(uniqueEvents.values())
+    console.log(`Deduped from ${rawEvents.length} to ${dedupedEvents.length} events`)
+
     // Upsert in batches
     const batchSize = 100
     let insertedCount = 0
 
-    for (let i = 0; i < rawEvents.length; i += batchSize) {
-      const batch = rawEvents.slice(i, i + batchSize)
+    for (let i = 0; i < dedupedEvents.length; i += batchSize) {
+      const batch = dedupedEvents.slice(i, i + batchSize)
       const { error } = await supabase
         .from('ops_raw_events')
         .upsert(batch, { onConflict: 'source,source_id' })
