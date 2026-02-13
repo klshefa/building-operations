@@ -12,9 +12,10 @@ const SYNC_ENDPOINTS = [
 export async function POST(request: Request) {
   const startTime = Date.now()
   const results: Record<string, { success: boolean; message: string; records?: number }> = {}
-  const baseUrl = process.env.NEXT_PUBLIC_VERCEL_URL 
-    ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` 
-    : 'http://localhost:3000'
+  
+  // Get base URL from request origin
+  const url = new URL(request.url)
+  const baseUrl = `${url.protocol}//${url.host}`
 
   // Run syncs sequentially to avoid overwhelming the APIs
   for (const endpoint of SYNC_ENDPOINTS) {
