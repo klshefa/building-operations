@@ -2,6 +2,7 @@
 
 import { format, parseISO } from 'date-fns'
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import type { OpsEvent, EventSource } from '@/lib/types'
 import {
   MapPinIcon,
@@ -41,6 +42,7 @@ interface EventCardProps {
 }
 
 export default function EventCard({ event, onClick, compact = false }: EventCardProps) {
+  const router = useRouter()
   const startDate = parseISO(event.start_date)
   const hasTeamNeeds = event.needs_program_director || event.needs_office || event.needs_it || event.needs_security || event.needs_facilities
 
@@ -49,11 +51,19 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
   // Remove duplicates and sort for consistent display
   const uniqueSources = [...new Set(allSources)]
 
+  function handleClick() {
+    if (onClick) {
+      onClick()
+    } else {
+      router.push(`/event/${event.id}`)
+    }
+  }
+
   if (compact) {
     return (
       <motion.div
         whileHover={{ scale: 1.02 }}
-        onClick={onClick}
+        onClick={handleClick}
         className={`p-3 rounded-lg border cursor-pointer transition-all ${
           event.is_hidden
             ? 'bg-slate-50 border-slate-200 opacity-60'
@@ -99,7 +109,7 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
   return (
     <motion.div
       whileHover={{ scale: 1.01 }}
-      onClick={onClick}
+      onClick={handleClick}
       className={`p-4 rounded-xl border cursor-pointer transition-all ${
         event.is_hidden
           ? 'bg-slate-50 border-slate-200 opacity-60'

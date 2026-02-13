@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { 
   format, 
@@ -53,6 +54,7 @@ const sourceLabels: Record<EventSource, string> = {
 }
 
 export default function CalendarPage() {
+  const router = useRouter()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [events, setEvents] = useState<OpsEvent[]>([])
@@ -333,10 +335,11 @@ export default function CalendarPage() {
                         {dayEvents.map(event => (
                           <div
                             key={event.id}
-                            className={`p-2 rounded-lg text-xs ${
+                            onClick={() => router.push(`/event/${event.id}`)}
+                            className={`p-2 rounded-lg text-xs cursor-pointer hover:opacity-80 transition-opacity ${
                               event.has_conflict && !event.conflict_ok
                                 ? 'bg-red-100 border border-red-200'
-                                : 'bg-slate-100 border border-slate-200'
+                                : 'bg-slate-100 border border-slate-200 hover:bg-slate-200'
                             }`}
                           >
                             <div className="font-medium text-slate-800 truncate">{event.title}</div>

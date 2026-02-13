@@ -87,6 +87,9 @@ export interface OpsEvent {
   av_equipment?: string
   tech_notes?: string
   
+  // General notes
+  general_notes?: string
+  
   // Status
   is_hidden: boolean
   has_conflict: boolean
