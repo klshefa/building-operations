@@ -15,6 +15,7 @@ import {
   XCircleIcon,
   FunnelIcon,
   PlusIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline'
 
 const roleOptions: { value: UserRole; label: string }[] = [
@@ -76,6 +77,17 @@ export default function AdminPage() {
   const [addingFilter, setAddingFilter] = useState(false)
   const [applyingFilters, setApplyingFilters] = useState(false)
   const [filterStatus, setFilterStatus] = useState<{ success: boolean; message: string } | null>(null)
+  
+  // Manual Event
+  const [eventTitle, setEventTitle] = useState('')
+  const [eventDescription, setEventDescription] = useState('')
+  const [eventDate, setEventDate] = useState('')
+  const [eventStartTime, setEventStartTime] = useState('')
+  const [eventEndTime, setEventEndTime] = useState('')
+  const [eventLocation, setEventLocation] = useState('')
+  const [eventAllDay, setEventAllDay] = useState(false)
+  const [addingEvent, setAddingEvent] = useState(false)
+  const [eventStatus, setEventStatus] = useState<{ success: boolean; message: string } | null>(null)
 
   useEffect(() => {
     if (userRole === 'admin') {
@@ -194,6 +206,51 @@ export default function AdminPage() {
       })
     }
     setApplyingFilters(false)
+  }
+
+  async function addManualEvent(e: React.FormEvent) {
+    e.preventDefault()
+    if (!eventTitle || !eventDate) return
+
+    setAddingEvent(true)
+    setEventStatus(null)
+
+    try {
+      const res = await fetch('/api/events/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: eventTitle,
+          description: eventDescription || null,
+          start_date: eventDate,
+          end_date: eventDate,
+          start_time: eventAllDay ? null : eventStartTime || null,
+          end_time: eventAllDay ? null : eventEndTime || null,
+          all_day: eventAllDay,
+          location: eventLocation || null,
+          created_by: user?.email,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        setEventStatus({ success: true, message: 'Event created successfully!' })
+        // Reset form
+        setEventTitle('')
+        setEventDescription('')
+        setEventDate('')
+        setEventStartTime('')
+        setEventEndTime('')
+        setEventLocation('')
+        setEventAllDay(false)
+      } else {
+        setEventStatus({ success: false, message: data.error || 'Failed to create event' })
+      }
+    } catch (err) {
+      setEventStatus({ success: false, message: 'Network error' })
+    }
+    setAddingEvent(false)
   }
 
   async function addUser(e: React.FormEvent) {
@@ -660,6 +717,133 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </motion.div>
+
+          {/* Create Manual Event - Full Width */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-8 bg-white rounded-xl shadow-sm border border-slate-200 p-6"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarDaysIcon className="w-5 h-5 text-slate-600" />
+              <h2 className="text-lg font-semibold text-slate-800">Create Manual Event</h2>
+            </div>
+            
+            <p className="text-sm text-slate-600 mb-4">
+              Add events that are not captured by any of the synced sources (BigQuery or Google Calendars).
+            </p>
+
+            {eventStatus && (
+              <div className={`mb-4 p-3 rounded-lg ${eventStatus.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {eventStatus.message}
+              </div>
+            )}
+
+            <form onSubmit={addManualEvent} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Event Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={eventTitle}
+                    onChange={(e) => setEventTitle(e.target.value)}
+                    placeholder="e.g., Board Meeting"
+                    required
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={eventLocation}
+                    onChange={(e) => setEventLocation(e.target.value)}
+                    placeholder="e.g., Conference Room A"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={eventDescription}
+                  onChange={(e) => setEventDescription(e.target.value)}
+                  placeholder="Optional event description..."
+                  rows={2}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={eventStartTime}
+                    onChange={(e) => setEventStartTime(e.target.value)}
+                    disabled={eventAllDay}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    End Time
+                  </label>
+                  <input
+                    type="time"
+                    value={eventEndTime}
+                    onChange={(e) => setEventEndTime(e.target.value)}
+                    disabled={eventAllDay}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 cursor-pointer p-2">
+                    <input
+                      type="checkbox"
+                      checked={eventAllDay}
+                      onChange={(e) => setEventAllDay(e.target.checked)}
+                      className="w-4 h-4 text-shefa-blue-600 border-slate-300 rounded focus:ring-shefa-blue-500"
+                    />
+                    <span className="text-sm text-slate-700">All Day Event</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={addingEvent}
+                  className="bg-shefa-blue-600 hover:bg-shefa-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                  {addingEvent ? 'Creating...' : 'Create Event'}
+                </button>
+              </div>
+            </form>
           </motion.div>
         </main>
       </div>
