@@ -1,13 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-// Use service role to bypass RLS
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 interface EventFilter {
   id: string
@@ -57,6 +49,12 @@ function eventMatchesFilter(event: OpsEvent, filter: EventFilter): boolean {
 
 // POST - Apply all active filters to events
 export async function POST() {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const supabase = createAdminClient()
   
   try {

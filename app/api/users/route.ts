@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 // GET all users
 export async function GET() {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   try {
     const supabase = createAdminClient()
     
@@ -28,8 +27,17 @@ export async function GET() {
   }
 }
 
-// POST - add new user
+// POST - add new user (admin only)
 export async function POST(request: Request) {
+  // Verify authentication - admin only
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+  if (!auth.isAdmin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+
   try {
     const body = await request.json()
     const { email, name, role, teams } = body
@@ -65,8 +73,17 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH - update user
+// PATCH - update user (admin only)
 export async function PATCH(request: Request) {
+  // Verify authentication - admin only
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+  if (!auth.isAdmin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+
   try {
     const body = await request.json()
     const { id, ...updates } = body
@@ -94,8 +111,17 @@ export async function PATCH(request: Request) {
   }
 }
 
-// DELETE - remove user
+// DELETE - remove user (admin only)
 export async function DELETE(request: Request) {
+  // Verify authentication - admin only
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+  if (!auth.isAdmin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')

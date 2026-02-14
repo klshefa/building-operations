@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 export async function GET(request: Request) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const { searchParams } = new URL(request.url)
   const query = searchParams.get('q')
 

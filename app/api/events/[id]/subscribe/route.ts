@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 // GET - Check if user is subscribed
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   try {
     const { id } = await params
     const { searchParams } = new URL(request.url)
@@ -61,6 +59,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   try {
     const { id } = await params
     const { email, name } = await request.json()
@@ -130,6 +134,12 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   try {
     const { id } = await params
     const { searchParams } = new URL(request.url)

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
-import { createClient } from '@supabase/supabase-js'
 import { format, parseISO } from 'date-fns'
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 const CALENDAR_ID = 'c_vk1n1cdvov22evuq77t4cehn68@group.calendar.google.com'
 const SOURCE_NAME = 'calendar_ms'
@@ -22,10 +22,7 @@ function getGoogleAuth() {
 }
 
 function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  return createAdminClient()
 }
 
 function getCurrentSchoolYear(): { start: string; end: string } {
@@ -41,6 +38,12 @@ function getCurrentSchoolYear(): { start: string; end: string } {
 }
 
 export async function POST(request: Request) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const startTime = Date.now()
   const schoolYear = getCurrentSchoolYear()
   const today = new Date()

@@ -1,14 +1,22 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/api-auth'
 
 export async function GET(request: Request) {
+  // This route requires a valid session but doesn't require ops_users access
+  // since it's the route that checks for ops_users access
+  const supabaseAuth = await createServerClient()
+  const { data: { user }, error: userError } = await supabaseAuth.auth.getUser()
+  
+  if (userError || !user?.email) {
+    return NextResponse.json({ error: 'Unauthorized - no valid session' }, { status: 401 })
+  }
+
+  // Check domain
+  if (!user.email.endsWith('@shefaschool.org')) {
+    return NextResponse.json({ error: 'Unauthorized - invalid domain' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(request.url)
   const email = searchParams.get('email')
 

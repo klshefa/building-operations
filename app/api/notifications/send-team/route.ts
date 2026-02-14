@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { sendEmail, buildTeamAssignmentEmail, getTeamDisplayName } from '@/lib/notifications'
 import type { TeamType, OpsEvent } from '@/lib/types'
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 export async function POST(request: Request) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   try {
     const { eventId, team } = await request.json()
     

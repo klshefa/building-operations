@@ -1,17 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import type { TeamType, OpsEvent } from '@/lib/types'
 import { buildTeamAssignmentEmail, buildEventUpdateEmail, getTeamDisplayName } from '@/lib/notifications'
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 async function sendEmail(to: string[], subject: string, html: string) {
   if (!RESEND_API_KEY) {
@@ -92,6 +84,12 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const { id } = await params
   
   try {
@@ -117,11 +115,17 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const { id } = await params
   
   try {
     const body = await request.json()
-    console.log('PATCH request for event:', id)
+    console.log('PATCH request for event:', id, 'by', auth.user.email)
     console.log('Body keys:', Object.keys(body))
     
     const supabase = createAdminClient()

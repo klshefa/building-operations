@@ -1,8 +1,18 @@
 import { NextResponse } from 'next/server'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 
 export async function POST(request: Request) {
+  // Verify authentication - admin only for test routes
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+  if (!auth.isAdmin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+
   try {
     // Send via Resend
     if (!RESEND_API_KEY) {

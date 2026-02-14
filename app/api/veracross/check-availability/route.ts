@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 // Veracross OAuth configuration
 const VERACROSS_CLIENT_ID = process.env.VERACROSS_CLIENT_ID
@@ -11,10 +11,7 @@ const VERACROSS_API_BASE = process.env.VERACROSS_API_BASE || 'https://api.veracr
 const CLASS_SCHEDULES_SCOPE = 'academics.class_schedules:list'
 
 function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  return createAdminClient()
 }
 
 // Get a token with class schedules scope
@@ -229,6 +226,12 @@ export interface AvailabilityResponse {
 }
 
 export async function POST(request: Request) {
+  // Verify authentication
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   try {
     const body: AvailabilityRequest = await request.json()
     const { resource_name, date, start_time, end_time, exclude_event_id, exclude_event_name } = body

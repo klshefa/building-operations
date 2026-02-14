@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { format, parseISO, eachDayOfInterval, isAfter, getDay } from 'date-fns'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 // Map day abbreviations to day numbers (0=Sun, 1=Mon, etc)
 const dayMap: Record<string, number> = {
@@ -13,6 +14,15 @@ const dayMap: Record<string, number> = {
 }
 
 export async function GET(request: Request) {
+  // Verify authentication - admin only for debug routes
+  const auth = await verifyApiAuth()
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+  if (!auth.isAdmin) {
+    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+  }
+
   const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('start') || '2026-02-16'
   const endDate = searchParams.get('end') || '2026-02-16'
