@@ -42,6 +42,18 @@ const TRACKED_FIELDS: Record<string, string> = {
   facilities_notes: 'Facilities notes'
 }
 
+// All allowed fields for update (whitelist)
+const ALLOWED_UPDATE_FIELDS = new Set([
+  'title', 'description', 'start_date', 'end_date', 'start_time', 'end_time',
+  'all_day', 'location', 'resource_id', 'event_type',
+  'expected_attendees', 'food_served', 'food_provider',
+  'needs_program_director', 'needs_office', 'needs_it', 'needs_security', 'needs_facilities',
+  'program_director_notes', 'office_notes', 'it_notes', 'security_notes', 'facilities_notes',
+  'setup_instructions', 'security_personnel_needed', 'building_open', 'elevator_notes',
+  'techs_needed', 'av_equipment', 'tech_notes',
+  'general_notes', 'is_hidden', 'has_conflict', 'conflict_ok', 'conflict_notes'
+])
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -88,8 +100,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     }
 
-    // Remove fields that shouldn't be updated directly
-    const { id: _, created_at, source_events, primary_source, sources, ...updateData } = body
+    // Remove fields that shouldn't be updated directly and filter to allowed fields only
+    const { id: _, created_at, source_events, primary_source, sources, ...rawUpdateData } = body
+
+    // Only include allowed fields (whitelist approach)
+    const updateData: Record<string, any> = {}
+    for (const [key, value] of Object.entries(rawUpdateData)) {
+      if (ALLOWED_UPDATE_FIELDS.has(key)) {
+        updateData[key] = value
+      }
+    }
 
     // Add updated timestamp
     updateData.updated_at = new Date().toISOString()
@@ -102,7 +122,8 @@ export async function PATCH(
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('Supabase update error:', error)
+      return NextResponse.json({ error: error.message, details: error }, { status: 500 })
     }
 
     // Check for newly assigned teams and send notifications
