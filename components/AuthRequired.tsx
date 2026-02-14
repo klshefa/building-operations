@@ -6,6 +6,9 @@ import { motion } from 'framer-motion'
 export default function AuthRequired({ children }: { children: React.ReactNode }) {
   const { user, loading, hasAccess, signIn } = useAuth()
 
+  // Debug logging
+  console.log('[AuthRequired] loading:', loading, 'user:', user?.email, 'hasAccess:', hasAccess)
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">

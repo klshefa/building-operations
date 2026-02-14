@@ -55,8 +55,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function checkUser() {
+    console.log('[useAuth] checkUser starting...')
     const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    console.log('[useAuth] getSession result - user:', session?.user?.email, 'error:', error?.message)
     
     setUser(session?.user ?? null)
     
@@ -67,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     setLoading(false)
+    console.log('[useAuth] checkUser done - loading set to false')
   }
 
   async function fetchUserDetails(email: string) {
