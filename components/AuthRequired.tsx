@@ -1,26 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { motion } from 'framer-motion'
 
 export default function AuthRequired({ children }: { children: React.ReactNode }) {
   const { user, loading, hasAccess, signIn } = useAuth()
-  const [loadingTimeout, setLoadingTimeout] = useState(false)
 
-  // Safety timeout - if loading takes more than 10 seconds, show login
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (loading) {
-        console.log('Loading timeout - forcing login screen')
-        setLoadingTimeout(true)
-      }
-    }, 10000)
-    
-    return () => clearTimeout(timer)
-  }, [loading])
-
-  if (loading && !loadingTimeout) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">
@@ -31,7 +17,7 @@ export default function AuthRequired({ children }: { children: React.ReactNode }
     )
   }
 
-  if (!user || loadingTimeout) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <motion.div
@@ -44,9 +30,7 @@ export default function AuthRequired({ children }: { children: React.ReactNode }
           </div>
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Building Operations</h1>
           <p className="text-slate-600 mb-6">
-            {loadingTimeout 
-              ? 'Session expired. Please sign in again.'
-              : 'Sign in with your Shefa account to manage building operations and events.'}
+            Sign in with your Shefa account to manage building operations and events.
           </p>
           <button
             onClick={signIn}

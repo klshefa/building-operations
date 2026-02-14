@@ -36,19 +36,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkUser()
     
     const supabase = createClient()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth state changed:', _event, session?.user?.email)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      
       if (session?.user?.email) {
-        await checkAccess(session.user.email)
+        // User has session, assume access (callback already validated)
+        // Fetch role/teams in background
+        fetchUserDetails(session.user.email)
+        setHasAccess(true)
       } else {
         setHasAccess(false)
         setUserRole(null)
         setUserTeams([])
       }
-      
-      // Always ensure loading is false after auth state change
       setLoading(false)
     })
 
@@ -56,53 +55,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function checkUser() {
-    try {
-      const supabase = createClient()
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (error) {
-        console.error('Error getting session:', error)
-        setUser(null)
-        setHasAccess(false)
-        setLoading(false)
-        return
-      }
-      
-      setUser(session?.user ?? null)
-      
-      if (session?.user?.email) {
-        await checkAccess(session.user.email)
-      }
-    } catch (err) {
-      console.error('Error in checkUser:', err)
-      setUser(null)
-      setHasAccess(false)
-    } finally {
-      setLoading(false)
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    setUser(session?.user ?? null)
+    
+    if (session?.user?.email) {
+      // User has session, assume access (callback already validated)
+      setHasAccess(true)
+      await fetchUserDetails(session.user.email)
     }
+    
+    setLoading(false)
   }
 
-  async function checkAccess(email: string) {
+  async function fetchUserDetails(email: string) {
     try {
-      // Use API route to check access (bypasses RLS)
       const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(email.toLowerCase())}`)
       const data = await response.json()
 
       if (data.hasAccess) {
-        setHasAccess(true)
         setUserRole(data.role as UserRole)
         setUserTeams((data.teams || []) as TeamType[])
-      } else {
-        console.log('User not authorized for building operations:', email)
-        setHasAccess(false)
-        setUserRole(null)
-        setUserTeams([])
       }
     } catch (err) {
-      console.error('Error checking access:', err)
-      setHasAccess(false)
-      setUserRole(null)
-      setUserTeams([])
+      console.error('Error fetching user details:', err)
     }
   }
 
@@ -113,16 +90,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
-          hd: 'shefaschool.org',
-          prompt: 'select_account',
-        },
-      },
+          hd: 'shefaschool.org'
+        }
+      }
     })
   }
 
   async function signOut() {
     const supabase = createClient()
-    await supabase.auth.signOut({ scope: 'global' })
+    await supabase.auth.signOut()
     setUser(null)
     setHasAccess(false)
     setUserRole(null)
