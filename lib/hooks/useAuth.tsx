@@ -36,30 +36,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkUser()
     
     const supabase = createClient()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('Auth state changed:', _event, session?.user?.email)
       setUser(session?.user ?? null)
+      
       if (session?.user?.email) {
-        checkAccess(session.user.email)
+        await checkAccess(session.user.email)
       } else {
         setHasAccess(false)
         setUserRole(null)
         setUserTeams([])
       }
+      
+      // Always ensure loading is false after auth state change
+      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
   async function checkUser() {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    setUser(session?.user ?? null)
-    
-    if (session?.user?.email) {
-      await checkAccess(session.user.email)
+    try {
+      const supabase = createClient()
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('Error getting session:', error)
+        setUser(null)
+        setHasAccess(false)
+        setLoading(false)
+        return
+      }
+      
+      setUser(session?.user ?? null)
+      
+      if (session?.user?.email) {
+        await checkAccess(session.user.email)
+      }
+    } catch (err) {
+      console.error('Error in checkUser:', err)
+      setUser(null)
+      setHasAccess(false)
+    } finally {
+      setLoading(false)
     }
-    
-    setLoading(false)
   }
 
   async function checkAccess(email: string) {

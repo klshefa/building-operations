@@ -1,5 +1,13 @@
 import { createBrowserClient } from '@supabase/ssr'
-import { getCookieDomain } from '@/lib/utils/cookieDomain'
+
+interface CookieOptions {
+  domain?: string
+  path?: string
+  secure?: boolean
+  sameSite?: 'lax' | 'strict' | 'none'
+  maxAge?: number
+  expires?: Date
+}
 
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rkfwphowryckqkozscfi.supabase.co'
@@ -8,29 +16,33 @@ export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
-        return document.cookie.split('; ').map(c => {
+        return document.cookie.split('; ').filter(c => c).map(c => {
           const [name, ...rest] = c.split('=')
           return { name, value: rest.join('=') }
         })
       },
-      setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
-        const cookieDomain = getCookieDomain()
-        
-        cookiesToSet.forEach(({ name, value, options }) => {
-          const cookieOptions = {
-            ...options,
-            domain: cookieDomain,
-            secure: true,
-            sameSite: 'lax' as const,
-            path: '/',
+      setAll(cookiesToSet: { name: string; value: string; options?: CookieOptions }[]) {
+        cookiesToSet.forEach(({ name, value, options = {} }) => {
+          // Build cookie string with all necessary options
+          let cookieString = `${name}=${value}`
+          
+          // Don't set domain - let browser default to current hostname only
+          // This prevents cross-subdomain cookie sharing
+          
+          cookieString += `; path=${options.path || '/'}`
+          
+          // Handle expiration - this is critical for session persistence
+          if (options.maxAge !== undefined) {
+            cookieString += `; max-age=${options.maxAge}`
+          } else if (options.expires) {
+            cookieString += `; expires=${options.expires.toUTCString()}`
           }
           
-          // Build cookie string
-          let cookieString = `${name}=${value}`
-          if (cookieOptions.domain) cookieString += `; domain=${cookieOptions.domain}`
-          if (cookieOptions.path) cookieString += `; path=${cookieOptions.path}`
-          if (cookieOptions.secure) cookieString += `; secure`
-          if (cookieOptions.sameSite) cookieString += `; samesite=${cookieOptions.sameSite}`
+          // Security options
+          if (options.secure !== false) {
+            cookieString += `; secure`
+          }
+          cookieString += `; samesite=${options.sameSite || 'lax'}`
           
           document.cookie = cookieString
         })
