@@ -149,6 +149,35 @@ function cleanLocation(location: string | null | undefined): string {
   return location.replace(/^\d+\s*/, '').trim()
 }
 
+// Convert time from various formats to HH:MM for input[type="time"]
+function toTimeInputFormat(time: string | null | undefined): string {
+  if (!time) return ''
+  
+  // If already in HH:MM format, return as-is
+  if (/^\d{2}:\d{2}$/.test(time)) return time
+  
+  // Handle "9:00 am", "10:30 pm", etc.
+  const match = time.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i)
+  if (match) {
+    let hours = parseInt(match[1])
+    const minutes = match[2]
+    const period = match[3]?.toLowerCase()
+    
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes}`
+  }
+  
+  // Handle HH:MM:SS format
+  const hmsMatch = time.match(/^(\d{2}):(\d{2}):\d{2}$/)
+  if (hmsMatch) {
+    return `${hmsMatch[1]}:${hmsMatch[2]}`
+  }
+  
+  return time
+}
+
 export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -555,14 +584,14 @@ export default function EventDetailPage() {
               <div className="flex items-center gap-1">
                 <input
                   type="time"
-                  value={event.start_time || ''}
+                  value={toTimeInputFormat(event.start_time)}
                   onChange={(e) => updateField('start_time', e.target.value)}
                   className="flex-1 min-w-0 text-sm border border-slate-200 rounded px-1 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
                 />
                 <span className="text-slate-400">-</span>
                 <input
                   type="time"
-                  value={event.end_time || ''}
+                  value={toTimeInputFormat(event.end_time)}
                   onChange={(e) => updateField('end_time', e.target.value)}
                   className="flex-1 min-w-0 text-sm border border-slate-200 rounded px-1 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
                 />
