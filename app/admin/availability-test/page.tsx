@@ -429,7 +429,14 @@ export default function AvailabilityTestPage() {
                     <div className="space-y-2">
                       {result.conflicts.map((c, i) => (
                         <div key={i} className="bg-red-50 border border-red-100 rounded-lg p-3">
-                          <p className="font-medium text-slate-800">{c.description}</p>
+                          <div className="flex justify-between items-start">
+                            <p className="font-medium text-slate-800">{c.description}</p>
+                            {c.resource_name && (
+                              <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded">
+                                {c.resource_name}
+                              </span>
+                            )}
+                          </div>
                           {c.event_name && c.event_name !== c.description && (
                             <p className="text-sm text-slate-600">Event: {c.event_name}</p>
                           )}
