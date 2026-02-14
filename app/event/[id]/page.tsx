@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
 import { motion } from 'framer-motion'
+import { useAuth } from '@/lib/hooks/useAuth'
 import type { OpsEvent, EventSource, EventType } from '@/lib/types'
 import {
   ArrowLeftIcon,
@@ -21,6 +22,8 @@ import {
   UserGroupIcon,
   CakeIcon,
   DocumentTextIcon,
+  BellIcon,
+  BellSlashIcon,
 } from '@heroicons/react/24/outline'
 
 const sourceLabels: Record<EventSource, string> = {
@@ -149,16 +152,73 @@ function cleanLocation(location: string | null | undefined): string {
 export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const [event, setEvent] = useState<OpsEvent | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [hasChanges, setHasChanges] = useState(false)
   const [activeTeamTab, setActiveTeamTab] = useState<string | null>(null)
+  const [subscribed, setSubscribed] = useState(false)
+  const [subscribing, setSubscribing] = useState(false)
 
   useEffect(() => {
     fetchEvent()
   }, [params.id])
+
+  // Check subscription status when user and event are loaded
+  useEffect(() => {
+    if (user?.email && params.id) {
+      checkSubscription()
+    }
+  }, [user?.email, params.id])
+
+  async function checkSubscription() {
+    if (!user?.email) return
+    try {
+      const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`)
+      const result = await response.json()
+      setSubscribed(result.subscribed)
+    } catch (error) {
+      console.error('Error checking subscription:', error)
+    }
+  }
+
+  async function toggleSubscription() {
+    if (!user?.email) return
+    
+    setSubscribing(true)
+    try {
+      if (subscribed) {
+        // Unsubscribe
+        const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`, {
+          method: 'DELETE'
+        })
+        const result = await response.json()
+        if (result.success) {
+          setSubscribed(false)
+        }
+      } else {
+        // Subscribe
+        const response = await fetch(`/api/events/${params.id}/subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            email: user.email, 
+            name: user.user_metadata?.full_name || user.email 
+          })
+        })
+        const result = await response.json()
+        if (result.success) {
+          setSubscribed(true)
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling subscription:', error)
+    } finally {
+      setSubscribing(false)
+    }
+  }
 
   async function fetchEvent() {
     try {
@@ -293,6 +353,27 @@ export default function EventDetailPage() {
               {saveStatus === 'error' && (
                 <span className="text-sm text-red-600">Save failed</span>
               )}
+              
+              {/* Subscribe button */}
+              <button
+                onClick={toggleSubscription}
+                disabled={subscribing || !user}
+                title={subscribed ? 'Unsubscribe from notifications' : 'Subscribe to get notifications when this event changes'}
+                className={`p-2 rounded-lg border transition-all ${
+                  subscribed
+                    ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                }`}
+              >
+                {subscribing ? (
+                  <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : subscribed ? (
+                  <BellIcon className="w-5 h-5 fill-current" />
+                ) : (
+                  <BellIcon className="w-5 h-5" />
+                )}
+              </button>
+              
               <button
                 onClick={saveEvent}
                 disabled={saving || !hasChanges}
