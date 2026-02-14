@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import type { TeamType } from '@/lib/types'
+import type { TeamType, OpsEvent } from '@/lib/types'
+import { buildTeamAssignmentEmail, buildEventUpdateEmail, getTeamDisplayName } from '@/lib/notifications'
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY
 
 function createAdminClient() {
   return createClient(
@@ -8,6 +11,36 @@ function createAdminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
+}
+
+async function sendEmail(to: string[], subject: string, html: string) {
+  if (!RESEND_API_KEY) {
+    console.error('RESEND_API_KEY not configured')
+    return false
+  }
+  
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: 'Building Operations <ops@shefaschool.org>',
+      to,
+      subject,
+      html
+    })
+  })
+  
+  if (!response.ok) {
+    const error = await response.text()
+    console.error('Email send failed:', error)
+    return false
+  }
+  
+  console.log('Email sent to:', to.join(', '))
+  return true
 }
 
 // Team field mapping
@@ -141,14 +174,22 @@ export async function PATCH(
       }
     }
 
-    // Send team assignment notifications (fire and forget)
-    if (newlyAssignedTeams.length > 0) {
-      for (const team of newlyAssignedTeams) {
-        fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://ops.shefaschool.org'}/api/notifications/send-team`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventId: id, team })
-        }).catch(err => console.error('Failed to send team notification:', err))
+    // Send team assignment notifications directly
+    for (const team of newlyAssignedTeams) {
+      const { data: teamMembers } = await supabase
+        .from('ops_users')
+        .select('email, name')
+        .contains('teams', [team])
+        .eq('is_active', true)
+      
+      if (teamMembers && teamMembers.length > 0) {
+        const html = buildTeamAssignmentEmail(data as OpsEvent, team)
+        const teamName = getTeamDisplayName(team)
+        await sendEmail(
+          teamMembers.map(m => m.email),
+          `[Ops] ${teamName} Team Assigned: ${data.title}`,
+          html
+        )
       }
     }
 
@@ -156,7 +197,6 @@ export async function PATCH(
     const changes: string[] = []
     for (const [field, label] of Object.entries(TRACKED_FIELDS)) {
       if (field in updateData && updateData[field] !== currentEvent[field]) {
-        // Format the change message
         if (typeof updateData[field] === 'boolean') {
           changes.push(`${label} changed to ${updateData[field] ? 'Yes' : 'No'}`)
         } else if (updateData[field] === null || updateData[field] === '') {
@@ -175,13 +215,24 @@ export async function PATCH(
       }
     }
 
-    // Send update notifications to subscribers (fire and forget)
+    // Send update notifications to subscribers directly
     if (changes.length > 0) {
-      fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://ops.shefaschool.org'}/api/notifications/send-update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: id, changes })
-      }).catch(err => console.error('Failed to send update notification:', err))
+      const { data: subscribers } = await supabase
+        .from('event_subscriptions')
+        .select('user_email, user_name')
+        .eq('event_id', id)
+      
+      if (subscribers && subscribers.length > 0) {
+        console.log('Sending update notifications to:', subscribers.map(s => s.user_email))
+        for (const sub of subscribers) {
+          const html = buildEventUpdateEmail(data as OpsEvent, changes, sub.user_name || undefined)
+          await sendEmail(
+            [sub.user_email],
+            `[Ops] Event Updated: ${data.title}`,
+            html
+          )
+        }
+      }
     }
 
     return NextResponse.json({ 
