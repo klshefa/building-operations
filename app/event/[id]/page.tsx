@@ -261,31 +261,33 @@ export default function EventDetailPage() {
 
   async function fetchConflictingEvents(eventData: OpsEvent) {
     try {
-      // Fetch events on same date that could conflict
+      // Fetch events on same date
       const response = await fetch(`/api/events?startDate=${eventData.start_date}&endDate=${eventData.start_date}&hideHidden=false`)
       const result = await response.json()
       
       if (result.data) {
-        // Filter to find actual conflicts (same location or overlapping time)
+        // Filter to find potential conflicts - same location OR overlapping time
         const conflicts = result.data.filter((e: OpsEvent) => {
           if (e.id === eventData.id) return false
           
-          // Same location conflict
-          const sameLocation = eventData.location && e.location && 
-            cleanLocation(eventData.location).toLowerCase() === cleanLocation(e.location).toLowerCase()
+          // Same location?
+          const eventLoc = cleanLocation(eventData.location)?.toLowerCase() || ''
+          const eLoc = cleanLocation(e.location)?.toLowerCase() || ''
+          const sameLocation = eventLoc && eLoc && eventLoc === eLoc
           
-          // Time overlap conflict
+          // Time overlap?
           let timeOverlap = false
-          if (eventData.start_time && eventData.end_time && e.start_time && e.end_time) {
+          if (eventData.start_time && e.start_time) {
             const eStart = e.start_time.replace(':', '')
-            const eEnd = e.end_time.replace(':', '')
+            const eEnd = (e.end_time || e.start_time).replace(':', '')
             const thisStart = eventData.start_time.replace(':', '')
-            const thisEnd = eventData.end_time.replace(':', '')
+            const thisEnd = (eventData.end_time || eventData.start_time).replace(':', '')
             
             timeOverlap = !(eEnd <= thisStart || eStart >= thisEnd)
           }
           
-          return sameLocation && timeOverlap
+          // Return if same location with time overlap, OR just same location
+          return sameLocation
         })
         
         setConflictingEvents(conflicts)
@@ -536,9 +538,9 @@ export default function EventDetailPage() {
           </div>
 
           {/* Quick Info */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
             <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1">
+              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
                 <CalendarIcon className="w-3 h-3" />
                 Date
               </label>
@@ -546,32 +548,32 @@ export default function EventDetailPage() {
                 type="date"
                 value={event.start_date}
                 onChange={(e) => updateField('start_date', e.target.value)}
-                className="mt-1 w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1">
+              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
                 <ClockIcon className="w-3 h-3" />
                 Time
               </label>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-1">
                 <input
                   type="time"
                   value={event.start_time || ''}
                   onChange={(e) => updateField('start_time', e.target.value)}
-                  className="w-24 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                  className="flex-1 min-w-0 text-sm border border-slate-200 rounded px-1 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
                 />
-                <span className="text-slate-400 shrink-0">-</span>
+                <span className="text-slate-400">-</span>
                 <input
                   type="time"
                   value={event.end_time || ''}
                   onChange={(e) => updateField('end_time', e.target.value)}
-                  className="w-24 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                  className="flex-1 min-w-0 text-sm border border-slate-200 rounded px-1 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
                 />
               </div>
             </div>
             <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1">
+              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
                 <MapPinIcon className="w-3 h-3" />
                 Location
               </label>
@@ -580,18 +582,18 @@ export default function EventDetailPage() {
                 value={cleanLocation(event.location)}
                 onChange={(e) => updateField('location', e.target.value)}
                 placeholder="Location"
-                className="mt-1 w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1">
+              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
                 <DocumentTextIcon className="w-3 h-3" />
                 Type
               </label>
               <select
                 value={event.event_type}
                 onChange={(e) => updateField('event_type', e.target.value)}
-                className="mt-1 w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
               >
                 {eventTypes.map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
