@@ -231,14 +231,20 @@ export async function POST(request: Request) {
     console.log(`Found ${reservations.length} reservations from Veracross`)
 
     // Filter to matching resource
-    // Resource name might be in 'resource' or 'resource_name' field
+    // Resource name might be in various fields depending on API response structure
     const matchingReservations = reservations.filter((r: any) => {
-      const resName = r.resource?.description || r.resource_name || r.resource || ''
+      // Try all possible resource name fields
+      const resName = r.resource?.description || r.resource?.name || 
+                      r.resource_description || r.resource_name || 
+                      (typeof r.resource === 'string' ? r.resource : '') || ''
       const resId = r.resource?.id || r.resource_id
+      
+      console.log(`Checking reservation: resource="${resName}", id=${resId}, looking for="${resource_name}"`)
       
       // Match by ID if provided, otherwise by name (case-insensitive partial match)
       if (resource_id && resId === resource_id) return true
-      if (resName.toLowerCase().includes(resource_name.toLowerCase())) return true
+      if (resName && resource_name && resName.toLowerCase().includes(resource_name.toLowerCase())) return true
+      if (resName && resource_name && resource_name.toLowerCase().includes(resName.toLowerCase())) return true
       return false
     })
 
@@ -312,7 +318,9 @@ export async function POST(request: Request) {
       available,
       conflicts,
       possible_conflicts: possibleConflicts,
-      raw_reservations: matchingReservations, // For debugging
+      raw_reservations: reservations, // Full API response for debugging
+      matched_count: matchingReservations.length,
+      total_count: reservations.length,
     } as AvailabilityResponse)
 
   } catch (error: any) {
