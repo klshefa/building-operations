@@ -248,10 +248,8 @@ export default function EventDetailPage() {
         setActiveTeamTab(firstAssigned.id)
       }
       
-      // If event has a conflict, fetch conflicting events
-      if (result.data.has_conflict) {
-        fetchConflictingEvents(result.data)
-      }
+      // Always check for conflicts based on location/time overlap
+      fetchConflictingEvents(result.data)
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -266,9 +264,29 @@ export default function EventDetailPage() {
       const result = await response.json()
       
       if (result.data) {
-        // Show all OTHER events on the same date (excluding this one)
-        const otherEvents = result.data.filter((e: OpsEvent) => e.id !== eventData.id)
-        setConflictingEvents(otherEvents)
+        // Find ACTUAL conflicts: same location AND overlapping time
+        const conflicts = result.data.filter((e: OpsEvent) => {
+          if (e.id === eventData.id) return false
+          
+          // Must have same location
+          const thisLoc = cleanLocation(eventData.location)?.toLowerCase().trim()
+          const otherLoc = cleanLocation(e.location)?.toLowerCase().trim()
+          if (!thisLoc || !otherLoc || thisLoc !== otherLoc) return false
+          
+          // Must have overlapping times
+          if (!eventData.start_time || !e.start_time) return false
+          
+          const thisStart = eventData.start_time.replace(':', '')
+          const thisEnd = (eventData.end_time || '23:59').replace(':', '')
+          const otherStart = e.start_time.replace(':', '')
+          const otherEnd = (e.end_time || '23:59').replace(':', '')
+          
+          // Check overlap: NOT (one ends before other starts)
+          const noOverlap = thisEnd <= otherStart || otherEnd <= thisStart
+          return !noOverlap
+        })
+        
+        setConflictingEvents(conflicts)
       }
     } catch (error) {
       console.error('Error fetching conflicts:', error)
@@ -646,41 +664,30 @@ export default function EventDetailPage() {
             />
           </div>
 
-          {/* Conflict section */}
-          {event.has_conflict && (
+          {/* Conflict section - only shown when we detect actual conflicts */}
+          {conflictingEvents.length > 0 && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-start gap-3">
                 <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h3 className="font-medium text-red-700">Scheduling Conflict</h3>
-                  <p className="text-sm text-red-600 mt-1">This event has a resource conflict flagged in Veracross.</p>
+                  <h3 className="font-medium text-red-700">Scheduling Conflict Detected</h3>
+                  <p className="text-sm text-red-600 mt-1">
+                    Same location ({cleanLocation(event.location)}) with overlapping time:
+                  </p>
                   
-                  {/* Show other events on same date for context */}
-                  {conflictingEvents.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-xs text-slate-500 uppercase font-medium mb-2">Other events on {format(parseISO(event.start_date), 'MMM d')}:</p>
-                      <div className="space-y-1 max-h-40 overflow-y-auto">
-                        {conflictingEvents.map(ce => (
-                          <div key={ce.id} className="bg-white rounded border border-slate-200 p-2 text-sm flex justify-between items-start">
-                            <div>
-                              <div className="font-medium text-slate-700">{ce.title}</div>
-                              <div className="text-slate-400 text-xs">
-                                {ce.start_time || 'All day'}
-                                {ce.end_time && ` - ${ce.end_time}`}
-                              </div>
-                            </div>
-                            {ce.location && (
-                              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                                {cleanLocation(ce.location)}
-                              </span>
-                            )}
-                          </div>
-                        ))}
+                  <div className="mt-3 space-y-2">
+                    {conflictingEvents.map(ce => (
+                      <div key={ce.id} className="bg-white rounded border border-red-200 p-3 text-sm">
+                        <div className="font-medium text-slate-800">{ce.title}</div>
+                        <div className="text-slate-500 text-xs mt-1">
+                          {ce.start_time}
+                          {ce.end_time && ` - ${ce.end_time}`}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                   
-                  <label className="flex items-center gap-2 mt-3">
+                  <label className="flex items-center gap-2 mt-4">
                     <input
                       type="checkbox"
                       checked={event.conflict_ok}
@@ -689,13 +696,15 @@ export default function EventDetailPage() {
                     />
                     <span className="text-sm text-slate-600">Mark conflict as OK</span>
                   </label>
-                  <textarea
-                    value={event.conflict_notes || ''}
-                    onChange={(e) => updateField('conflict_notes', e.target.value)}
-                    placeholder="Add resolution notes..."
-                    rows={2}
-                    className="mt-2 w-full border border-red-200 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none text-sm bg-white"
-                  />
+                  {event.conflict_ok && (
+                    <textarea
+                      value={event.conflict_notes || ''}
+                      onChange={(e) => updateField('conflict_notes', e.target.value)}
+                      placeholder="Why is this conflict acceptable?"
+                      rows={2}
+                      className="mt-2 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm bg-white"
+                    />
+                  )}
                 </div>
               </div>
             </div>
