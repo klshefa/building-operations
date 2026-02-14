@@ -700,6 +700,8 @@ export default function EventDetailPage() {
                   date={event.start_date}
                   startTime={toTimeInputFormat(event.start_time) || '09:00'}
                   endTime={toTimeInputFormat(event.end_time) || '17:00'}
+                  excludeEventId={event.id}
+                  excludeEventName={event.title}
                 />
               </div>
             )}

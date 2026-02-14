@@ -6,7 +6,9 @@ const VERACROSS_CLIENT_ID = process.env.VERACROSS_CLIENT_ID
 const VERACROSS_CLIENT_SECRET = process.env.VERACROSS_CLIENT_SECRET
 const VERACROSS_TOKEN_URL = process.env.VERACROSS_TOKEN_URL || 'https://accounts.veracross.com/shefa/oauth/token'
 const VERACROSS_API_BASE = process.env.VERACROSS_API_BASE || 'https://api.veracross.com/shefa/v3'
-const VERACROSS_SCOPES = process.env.VERACROSS_SCOPES || 'resource_reservations:list'
+
+// Scopes
+const CLASS_SCHEDULES_SCOPE = 'academics.class_schedules:list'
 
 function getSupabaseClient() {
   return createClient(
@@ -15,47 +17,8 @@ function getSupabaseClient() {
   )
 }
 
-// Get or refresh Veracross access token
-async function getAccessToken(supabase: ReturnType<typeof getSupabaseClient>): Promise<string> {
-  // Check cache first
-  const { data: cached } = await supabase
-    .from('veracross_tokens')
-    .select('*')
-    .eq('id', 'default')
-    .single()
-
-  const now = new Date()
-  
-  // If we have a valid cached token, use it
-  // BUT also check if the scopes match - if scopes changed, we need a new token
-  if (cached?.access_token && cached?.expires_at) {
-    const expiresAt = new Date(cached.expires_at)
-    const cachedScopes = cached.scope || ''
-    const requestedScopes = VERACROSS_SCOPES
-    
-    // Check if scopes match (order-independent comparison)
-    const cachedScopeArr: string[] = cachedScopes.split(' ').filter(Boolean)
-    const requestedScopeArr: string[] = requestedScopes.split(' ').filter(Boolean)
-    const requestedScopeSet = new Set<string>(requestedScopeArr)
-    const scopesMatch = cachedScopeArr.length === requestedScopeArr.length && 
-      cachedScopeArr.every((s: string) => requestedScopeSet.has(s))
-    
-    // Add 5 minute buffer
-    if (scopesMatch && expiresAt > new Date(now.getTime() + 5 * 60 * 1000)) {
-      console.log('Using cached Veracross token (scopes match)')
-      return cached.access_token
-    }
-    
-    if (!scopesMatch) {
-      console.log('Cached token scopes do not match requested scopes - refreshing')
-      console.log('Cached:', cachedScopes)
-      console.log('Requested:', requestedScopes)
-    }
-  }
-
-  // Request new token
-  console.log('Requesting new Veracross token')
-  
+// Get a token with class schedules scope
+async function getClassSchedulesToken(): Promise<string> {
   if (!VERACROSS_CLIENT_ID || !VERACROSS_CLIENT_SECRET) {
     throw new Error('Veracross OAuth credentials not configured')
   }
@@ -69,32 +32,16 @@ async function getAccessToken(supabase: ReturnType<typeof getSupabaseClient>): P
       grant_type: 'client_credentials',
       client_id: VERACROSS_CLIENT_ID,
       client_secret: VERACROSS_CLIENT_SECRET,
-      scope: VERACROSS_SCOPES,
+      scope: CLASS_SCHEDULES_SCOPE,
     }),
   })
 
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text()
-    throw new Error(`Failed to get Veracross token: ${tokenResponse.status} - ${errorText}`)
+    throw new Error(`Failed to get class schedules token: ${tokenResponse.status} - ${errorText}`)
   }
 
   const tokenData = await tokenResponse.json()
-  
-  // Calculate expiration (token usually valid for 1 hour)
-  const expiresAt = new Date(now.getTime() + (tokenData.expires_in || 3600) * 1000)
-
-  // Cache the token - store the REQUESTED scopes so we can detect changes
-  await supabase
-    .from('veracross_tokens')
-    .upsert({
-      id: 'default',
-      access_token: tokenData.access_token,
-      token_type: tokenData.token_type,
-      expires_at: expiresAt.toISOString(),
-      scope: VERACROSS_SCOPES, // Store requested scopes, not returned scopes
-      updated_at: now.toISOString(),
-    })
-
   return tokenData.access_token
 }
 
@@ -160,66 +107,49 @@ function timesOverlap(
   start2: number | null,
   end2: number | null
 ): boolean {
-  // If any time is missing, we can't determine overlap
   if (start1 === null || end1 === null || start2 === null || end2 === null) {
-    return false // Will be handled as "possible conflict"
+    return false
   }
-  
   return start1 < end2 && end1 > start2
 }
 
 // Detect parent/child/sibling resource relationships
-// Pattern: "Ulam" is parent of "Ulam Side 1" and "Ulam Side 2"
 function getResourceRelationships(resourceName: string): {
   parent: string | null,
   siblings: string[],
   isChild: boolean
 } {
-  // Check if this is a "Side X" resource
   const sideMatch = resourceName.match(/^(.+?)\s+Side\s+(\d+)$/i)
   
   if (sideMatch) {
-    // This is a child resource (e.g., "Ulam Side 1")
-    const parent = sideMatch[1].trim() // "Ulam"
+    const parent = sideMatch[1].trim()
     const sideNum = parseInt(sideMatch[2])
-    
-    // Generate sibling names (assume Side 1 and Side 2 exist)
     const siblings: string[] = []
     for (let i = 1; i <= 2; i++) {
       if (i !== sideNum) {
         siblings.push(`${parent} Side ${i}`)
       }
     }
-    
     return { parent, siblings, isChild: true }
   }
   
-  // Check if this could be a parent resource
-  // A parent would have children like "X Side 1", "X Side 2"
-  return {
-    parent: null,
-    siblings: [],
-    isChild: false
-  }
+  return { parent: null, siblings: [], isChild: false }
 }
 
 // Get all resource names to check for a given resource
 function getRelatedResourceNames(resourceName: string): {
-  blocking: string[],   // Resources that would block this booking
-  adjacent: string[]    // Resources that are adjacent (informational)
+  blocking: string[],
+  adjacent: string[]
 } {
   const relationships = getResourceRelationships(resourceName)
   
-  const blocking: string[] = [resourceName] // Always check exact match
+  const blocking: string[] = [resourceName]
   const adjacent: string[] = []
   
   if (relationships.isChild && relationships.parent) {
-    // If booking "Ulam Side 1", also blocked by "Ulam"
     blocking.push(relationships.parent)
-    // Siblings are adjacent (informational)
     adjacent.push(...relationships.siblings)
   } else {
-    // If booking "Ulam" (parent), also blocked by all children
     blocking.push(`${resourceName} Side 1`)
     blocking.push(`${resourceName} Side 2`)
   }
@@ -227,52 +157,81 @@ function getRelatedResourceNames(resourceName: string): {
   return { blocking, adjacent }
 }
 
+// Map day of week number to possible day codes
+const dayCodeMap: Record<number, string[]> = {
+  0: ['U', 'Su', 'SU', 'Sun'],
+  1: ['M', 'Mo', 'MO', 'Mon'],
+  2: ['T', 'Tu', 'TU', 'Tue'],
+  3: ['W', 'We', 'WE', 'Wed'],
+  4: ['R', 'Th', 'TH', 'Thu'],
+  5: ['F', 'Fr', 'FR', 'Fri'],
+  6: ['S', 'Sa', 'SA', 'Sat'],
+}
+
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+// Check if a days pattern includes a specific day of week
+function patternIncludesDay(pattern: string, dayOfWeek: number): boolean {
+  if (!pattern) return true // No pattern means all days
+  const validCodes = dayCodeMap[dayOfWeek]
+  const patternUpper = pattern.toUpperCase()
+  return validCodes.some(code => patternUpper.includes(code.toUpperCase()))
+}
+
 export interface AvailabilityRequest {
-  resource_name: string       // e.g., "Beit Midrash"
-  resource_id?: number        // Optional VC resource ID if known
-  date: string               // YYYY-MM-DD
-  start_time: string         // HH:MM
-  end_time: string           // HH:MM
+  resource_name: string
+  resource_id?: number
+  date: string
+  start_time: string
+  end_time: string
+  exclude_event_id?: string  // When editing, exclude current event from results
+  exclude_event_name?: string // Fallback: exclude by matching name
 }
 
 export interface ConflictInfo {
   type: 'definite' | 'possible'
-  reservation_id: number
+  source: 'class_schedule' | 'reservation'
   description: string
-  resource_name?: string      // Which resource this conflict is on
-  start_date: string
+  resource_name?: string
+  start_date?: string
   end_date?: string
   start_time?: string
   end_time?: string
-  event_name?: string
-  contact_person?: string
+  class_name?: string
+  days_pattern?: string
 }
 
 export interface AdjacentBooking {
-  reservation_id: number
+  source: 'class_schedule' | 'reservation'
   description: string
-  resource_name: string       // e.g., "Ulam Side 2"
-  start_date: string
-  end_date?: string
+  resource_name: string
   start_time?: string
   end_time?: string
-  event_name?: string
-  note: string               // e.g., "Adjacent space has booking"
+  days_pattern?: string
+  note: string
 }
 
 export interface AvailabilityResponse {
   available: boolean
   conflicts: ConflictInfo[]
   possible_conflicts: ConflictInfo[]
-  adjacent_bookings: AdjacentBooking[]  // Sibling resources with bookings
-  raw_reservations?: any[]   // For debugging
+  adjacent_bookings: AdjacentBooking[]
+  debug?: {
+    class_schedules_checked: number
+    class_schedules_total?: number
+    class_schedules_pages?: number
+    class_schedules_error?: string
+    reservations_checked: number
+    checking_day: string
+    requested_time: string
+  }
   error?: string
 }
 
 export async function POST(request: Request) {
   try {
     const body: AvailabilityRequest = await request.json()
-    const { resource_name, resource_id, date, start_time, end_time } = body
+    const { resource_name, date, start_time, end_time, exclude_event_id, exclude_event_name } = body
 
     if (!resource_name || !date) {
       return NextResponse.json({
@@ -283,216 +242,299 @@ export async function POST(request: Request) {
         error: 'resource_name and date are required'
       } as AvailabilityResponse, { status: 400 })
     }
+    
+    console.log(`Exclude event: id=${exclude_event_id}, name=${exclude_event_name}`)
 
     const supabase = getSupabaseClient()
     
-    // Get access token
-    const accessToken = await getAccessToken(supabase)
+    // Parse the requested date to get day of week
+    const checkDate = new Date(date + 'T12:00:00')
+    const dayOfWeek = checkDate.getDay()
+    const dayName = dayNames[dayOfWeek]
     
-    // Build query parameters for Veracross API
-    // For recurring reservations, we need reservations where:
-    // - start_date <= our_date (reservation started on or before)
-    // - end_date >= our_date (reservation ends on or after)
-    // The API may not support end_date filter, so we query broadly and filter client-side
-    const queryParams = new URLSearchParams()
-    
-    // Get reservations that started on or before our date
-    // We'll filter by end_date client-side
-    queryParams.set('on_or_before_start_date', date)
-    
-    // If we have a resource_id, filter by that too
-    if (resource_id) {
-      queryParams.set('resource_id', resource_id.toString())
-    }
-    
-    // Veracross v3 API endpoint for resource reservations
-    const apiUrl = `${VERACROSS_API_BASE}/resource_reservations/reservations?${queryParams.toString()}`
-    
-    console.log('Querying Veracross:', apiUrl)
-    console.log('Using token:', accessToken ? 'Yes (length: ' + accessToken.length + ')' : 'No')
-    
-    const response = await fetch(apiUrl, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/json',
-        'X-Page-Size': '1000', // Get more results to catch recurring reservations
-      },
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Veracross API error:', response.status, errorText, 'URL:', apiUrl)
-      
-      // If 404, provide more helpful error
-      if (response.status === 404) {
-        return NextResponse.json({
-          available: false,
-          conflicts: [],
-          possible_conflicts: [],
-          adjacent_bookings: [],
-          error: `Veracross API endpoint not found (404). Check VERACROSS_API_BASE and scope. Tried: ${apiUrl}`,
-          debug: { url: apiUrl, status: response.status, body: errorText }
-        } as AvailabilityResponse, { status: 500 })
-      }
-      
-      return NextResponse.json({
-        available: false,
-        conflicts: [],
-        possible_conflicts: [],
-        adjacent_bookings: [],
-        error: `Veracross API error: ${response.status}`,
-        debug: { url: apiUrl, status: response.status, body: errorText }
-      } as AvailabilityResponse, { status: 500 })
-    }
-
-    const data = await response.json()
-    const reservations = data.data || data || []
-    
-    console.log(`Found ${reservations.length} reservations from Veracross`)
+    const requestedStart = parseTimeToMinutes(start_time)
+    const requestedEnd = parseTimeToMinutes(end_time)
 
     // Get related resources (blocking and adjacent)
     const { blocking: blockingResources, adjacent: adjacentResources } = getRelatedResourceNames(resource_name)
-    console.log(`Checking resources - Blocking: ${blockingResources.join(', ')} | Adjacent: ${adjacentResources.join(', ')}`)
-
-    // Helper to get resource name from reservation
-    const getResName = (r: any): string => {
-      return r.resource?.description || r.resource?.name || 
-             r.resource_description || r.resource_name || 
-             (typeof r.resource === 'string' ? r.resource : '') || ''
-    }
-
-    // Helper to check if a reservation matches any of the given resource names
-    const matchesAnyResource = (r: any, resourceNames: string[]): string | null => {
-      const resName = getResName(r)
-      for (const targetName of resourceNames) {
-        if (resName.toLowerCase().includes(targetName.toLowerCase()) ||
-            targetName.toLowerCase().includes(resName.toLowerCase())) {
-          return resName
-        }
-      }
-      return null
-    }
-
-    // Filter reservations into blocking and adjacent categories
-    const blockingReservations: Array<{ res: any, matchedResource: string }> = []
-    const adjacentReservations: Array<{ res: any, matchedResource: string }> = []
-
-    for (const r of reservations) {
-      const blockingMatch = matchesAnyResource(r, blockingResources)
-      if (blockingMatch) {
-        blockingReservations.push({ res: r, matchedResource: blockingMatch })
-        continue
-      }
-      
-      const adjacentMatch = matchesAnyResource(r, adjacentResources)
-      if (adjacentMatch) {
-        adjacentReservations.push({ res: r, matchedResource: adjacentMatch })
-      }
-    }
-
-    console.log(`${blockingReservations.length} blocking, ${adjacentReservations.length} adjacent`)
+    
+    console.log(`Checking availability for ${resource_name} on ${date} (${dayName})`)
+    console.log(`Blocking resources: ${blockingResources.join(', ')}`)
+    console.log(`Adjacent resources: ${adjacentResources.join(', ')}`)
 
     const conflicts: ConflictInfo[] = []
     const possibleConflicts: ConflictInfo[] = []
     const adjacentBookings: AdjacentBooking[] = []
     
-    const requestedStart = parseTimeToMinutes(start_time)
-    const requestedEnd = parseTimeToMinutes(end_time)
+    let classSchedulesChecked = 0
+    let classSchedulesTotal: number | undefined
+    let classSchedulesPages: number | undefined
+    let classSchedulesError: string | undefined
+    let reservationsChecked = 0
 
-    // Helper to check date and day pattern
-    const isReservationOnDate = (res: any): boolean => {
-      const resStartDate = res.start_date || res.begin_date
-      const resEndDate = res.end_date || resStartDate
+    // ==========================================
+    // CHECK 1: Class Schedules (Veracross API)
+    // Pagination is controlled via headers: X-Page-Number, X-Page-Size
+    // ==========================================
+    try {
+      const accessToken = await getClassSchedulesToken()
       
-      // Skip if date doesn't match
-      if (resStartDate > date || (resEndDate && resEndDate < date)) {
-        return false
-      }
+      const apiUrl = `${VERACROSS_API_BASE}/academics/class_schedules`
+      const allSchedules: any[] = []
+      let currentPage = 1
+      const maxPages = 20 // Safety limit
       
-      // For recurring reservations, check if our day of week matches
-      if (res.days && resEndDate !== resStartDate) {
-        const requestedDate = new Date(date)
-        const dayOfWeek = requestedDate.getDay() // 0=Sun, 1=Mon, etc.
-        const dayMap: Record<number, string> = {
-          0: 'Su', 1: 'M', 2: 'T', 3: 'W', 4: 'Th', 5: 'F', 6: 'Sa'
-        }
-        const dayCode = dayMap[dayOfWeek]
-        
-        // Check if this day is in the pattern
-        if (!res.days.includes(dayCode)) {
-          return false
-        }
-      }
-      
-      return true
-    }
-
-    // Process blocking reservations (conflicts)
-    for (const { res, matchedResource } of blockingReservations) {
-      if (!isReservationOnDate(res)) continue
-      
-      const resStartDate = res.start_date || res.begin_date
-      const resEndDate = res.end_date || resStartDate
-      const resStart = parseTimeToMinutes(res.start_time || res.begin_time)
-      const resEnd = parseTimeToMinutes(res.end_time)
-      
-      const conflictInfo: ConflictInfo = {
-        type: 'possible',
-        reservation_id: res.id || res.reservation_id,
-        description: res.description || res.event_description || 'Reservation',
-        resource_name: matchedResource,
-        start_date: resStartDate,
-        end_date: resEndDate,
-        start_time: formatTimeForDisplay(res.start_time || res.begin_time),
-        end_time: formatTimeForDisplay(res.end_time),
-        event_name: res.event?.name || res.event_name,
-        contact_person: res.contact_person || res.event?.contact_person,
-      }
-      
-      // Determine if definite or possible conflict
-      if (requestedStart !== null && requestedEnd !== null && 
-          resStart !== null && resEnd !== null) {
-        // We have all time data - can definitively determine conflict
-        if (timesOverlap(requestedStart, requestedEnd, resStart, resEnd)) {
-          conflictInfo.type = 'definite'
-          conflicts.push(conflictInfo)
-        }
-        // No overlap - not a conflict, don't add
-      } else {
-        // Missing time data - can't determine, mark as possible
-        conflictInfo.type = 'possible'
-        possibleConflicts.push(conflictInfo)
-      }
-    }
-
-    // Process adjacent reservations (informational - sibling resources)
-    for (const { res, matchedResource } of adjacentReservations) {
-      if (!isReservationOnDate(res)) continue
-      
-      const resStartDate = res.start_date || res.begin_date
-      const resEndDate = res.end_date || resStartDate
-      const resStart = parseTimeToMinutes(res.start_time || res.begin_time)
-      const resEnd = parseTimeToMinutes(res.end_time)
-      
-      // Only show adjacent bookings that overlap with our time
-      const overlaps = (requestedStart !== null && requestedEnd !== null && 
-                        resStart !== null && resEnd !== null)
-        ? timesOverlap(requestedStart, requestedEnd, resStart, resEnd)
-        : true // If time unknown, show it anyway
-      
-      if (overlaps) {
-        adjacentBookings.push({
-          reservation_id: res.id || res.reservation_id,
-          description: res.description || res.event_description || 'Reservation',
-          resource_name: matchedResource,
-          start_date: resStartDate,
-          end_date: resEndDate,
-          start_time: formatTimeForDisplay(res.start_time || res.begin_time),
-          end_time: formatTimeForDisplay(res.end_time),
-          event_name: res.event?.name || res.event_name,
-          note: `Adjacent space (${matchedResource}) has a booking during this time`,
+      while (currentPage <= maxPages) {
+        const response = await fetch(apiUrl, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json',
+            'X-Page-Size': '1000',
+            'X-Page-Number': String(currentPage),
+          },
         })
+
+        if (!response.ok) {
+          classSchedulesError = `API returned ${response.status} on page ${currentPage}`
+          break
+        }
+        
+        const data = await response.json()
+        const pageSchedules = data.data || data || []
+        allSchedules.push(...pageSchedules)
+        
+        // Check if there are more pages
+        const totalCount = parseInt(response.headers.get('X-Total-Count') || '0')
+        const pageSize = 1000
+        
+        // Save for debug output
+        classSchedulesTotal = totalCount || allSchedules.length
+        classSchedulesPages = currentPage
+        
+        console.log(`Page ${currentPage}: fetched ${pageSchedules.length} (running total: ${allSchedules.length}, header total: ${totalCount})`)
+        
+        // Continue fetching if we got a full page OR if header says there's more
+        const hasMoreByHeader = totalCount > 0 && allSchedules.length < totalCount
+        const hasMoreByPageSize = pageSchedules.length >= pageSize
+        
+        if (!hasMoreByHeader && !hasMoreByPageSize) {
+          break
+        }
+        if (pageSchedules.length === 0) {
+          break
+        }
+        currentPage++
       }
+
+      if (allSchedules.length > 0) {
+        const schedules = allSchedules
+        classSchedulesChecked = schedules.length
+        classSchedulesPages = classSchedulesPages || 1
+        
+        console.log(`Fetched ${schedules.length} total class schedules from Veracross`)
+        
+        for (const schedule of schedules) {
+          // Get room info from schedule - API returns room.description and room.abbreviation
+          const roomDesc = (schedule.room?.description || '').trim()
+          const roomAbbrev = (schedule.room?.abbreviation || '').trim()
+          const roomName = (schedule.room?.name || schedule.room_name || schedule.location || '').trim()
+          
+          // Skip rooms with no meaningful identifier
+          if (!roomDesc && !roomAbbrev && !roomName) continue
+          if (roomDesc === '<None Specified>') continue
+          
+          // Extract room number from the API room (e.g., "902" from "902 Classroom")
+          const apiRoomNumber = roomDesc.match(/^\d+/)?.[0] || roomAbbrev || ''
+          
+          // Check if ANY room field matches our blocking or adjacent resources
+          const matchesResource = (resourceList: string[]) => {
+            return resourceList.some(r => {
+              // Extract room number from the resource name (e.g., "902" from "902 Classroom")
+              const resourceNumber = r.match(/^\d+/)?.[0] || ''
+              
+              // Match by room number (most reliable)
+              if (resourceNumber && apiRoomNumber && resourceNumber === apiRoomNumber) {
+                return true
+              }
+              
+              // Fallback: exact match on description
+              if (roomDesc && r.toLowerCase() === roomDesc.toLowerCase()) {
+                return true
+              }
+              
+              return false
+            })
+          }
+          
+          const isBlocking = matchesResource(blockingResources)
+          const isAdjacent = matchesResource(adjacentResources)
+          
+          if (!isBlocking && !isAdjacent) continue
+          
+          // Use the best available room identifier for display
+          const displayRoomName = roomDesc || roomAbbrev || roomName
+          
+          // Check if this class meets on the requested day
+          // The API should return day info - check various possible field names
+          const classDay = schedule.day?.name || schedule.day?.abbreviation || 
+                          schedule.day_name || schedule.day_of_week || ''
+          
+          // Skip if this class doesn't meet on our day
+          if (classDay && !patternIncludesDay(classDay, dayOfWeek)) {
+            continue
+          }
+          
+          // Check time overlap
+          const classStart = parseTimeToMinutes(schedule.start_time)
+          const classEnd = parseTimeToMinutes(schedule.end_time)
+          
+          const overlaps = timesOverlap(requestedStart, requestedEnd, classStart, classEnd)
+          
+          if (!overlaps) continue
+          
+          const className = schedule.class?.name || schedule.class_name || 
+                           schedule.course?.name || 'Class'
+          
+          const conflictInfo: ConflictInfo = {
+            type: (classStart !== null && classEnd !== null) ? 'definite' : 'possible',
+            source: 'class_schedule',
+            description: className,
+            resource_name: displayRoomName,
+            start_time: formatTimeForDisplay(schedule.start_time),
+            end_time: formatTimeForDisplay(schedule.end_time),
+            class_name: className,
+            days_pattern: classDay,
+          }
+          
+          if (isBlocking) {
+            if (conflictInfo.type === 'definite') {
+              conflicts.push(conflictInfo)
+            } else {
+              possibleConflicts.push(conflictInfo)
+            }
+          } else if (isAdjacent) {
+            adjacentBookings.push({
+              source: 'class_schedule',
+              description: className,
+              resource_name: displayRoomName,
+              start_time: formatTimeForDisplay(schedule.start_time),
+              end_time: formatTimeForDisplay(schedule.end_time),
+              days_pattern: classDay,
+              note: `Class in adjacent space (${displayRoomName})`,
+            })
+          }
+        }
+      }
+    } catch (classError: any) {
+      console.warn('Class schedules check failed:', classError.message)
+      classSchedulesError = classError.message
+      // Continue to reservation check even if class check fails
+    }
+
+    // ==========================================
+    // CHECK 2: Resource Reservations (Local DB)
+    // Uses ops_raw_events from BigQuery sync which has the days pattern
+    // ==========================================
+    try {
+      // Build list of all resource names to check (blocking + adjacent)
+      const allResourcesToCheck = [...blockingResources, ...adjacentResources]
+      
+      // Query ops_raw_events for reservations on this date
+      // We filter by date range, and then by recurring_pattern client-side
+      const { data: reservations, error: dbError } = await supabase
+        .from('ops_raw_events')
+        .select('*')
+        .eq('source', 'bigquery_resource')
+        .lte('start_date', date) // Reservation starts on or before our date
+        .or(`end_date.gte.${date},end_date.is.null`) // And ends on or after (or is single-day)
+      
+      if (dbError) {
+        console.warn('Could not fetch reservations from local DB:', dbError)
+      } else if (reservations) {
+        console.log(`Fetched ${reservations.length} reservations from local database`)
+        reservationsChecked = reservations.length
+        
+        for (const res of reservations) {
+          // Skip if this is the event we're currently editing
+          if (exclude_event_id && res.id === exclude_event_id) {
+            console.log(`Skipping reservation "${res.title}" - matches exclude_event_id`)
+            continue
+          }
+          
+          // Also skip by matching name + date + time (fallback for when ID doesn't match)
+          if (exclude_event_name && res.title === exclude_event_name && 
+              res.start_date === date && 
+              formatTimeForDisplay(res.start_time) === formatTimeForDisplay(start_time) &&
+              formatTimeForDisplay(res.end_time) === formatTimeForDisplay(end_time)) {
+            console.log(`Skipping reservation "${res.title}" - matches by name/date/time`)
+            continue
+          }
+          
+          // Check if this resource matches our blocking or adjacent resources
+          const resResource = res.resource || ''
+          
+          const isBlocking = blockingResources.some(r => 
+            resResource.toLowerCase().includes(r.toLowerCase()) ||
+            r.toLowerCase().includes(resResource.toLowerCase())
+          )
+          const isAdjacent = adjacentResources.some(r => 
+            resResource.toLowerCase().includes(r.toLowerCase()) ||
+            r.toLowerCase().includes(resResource.toLowerCase())
+          )
+          
+          if (!isBlocking && !isAdjacent) continue
+          
+          // Check if this is a recurring reservation and if our day matches
+          const daysPattern = res.recurring_pattern
+          if (daysPattern && res.start_date !== res.end_date) {
+            // It's recurring - check if our day matches the pattern
+            if (!patternIncludesDay(daysPattern, dayOfWeek)) {
+              console.log(`Skipping reservation "${res.title}" - days ${daysPattern} doesn't include ${dayName}`)
+              continue
+            }
+          }
+          
+          // Check time overlap
+          const resStart = parseTimeToMinutes(res.start_time)
+          const resEnd = parseTimeToMinutes(res.end_time)
+          
+          const overlaps = timesOverlap(requestedStart, requestedEnd, resStart, resEnd)
+          
+          if (!overlaps && resStart !== null && resEnd !== null) continue
+          
+          const conflictInfo: ConflictInfo = {
+            type: (resStart !== null && resEnd !== null && overlaps) ? 'definite' : 'possible',
+            source: 'reservation',
+            description: res.title || 'Reservation',
+            resource_name: resResource,
+            start_date: res.start_date,
+            end_date: res.end_date,
+            start_time: formatTimeForDisplay(res.start_time),
+            end_time: formatTimeForDisplay(res.end_time),
+            days_pattern: daysPattern,
+          }
+          
+          if (isBlocking) {
+            if (conflictInfo.type === 'definite') {
+              conflicts.push(conflictInfo)
+            } else {
+              possibleConflicts.push(conflictInfo)
+            }
+          } else if (isAdjacent) {
+            adjacentBookings.push({
+              source: 'reservation',
+              description: res.title || 'Reservation',
+              resource_name: resResource,
+              start_time: formatTimeForDisplay(res.start_time),
+              end_time: formatTimeForDisplay(res.end_time),
+              days_pattern: daysPattern,
+              note: `Reservation in adjacent space (${resResource})`,
+            })
+          }
+        }
+      }
+    } catch (resError: any) {
+      console.warn('Reservations check failed:', resError.message)
     }
 
     const available = conflicts.length === 0
@@ -502,10 +544,15 @@ export async function POST(request: Request) {
       conflicts,
       possible_conflicts: possibleConflicts,
       adjacent_bookings: adjacentBookings,
-      raw_reservations: reservations, // Full API response for debugging
-      blocking_count: blockingReservations.length,
-      adjacent_count: adjacentReservations.length,
-      total_count: reservations.length,
+      debug: {
+        class_schedules_checked: classSchedulesChecked,
+        class_schedules_total: classSchedulesTotal,
+        class_schedules_pages: classSchedulesPages,
+        class_schedules_error: classSchedulesError,
+        reservations_checked: reservationsChecked,
+        checking_day: `${dayName} (${dayOfWeek})`,
+        requested_time: `${start_time} - ${end_time}`,
+      },
     } as AvailabilityResponse)
 
   } catch (error: any) {

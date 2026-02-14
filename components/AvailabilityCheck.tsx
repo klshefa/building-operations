@@ -29,6 +29,8 @@ interface AvailabilityCheckProps {
   date: string
   startTime: string
   endTime: string
+  excludeEventId?: string  // When editing an event, exclude it from conflict results
+  excludeEventName?: string // Fallback: exclude by matching name
   className?: string
 }
 
@@ -37,6 +39,8 @@ export function AvailabilityCheck({
   date,
   startTime,
   endTime,
+  excludeEventId,
+  excludeEventName,
   className = '',
 }: AvailabilityCheckProps) {
   const [checking, setChecking] = useState(false)
@@ -51,7 +55,7 @@ export function AvailabilityCheck({
     }
 
     // Create a key to avoid duplicate checks
-    const checkKey = `${resourceName}|${date}|${startTime}|${endTime}`
+    const checkKey = `${resourceName}|${date}|${startTime}|${endTime}|${excludeEventId}`
     if (checkKey === lastChecked) return
 
     setChecking(true)
@@ -66,6 +70,8 @@ export function AvailabilityCheck({
           date,
           start_time: startTime,
           end_time: endTime,
+          exclude_event_id: excludeEventId,
+          exclude_event_name: excludeEventName,
         }),
       })
 
@@ -77,7 +83,7 @@ export function AvailabilityCheck({
     } finally {
       setChecking(false)
     }
-  }, [resourceName, date, startTime, endTime, lastChecked])
+  }, [resourceName, date, startTime, endTime, excludeEventId, excludeEventName, lastChecked])
 
   // Debounced check when inputs change
   useEffect(() => {
