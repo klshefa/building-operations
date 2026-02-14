@@ -1,18 +1,15 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getCookieDomain } from '@/lib/utils/cookieDomain'
 import { createAdminClient } from '@/lib/api-auth'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rkfwphowryckqkozscfi.supabase.co'
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrZndwaG93cnlja3Frb3pzY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0Mzg2MTEsImV4cCI6MjA3MzAxNDYxMX0.BRxY8LGo1iVhO-9j6eVc_vQ4UcXWa8uweOsY_DDuhq4'
-
 export async function GET(request: Request) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
-  const error = requestUrl.searchParams.get('error')
-  const errorDescription = requestUrl.searchParams.get('error_description')
-  const next = requestUrl.searchParams.get('next') ?? '/events'
-  const origin = requestUrl.origin
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  const error = searchParams.get('error')
+  const errorDescription = searchParams.get('error_description')
+  const next = searchParams.get('next') ?? '/events'
 
   // Check if Supabase returned an error
   if (error) {
@@ -25,21 +22,28 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/?error=auth_callback_error`)
   }
 
-  // Track cookies to set on the response
-  const cookiesToSet: Array<{ name: string; value: string; options: any }> = []
   const cookieStore = await cookies()
+  const cookieDomain = getCookieDomain()
 
   const supabase = createServerClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
+    'https://rkfwphowryckqkozscfi.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrZndwaG93cnlja3Frb3pzY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0Mzg2MTEsImV4cCI6MjA3MzAxNDYxMX0.BRxY8LGo1iVhO-9j6eVc_vQ4UcXWa8uweOsY_DDuhq4',
     {
       cookies: {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookiesToSet.push({ name, value, options })
+        setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set({
+              name,
+              value,
+              ...options,
+              domain: cookieDomain,
+              secure: true,
+              sameSite: 'lax',
+              path: '/',
+            })
           })
         },
       },
@@ -91,13 +95,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Create redirect response and explicitly set all cookies
-  const response = NextResponse.redirect(`${origin}${next}`)
-  
-  cookiesToSet.forEach(({ name, value, options }) => {
-    response.cookies.set(name, value, options)
-  })
-
-  console.log('Auth successful for:', user.email, '- setting', cookiesToSet.length, 'cookies')
-  return response
+  console.log('Auth successful for:', user.email)
+  return NextResponse.redirect(`${origin}${next}`)
 }
