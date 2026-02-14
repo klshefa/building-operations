@@ -6,8 +6,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import Navbar from '@/components/Navbar'
 import { StaffLookup, type StaffMember } from '@/components/StaffLookup'
-import { createClient } from '@/lib/supabase/client'
-import type { User } from '@supabase/supabase-js'
+import { useAuth } from '@/lib/hooks/useAuth'
 import type { OpsUser, UserRole, TeamType } from '@/lib/types'
 import {
   UserPlusIcon,
@@ -71,9 +70,7 @@ interface EventFilter {
 
 export default function AdminPage() {
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [userRole, setUserRole] = useState<UserRole | null>(null)
+  const { user, loading: authLoading, role: userRole, isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<AdminTab>('event')
   const [users, setUsers] = useState<OpsUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -113,16 +110,18 @@ export default function AdminPage() {
   const [showLocationDropdown, setShowLocationDropdown] = useState(false)
 
   useEffect(() => {
-    fetchUserInfo()
-  }, [])
+    if (!authLoading && !user) {
+      router.push('/')
+    }
+  }, [authLoading, user, router])
 
   useEffect(() => {
-    if (userRole === 'admin') {
+    if (isAdmin) {
       fetchUsers()
       fetchFilters()
       fetchResources()
     }
-  }, [userRole])
+  }, [isAdmin])
 
   async function fetchResources() {
     try {
@@ -135,25 +134,6 @@ export default function AdminPage() {
       console.error('Error fetching resources:', err)
     }
     setResourcesLoading(false)
-  }
-
-  async function fetchUserInfo() {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) {
-      router.push('/')
-      return
-    }
-    setUser(session.user)
-    
-    try {
-      const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email!.toLowerCase())}`)
-      const data = await response.json()
-      setUserRole(data.role || null)
-    } catch {
-      setUserRole(null)
-    }
-    setAuthLoading(false)
   }
 
   async function fetchUsers() {
@@ -444,7 +424,7 @@ export default function AdminPage() {
     )
   }
 
-  if (userRole !== 'admin') {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <Navbar />
