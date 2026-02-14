@@ -1,8 +1,11 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { createClient } from '@/lib/supabase/client'
+import type { User } from '@supabase/supabase-js'
+import type { UserRole } from '@/lib/types'
 import {
   HomeIcon,
   CalendarDaysIcon,
@@ -23,7 +26,33 @@ const navItems = [
 
 export default function Navbar() {
   const pathname = usePathname()
-  const { user, userRole, signOut } = useAuth()
+  const [user, setUser] = useState<User | null>(null)
+  const [userRole, setUserRole] = useState<UserRole | null>(null)
+
+  useEffect(() => {
+    async function loadUser() {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      setUser(session?.user || null)
+      
+      if (session?.user?.email) {
+        try {
+          const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email.toLowerCase())}`)
+          const data = await response.json()
+          setUserRole(data.role || null)
+        } catch {
+          setUserRole(null)
+        }
+      }
+    }
+    loadUser()
+  }, [])
+
+  async function signOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
 
   const isAdmin = userRole === 'admin'
 
