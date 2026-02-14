@@ -40,6 +40,7 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (error) {
+      console.error('OAuth exchange error:', error.message)
       return NextResponse.redirect(`${origin}/?error=auth_callback_error`)
     }
 
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/?error=unauthorized_domain`)
       }
 
-      // Check if user has access to Building Operations
+      // Check if user has access to Building Operations via ops_users
       const { data: accessData } = await supabase
         .from('ops_users')
         .select('*')
