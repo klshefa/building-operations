@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
 import { format, parseISO, addDays } from 'date-fns'
-import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
 import type { OpsEvent, EventSource } from '@/lib/types'
@@ -25,6 +26,9 @@ const sourceFilters: { value: EventSource | 'all'; label: string }[] = [
 ]
 
 export default function EventsPage() {
+  const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -33,8 +37,25 @@ export default function EventsPage() {
   const [dateRange, setDateRange] = useState<'week' | 'month' | 'all'>('month')
 
   useEffect(() => {
-    fetchEvents()
-  }, [sourceFilter, showHidden, dateRange])
+    checkUser()
+  }, [])
+
+  useEffect(() => {
+    if (user) {
+      fetchEvents()
+    }
+  }, [user, sourceFilter, showHidden, dateRange])
+
+  async function checkUser() {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      router.push('/')
+      return
+    }
+    setUser(session.user)
+    setAuthLoading(false)
+  }
 
   async function fetchEvents() {
     setLoading(true)
@@ -92,10 +113,17 @@ export default function EventsPage() {
     return acc
   }, {} as Record<string, OpsEvent[]>)
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
-    <AuthRequired>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <Navbar />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <Navbar />
         
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
@@ -187,6 +215,5 @@ export default function EventsPage() {
           )}
         </main>
       </div>
-    </AuthRequired>
   )
 }

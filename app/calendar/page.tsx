@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
 import { 
   format, 
@@ -21,7 +22,6 @@ import {
   subDays,
   isSameDay 
 } from 'date-fns'
-import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
 import type { OpsEvent, EventSource } from '@/lib/types'
@@ -60,6 +60,8 @@ const sourceLabels: Record<EventSource, string> = {
 
 export default function CalendarPage() {
   const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [events, setEvents] = useState<OpsEvent[]>([])
@@ -67,8 +69,25 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   useEffect(() => {
-    fetchEvents()
-  }, [currentDate, viewMode])
+    checkUser()
+  }, [])
+
+  useEffect(() => {
+    if (user) {
+      fetchEvents()
+    }
+  }, [user, currentDate, viewMode])
+
+  async function checkUser() {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      router.push('/')
+      return
+    }
+    setUser(session.user)
+    setAuthLoading(false)
+  }
 
   async function fetchEvents() {
     setLoading(true)
@@ -139,10 +158,17 @@ export default function CalendarPage() {
 
   const selectedDayEvents = selectedDate ? getEventsForDay(selectedDate) : []
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
-    <AuthRequired>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <Navbar />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <Navbar />
         
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
@@ -404,6 +430,5 @@ export default function CalendarPage() {
           )}
         </main>
       </div>
-    </AuthRequired>
   )
 }

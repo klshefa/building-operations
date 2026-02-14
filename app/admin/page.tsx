@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import { StaffLookup, type StaffMember } from '@/components/StaffLookup'
 import { createClient } from '@/lib/supabase/client'
@@ -67,7 +67,9 @@ interface EventFilter {
 }
 
 export default function AdminPage() {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [userRole, setUserRole] = useState<UserRole | null>(null)
   const [activeTab, setActiveTab] = useState<AdminTab>('event')
   const [users, setUsers] = useState<OpsUser[]>([])
@@ -116,17 +118,20 @@ export default function AdminPage() {
   async function fetchUserInfo() {
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
-    setUser(session?.user || null)
-    
-    if (session?.user?.email) {
-      try {
-        const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email.toLowerCase())}`)
-        const data = await response.json()
-        setUserRole(data.role || null)
-      } catch {
-        setUserRole(null)
-      }
+    if (!session?.user) {
+      router.push('/')
+      return
     }
+    setUser(session.user)
+    
+    try {
+      const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email!.toLowerCase())}`)
+      const data = await response.json()
+      setUserRole(data.role || null)
+    } catch {
+      setUserRole(null)
+    }
+    setAuthLoading(false)
   }
 
   async function fetchUsers() {
@@ -409,26 +414,31 @@ export default function AdminPage() {
     )
   }
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   if (userRole !== 'admin') {
     return (
-      <AuthRequired>
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-          <Navbar />
-          <main className="max-w-7xl mx-auto px-4 py-8">
-            <div className="bg-white rounded-xl p-8 text-center">
-              <h1 className="text-xl font-semibold text-slate-800">Access Denied</h1>
-              <p className="text-slate-600 mt-2">Admin access required</p>
-            </div>
-          </main>
-        </div>
-      </AuthRequired>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <Navbar />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-xl p-8 text-center">
+            <h1 className="text-xl font-semibold text-slate-800">Access Denied</h1>
+            <p className="text-slate-600 mt-2">Admin access required</p>
+          </div>
+        </main>
+      </div>
     )
   }
 
   return (
-    <AuthRequired>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <Navbar />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <Navbar />
         
         <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl font-bold text-slate-800 mb-6">Admin</h1>
@@ -941,6 +951,5 @@ export default function AdminPage() {
           </div>
         </main>
       </div>
-    </AuthRequired>
   )
 }

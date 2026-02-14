@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
-import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import { createClient } from '@/lib/supabase/client'
 import type { OpsEvent } from '@/lib/types'
@@ -20,13 +20,33 @@ interface ConflictPair {
 }
 
 export default function ConflictsPage() {
+  const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [conflicts, setConflicts] = useState<ConflictPair[]>([])
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchConflicts()
+    checkUser()
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      fetchConflicts()
+    }
+  }, [user])
+
+  async function checkUser() {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      router.push('/')
+      return
+    }
+    setUser(session.user)
+    setAuthLoading(false)
+  }
 
   async function fetchConflicts() {
     setLoading(true)
@@ -65,10 +85,17 @@ export default function ConflictsPage() {
     }
   }
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
-    <AuthRequired>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <Navbar />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <Navbar />
         
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
@@ -149,6 +176,5 @@ export default function ConflictsPage() {
           )}
         </main>
       </div>
-    </AuthRequired>
   )
 }
