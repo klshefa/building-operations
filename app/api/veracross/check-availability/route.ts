@@ -102,6 +102,12 @@ async function getAccessToken(supabase: ReturnType<typeof getSupabaseClient>): P
 function parseTimeToMinutes(timeStr: string | null | undefined): number | null {
   if (!timeStr) return null
   
+  // Handle ISO datetime format "1900-01-01T09:00:00Z" or "2026-02-16T09:00:00Z"
+  const iso = timeStr.match(/T(\d{2}):(\d{2}):(\d{2})/)
+  if (iso) {
+    return parseInt(iso[1]) * 60 + parseInt(iso[2])
+  }
+  
   // Handle "HH:MM" format
   const hhmm = timeStr.match(/^(\d{1,2}):(\d{2})$/)
   if (hhmm) {
@@ -128,6 +134,23 @@ function parseTimeToMinutes(timeStr: string | null | undefined): number | null {
   }
   
   return null
+}
+
+// Format time for display (extracts time from ISO or returns as-is)
+function formatTimeForDisplay(timeStr: string | null | undefined): string {
+  if (!timeStr) return ''
+  
+  // Handle ISO datetime format - extract just the time part
+  const iso = timeStr.match(/T(\d{2}):(\d{2})/)
+  if (iso) {
+    const hours = parseInt(iso[1])
+    const minutes = iso[2]
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+    return `${displayHours}:${minutes} ${period}`
+  }
+  
+  return timeStr
 }
 
 // Check if two time ranges overlap
@@ -307,8 +330,8 @@ export async function POST(request: Request) {
         description: res.description || res.event_description || 'Reservation',
         start_date: resStartDate,
         end_date: resEndDate,
-        start_time: res.start_time || res.begin_time,
-        end_time: res.end_time,
+        start_time: formatTimeForDisplay(res.start_time || res.begin_time),
+        end_time: formatTimeForDisplay(res.end_time),
         event_name: res.event?.name || res.event_name,
         contact_person: res.contact_person || res.event?.contact_person,
       }
