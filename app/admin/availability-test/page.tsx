@@ -480,14 +480,14 @@ export default function AvailabilityTestPage() {
                 <div className="mt-4 pt-4 border-t border-slate-100">
                   <button
                     onClick={() => setShowDebug(!showDebug)}
-                    className="text-xs text-slate-400 hover:text-slate-600"
+                    className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded cursor-pointer"
                   >
                     {showDebug ? 'Hide' : 'Show'} raw API response
                   </button>
                   
-                  {showDebug && result.raw_reservations && (
+                  {showDebug && (
                     <pre className="mt-2 p-3 bg-slate-50 rounded-lg text-xs overflow-auto max-h-96">
-                      {JSON.stringify(result.raw_reservations, null, 2)}
+                      {JSON.stringify(result, null, 2)}
                     </pre>
                   )}
                 </div>
