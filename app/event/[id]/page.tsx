@@ -166,17 +166,27 @@ export default function EventDetailPage() {
     fetchEvent()
   }, [params.id])
 
-  // Check subscription status when user and event are loaded
+  // Check subscription status when event is loaded
   useEffect(() => {
-    if (user?.email && params.id) {
+    if (params.id && event) {
       checkSubscription()
     }
-  }, [user?.email, params.id])
+  }, [params.id, event?.id])
 
   async function checkSubscription() {
-    if (!user?.email) return
+    let email = user?.email
+    
+    if (!email) {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      email = session?.user?.email
+    }
+    
+    if (!email) return
+    
     try {
-      const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`)
+      const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(email)}`)
       const result = await response.json()
       setSubscribed(result.subscribed)
     } catch (error) {
@@ -185,13 +195,29 @@ export default function EventDetailPage() {
   }
 
   async function toggleSubscription() {
-    if (!user?.email) return
+    // Get email from user or try to get from Supabase session
+    let email = user?.email
+    let name = user?.user_metadata?.full_name
+    
+    if (!email) {
+      // Try to get from Supabase directly
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      email = session?.user?.email
+      name = session?.user?.user_metadata?.full_name
+    }
+    
+    if (!email) {
+      alert('Please log in to subscribe to events')
+      return
+    }
     
     setSubscribing(true)
     try {
       if (subscribed) {
         // Unsubscribe
-        const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`, {
+        const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(email)}`, {
           method: 'DELETE'
         })
         const result = await response.json()
@@ -204,8 +230,8 @@ export default function EventDetailPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            email: user.email, 
-            name: user.user_metadata?.full_name || user.email 
+            email: email, 
+            name: name || email 
           })
         })
         const result = await response.json()
@@ -357,7 +383,7 @@ export default function EventDetailPage() {
               {/* Subscribe button */}
               <button
                 onClick={toggleSubscription}
-                disabled={subscribing || !user}
+                disabled={subscribing}
                 title={subscribed ? 'Unsubscribe from notifications' : 'Subscribe to get notifications when this event changes'}
                 className={`p-2 rounded-lg border transition-all ${
                   subscribed
