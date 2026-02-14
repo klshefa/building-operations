@@ -186,9 +186,11 @@ export async function POST(request: Request) {
     // Also get single-day reservations on our date
     // We may need to make two queries or handle this in post-processing
     
-    const apiUrl = `${VERACROSS_API_BASE}/resource_reservations?${queryParams.toString()}`
+    // Veracross v3 API endpoint for resource reservations
+    const apiUrl = `${VERACROSS_API_BASE}/resource_reservations/reservations?${queryParams.toString()}`
     
     console.log('Querying Veracross:', apiUrl)
+    console.log('Using token:', accessToken ? 'Yes (length: ' + accessToken.length + ')' : 'No')
     
     const response = await fetch(apiUrl, {
       headers: {
@@ -199,12 +201,25 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('Veracross API error:', response.status, errorText)
+      console.error('Veracross API error:', response.status, errorText, 'URL:', apiUrl)
+      
+      // If 404, provide more helpful error
+      if (response.status === 404) {
+        return NextResponse.json({
+          available: false,
+          conflicts: [],
+          possible_conflicts: [],
+          error: `Veracross API endpoint not found (404). Check VERACROSS_API_BASE and scope. Tried: ${apiUrl}`,
+          debug: { url: apiUrl, status: response.status, body: errorText }
+        } as AvailabilityResponse, { status: 500 })
+      }
+      
       return NextResponse.json({
         available: false,
         conflicts: [],
         possible_conflicts: [],
-        error: `Veracross API error: ${response.status}`
+        error: `Veracross API error: ${response.status}`,
+        debug: { url: apiUrl, status: response.status, body: errorText }
       } as AvailabilityResponse, { status: 500 })
     }
 

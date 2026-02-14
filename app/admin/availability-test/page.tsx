@@ -344,9 +344,16 @@ export default function AvailabilityTestPage() {
             </h2>
 
             {result.error ? (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-                <ExclamationTriangleIcon className="w-5 h-5 inline mr-2" />
-                {result.error}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="text-red-700">
+                  <ExclamationTriangleIcon className="w-5 h-5 inline mr-2" />
+                  {result.error}
+                </div>
+                {(result as any).debug && (
+                  <pre className="mt-3 p-2 bg-red-100 rounded text-xs text-red-800 overflow-auto">
+                    {JSON.stringify((result as any).debug, null, 2)}
+                  </pre>
+                )}
               </div>
             ) : (
               <>
