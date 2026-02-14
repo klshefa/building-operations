@@ -85,25 +85,15 @@ export default function AvailabilityTestPage() {
     checkAuth()
   }, [router])
 
-  // Common school resources (fallback)
-  const commonResources = [
-    'Beit Midrash',
-    'Gymnasium',
-    'Cafeteria',
-    'Library',
-    'Auditorium',
-    'Conference Room',
-    'Art Room',
-    'Music Room',
-    'Science Lab',
-    'Computer Lab',
-    'Main Office',
-    'Multi-Purpose Room',
-  ]
+  const [resourcesLoading, setResourcesLoading] = useState(true)
+  const [resourcesError, setResourcesError] = useState<string | null>(null)
 
-  // Load resources
+  // Load resources from ops_resources table (synced from BigQuery)
   useEffect(() => {
     async function loadResources() {
+      setResourcesLoading(true)
+      setResourcesError(null)
+      
       const supabase = createClient()
       const { data, error } = await supabase
         .from('ops_resources')
@@ -112,29 +102,15 @@ export default function AvailabilityTestPage() {
       
       console.log('Resources loaded:', data?.length, error)
       
-      if (data && data.length > 0) {
+      if (error) {
+        setResourcesError(`Failed to load resources: ${error.message}`)
+      } else if (data && data.length > 0) {
         setResources(data)
       } else {
-        // If no resources in table, try to get unique locations from events
-        const { data: events } = await supabase
-          .from('ops_events')
-          .select('location')
-          .not('location', 'is', null)
-        
-        if (events && events.length > 0) {
-          const uniqueLocations = [...new Set(events.map(e => e.location).filter(Boolean))]
-          setResources(uniqueLocations.map((loc, i) => ({
-            id: i,
-            description: loc as string,
-          })))
-        } else {
-          // Use common resources as last fallback
-          setResources(commonResources.map((loc, i) => ({
-            id: i,
-            description: loc,
-          })))
-        }
+        setResourcesError('No resources found. Please sync resources from Admin > Data Sync first.')
       }
+      
+      setResourcesLoading(false)
     }
     
     if (!checkingAuth) {
@@ -224,6 +200,13 @@ export default function AvailabilityTestPage() {
             Check Availability
           </h2>
 
+          {/* Resources Error/Warning */}
+          {resourcesError && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
+              {resourcesError}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {/* Resource Searchable Dropdown */}
             <div className="relative">
@@ -240,20 +223,22 @@ export default function AvailabilityTestPage() {
                     setShowDropdown(true)
                   }}
                   onFocus={() => setShowDropdown(true)}
-                  placeholder="Type to search..."
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 pr-8 focus:border-shefa-blue-500 focus:outline-none"
+                  placeholder={resourcesLoading ? "Loading resources..." : "Type to search..."}
+                  disabled={resourcesLoading}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 pr-8 focus:border-shefa-blue-500 focus:outline-none disabled:bg-slate-100"
                 />
                 <button
                   type="button"
                   onClick={() => setShowDropdown(!showDropdown)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  disabled={resourcesLoading || resources.length === 0}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:opacity-50"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
               </div>
-              {showDropdown && (
+              {showDropdown && resources.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
                   {resources
                     .filter(r => r.description.toLowerCase().includes(selectedResource.toLowerCase()))
@@ -272,10 +257,13 @@ export default function AvailabilityTestPage() {
                     ))}
                   {resources.filter(r => r.description.toLowerCase().includes(selectedResource.toLowerCase())).length === 0 && (
                     <div className="px-3 py-2 text-sm text-slate-500">
-                      No matches - press Enter to use "{selectedResource}"
+                      No matches found
                     </div>
                   )}
                 </div>
+              )}
+              {resources.length > 0 && (
+                <p className="text-xs text-slate-400 mt-1">{resources.length} resources from Veracross</p>
               )}
             </div>
 
