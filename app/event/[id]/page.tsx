@@ -152,7 +152,7 @@ function cleanLocation(location: string | null | undefined): string {
 export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const [event, setEvent] = useState<OpsEvent | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -168,14 +168,13 @@ export default function EventDetailPage() {
 
   // Check subscription status when user and event are loaded
   useEffect(() => {
-    if (params.id && user?.email) {
+    if (user?.email && params.id) {
       checkSubscription()
     }
-  }, [params.id, user?.email])
+  }, [user?.email, params.id])
 
   async function checkSubscription() {
     if (!user?.email) return
-    
     try {
       const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`)
       const result = await response.json()
@@ -358,17 +357,15 @@ export default function EventDetailPage() {
               {/* Subscribe button */}
               <button
                 onClick={toggleSubscription}
-                disabled={subscribing || authLoading || !user}
+                disabled={subscribing || !user}
                 title={subscribed ? 'Unsubscribe from notifications' : 'Subscribe to get notifications when this event changes'}
                 className={`p-2 rounded-lg border transition-all ${
-                  !user || authLoading
-                    ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-wait'
-                    : subscribed
-                      ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  subscribed
+                    ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
                 }`}
               >
-                {subscribing || authLoading ? (
+                {subscribing ? (
                   <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : subscribed ? (
                   <BellIcon className="w-5 h-5 fill-current" />
