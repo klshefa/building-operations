@@ -59,6 +59,7 @@ export default function AvailabilityTestPage() {
   // Result state
   const [result, setResult] = useState<AvailabilityResult | null>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [clearingToken, setClearingToken] = useState(false)
 
   // Auth check
   useEffect(() => {
@@ -124,6 +125,23 @@ export default function AvailabilityTestPage() {
     const today = new Date().toISOString().split('T')[0]
     setSelectedDate(today)
   }, [])
+
+  const clearTokenCache = async () => {
+    setClearingToken(true)
+    try {
+      const response = await fetch('/api/veracross/clear-token', { method: 'POST' })
+      const data = await response.json()
+      if (data.success) {
+        alert('Token cache cleared! Next check will use a fresh token with updated scopes.')
+      } else {
+        alert(`Failed to clear token: ${data.error}`)
+      }
+    } catch (error: any) {
+      alert(`Error: ${error.message}`)
+    } finally {
+      setClearingToken(false)
+    }
+  }
 
   const checkAvailability = async () => {
     if (!selectedResource || !selectedDate) {
@@ -488,6 +506,19 @@ export default function AvailabilityTestPage() {
             <li>• <strong>Possible conflicts:</strong> Same resource/date but missing time data</li>
             <li>• Uses OAuth2 tokens cached in database (auto-refreshes)</li>
           </ul>
+          
+          <div className="mt-4 pt-3 border-t border-blue-200">
+            <p className="text-xs text-blue-600 mb-2">
+              If you update API scopes in Veracross, clear the token cache to use the new scopes:
+            </p>
+            <button
+              onClick={clearTokenCache}
+              disabled={clearingToken}
+              className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {clearingToken ? 'Clearing...' : 'Clear Token Cache'}
+            </button>
+          </div>
         </div>
       </main>
     </div>
