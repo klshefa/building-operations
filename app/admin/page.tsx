@@ -70,7 +70,7 @@ interface EventFilter {
 
 export default function AdminPage() {
   const router = useRouter()
-  const { user, loading: authLoading, role: userRole, isAdmin } = useAuth()
+  const { user, loading: authLoading, hasAccess } = useAuth()
   const [activeTab, setActiveTab] = useState<AdminTab>('event')
   const [users, setUsers] = useState<OpsUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -116,12 +116,12 @@ export default function AdminPage() {
   }, [authLoading, user, router])
 
   useEffect(() => {
-    if (isAdmin) {
+    if (hasAccess) {
       fetchUsers()
       fetchFilters()
       fetchResources()
     }
-  }, [isAdmin])
+  }, [hasAccess])
 
   async function fetchResources() {
     try {
@@ -424,7 +424,7 @@ export default function AdminPage() {
     )
   }
 
-  if (!isAdmin) {
+  if (!hasAccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <Navbar />

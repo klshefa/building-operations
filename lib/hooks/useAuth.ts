@@ -3,14 +3,11 @@
 import { useEffect, useState, createContext, useContext } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
-import { UserRole } from '@/lib/types'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  role: UserRole | null
   teams: string[]
-  isAdmin: boolean
   hasAccess: boolean
   signOut: () => Promise<void>
 }
@@ -28,9 +25,7 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [role, setRole] = useState<UserRole | null>(null)
   const [teams, setTeams] = useState<string[]>([])
-  const [isAdmin, setIsAdmin] = useState(false)
   const [hasAccess, setHasAccess] = useState(false)
 
   useEffect(() => {
@@ -41,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user?.email) {
-        fetchUserRole(session.user.email)
+        fetchUserAccess(session.user.email)
       } else {
         resetAuth()
       }
@@ -51,9 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   function resetAuth() {
-    setRole(null)
     setTeams([])
-    setIsAdmin(false)
     setHasAccess(false)
   }
 
@@ -63,29 +56,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(session?.user ?? null)
     
     if (session?.user?.email) {
-      await fetchUserRole(session.user.email)
+      await fetchUserAccess(session.user.email)
     }
     
     setLoading(false)
   }
 
-  async function fetchUserRole(email: string) {
+  async function fetchUserAccess(email: string) {
     const supabase = createClient()
     const emailLower = email.toLowerCase()
     
     try {
-      // First check ops_users table
-      const { data: opsUser, error: opsError } = await supabase
+      // Check ops_users table for access and team assignments
+      const { data: opsUser } = await supabase
         .from('ops_users')
-        .select('role, teams, is_active')
+        .select('teams, is_active')
         .eq('email', emailLower)
         .eq('is_active', true)
         .maybeSingle()
 
       if (opsUser) {
-        setRole(opsUser.role as UserRole)
         setTeams(opsUser.teams || [])
-        setIsAdmin(opsUser.role === 'admin')
         setHasAccess(true)
         return
       }
@@ -98,9 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle()
 
       if (superAdmin) {
-        setRole('admin')
         setTeams([])
-        setIsAdmin(true)
         setHasAccess(true)
         return
       }
@@ -108,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // No access
       resetAuth()
     } catch (err) {
-      console.error('Error fetching user role:', err)
+      console.error('Error fetching user access:', err)
       resetAuth()
     }
   }
@@ -122,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, role, teams, isAdmin, hasAccess, signOut }}>
+    <AuthContext.Provider value={{ user, loading, teams, hasAccess, signOut }}>
       {children}
     </AuthContext.Provider>
   )

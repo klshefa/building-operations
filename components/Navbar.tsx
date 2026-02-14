@@ -19,11 +19,12 @@ const navItems = [
   { name: 'All Events', href: '/events', icon: ListBulletIcon },
   { name: 'My Tasks', href: '/my-tasks', icon: ClipboardDocumentCheckIcon },
   { name: 'Conflicts', href: '/conflicts', icon: ExclamationTriangleIcon },
+  { name: 'Admin', href: '/admin', icon: Cog6ToothIcon },
 ]
 
 export default function Navbar() {
   const pathname = usePathname()
-  const { user, role, isAdmin, signOut } = useAuth()
+  const { user, signOut } = useAuth()
 
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -40,10 +41,10 @@ export default function Navbar() {
               </Link>
             </div>
 
-            {/* Navigation Links */}
+            {/* Navigation Links - All users see all links */}
             <div className="hidden md:ml-8 md:flex md:space-x-1">
               {navItems.map((item) => {
-                const isActive = pathname === item.href
+                const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
                 return (
                   <Link
                     key={item.name}
@@ -59,19 +60,6 @@ export default function Navbar() {
                   </Link>
                 )
               })}
-              {isAdmin && (
-                <Link
-                  href="/admin"
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    pathname.startsWith('/admin')
-                      ? 'bg-shefa-blue-50 text-shefa-blue-700'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <Cog6ToothIcon className="w-5 h-5 mr-1.5" />
-                  Admin
-                </Link>
-              )}
             </div>
           </div>
 
@@ -82,9 +70,6 @@ export default function Navbar() {
                 <div className="hidden sm:flex flex-col items-end">
                   <span className="text-sm font-medium text-slate-700">
                     {user.email?.split('@')[0]}
-                  </span>
-                  <span className="text-xs text-slate-500 capitalize">
-                    {role?.replace('_', ' ') || 'User'}
                   </span>
                 </div>
                 <button
@@ -104,7 +89,7 @@ export default function Navbar() {
       <div className="md:hidden border-t border-slate-200">
         <div className="flex overflow-x-auto py-2 px-4 gap-1">
           {navItems.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
             return (
               <Link
                 key={item.name}
@@ -120,19 +105,6 @@ export default function Navbar() {
               </Link>
             )
           })}
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className={`flex-shrink-0 inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                pathname.startsWith('/admin')
-                  ? 'bg-shefa-blue-50 text-shefa-blue-700'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Cog6ToothIcon className="w-4 h-4 mr-1" />
-              Admin
-            </Link>
-          )}
         </div>
       </div>
     </nav>
