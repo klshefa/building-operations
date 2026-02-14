@@ -460,7 +460,7 @@ export default function EventDetailPage() {
                     Hidden
                   </span>
                 )}
-                {event.has_conflict && !event.conflict_ok && (
+                {conflictingEvents.length > 0 && !event.conflict_ok && (
                   <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 flex items-center gap-1">
                     <ExclamationTriangleIcon className="w-3 h-3" />
                     Conflict

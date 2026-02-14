@@ -10,7 +10,6 @@ import EventCard from '@/components/EventCard'
 import type { OpsEvent } from '@/lib/types'
 import {
   CalendarDaysIcon,
-  ExclamationTriangleIcon,
   ClockIcon,
   ArrowRightIcon,
 } from '@heroicons/react/24/outline'
@@ -23,7 +22,6 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
-  const [conflictCount, setConflictCount] = useState(0)
 
   useEffect(() => {
     checkUser()
@@ -89,7 +87,6 @@ export default function DashboardPage() {
       if (res.ok) {
         const { data } = await res.json()
         setEvents(data || [])
-        setConflictCount(data?.filter((e: OpsEvent) => e.has_conflict && !e.conflict_ok).length || 0)
       } else {
         console.error('Error fetching events:', await res.text())
       }
@@ -135,7 +132,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -182,29 +179,6 @@ export default function DashboardPage() {
               <div>
                 <p className="text-2xl font-bold text-slate-800">{thisWeekEvents.length}</p>
                 <p className="text-sm text-slate-500">This Week</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className={`rounded-xl p-5 shadow-sm border ${
-              conflictCount > 0
-                ? 'bg-red-50 border-red-200'
-                : 'bg-white border-slate-200'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${conflictCount > 0 ? 'bg-red-100' : 'bg-slate-100'}`}>
-                <ExclamationTriangleIcon className={`w-6 h-6 ${conflictCount > 0 ? 'text-red-600' : 'text-slate-400'}`} />
-              </div>
-              <div>
-                <p className={`text-2xl font-bold ${conflictCount > 0 ? 'text-red-600' : 'text-slate-800'}`}>
-                  {conflictCount}
-                </p>
-                <p className="text-sm text-slate-500">Conflicts</p>
               </div>
             </div>
           </motion.div>
@@ -299,40 +273,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Conflicts Section */}
-        {conflictCount > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="mt-8"
-          >
-            <div className="bg-red-50 rounded-xl border border-red-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-red-800 flex items-center gap-2">
-                  <ExclamationTriangleIcon className="w-5 h-5" />
-                  Unresolved Conflicts
-                </h2>
-                <Link
-                  href="/conflicts"
-                  className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
-                >
-                  View All
-                  <ArrowRightIcon className="w-4 h-4" />
-                </Link>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {events
-                  .filter(e => e.has_conflict && !e.conflict_ok)
-                  .slice(0, 4)
-                  .map(event => (
-                    <EventCard key={event.id} event={event} compact />
-                  ))
-                }
-              </div>
-            </div>
-          </motion.div>
-        )}
       </main>
     </div>
   )

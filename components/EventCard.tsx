@@ -8,7 +8,6 @@ import {
   MapPinIcon,
   ClockIcon,
   UsersIcon,
-  ExclamationTriangleIcon,
   EyeSlashIcon,
   WrenchScrewdriverIcon,
   ShieldCheckIcon,
@@ -67,8 +66,6 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
         className={`p-3 rounded-lg border cursor-pointer transition-all ${
           event.is_hidden
             ? 'bg-slate-50 border-slate-200 opacity-60'
-            : event.has_conflict && !event.conflict_ok
-            ? 'bg-red-50 border-red-200'
             : 'bg-white border-slate-200 hover:border-shefa-blue-300 hover:shadow-sm'
         }`}
       >
@@ -81,9 +78,6 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
                 </span>
               ))}
               {event.is_hidden && <EyeSlashIcon className="w-3 h-3 text-slate-400" />}
-              {event.has_conflict && !event.conflict_ok && (
-                <ExclamationTriangleIcon className="w-3 h-3 text-red-500" />
-              )}
             </div>
             <h4 className="font-medium text-slate-800 truncate">{event.title}</h4>
             <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
@@ -148,8 +142,6 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
       className={`p-4 rounded-xl border cursor-pointer transition-all ${
         event.is_hidden
           ? 'bg-slate-50 border-slate-200 opacity-60'
-          : event.has_conflict && !event.conflict_ok
-          ? 'bg-red-50 border-red-200'
           : 'bg-white border-slate-200 hover:border-shefa-blue-300 hover:shadow-md'
       }`}
     >
@@ -166,12 +158,6 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 flex items-center gap-1">
                 <EyeSlashIcon className="w-3 h-3" />
                 Hidden
-              </span>
-            )}
-            {event.has_conflict && !event.conflict_ok && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 flex items-center gap-1">
-                <ExclamationTriangleIcon className="w-3 h-3" />
-                Conflict
               </span>
             )}
           </div>
