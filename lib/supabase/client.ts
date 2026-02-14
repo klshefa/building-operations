@@ -25,6 +25,7 @@ export function createClient() {
               path: '/',
             }
             
+            // Build cookie string
             let cookieString = `${name}=${value}`
             if (cookieOptions.domain) cookieString += `; domain=${cookieOptions.domain}`
             if (cookieOptions.path) cookieString += `; path=${cookieOptions.path}`
@@ -38,3 +39,4 @@ export function createClient() {
     }
   )
 }
+
