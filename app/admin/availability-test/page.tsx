@@ -65,13 +65,13 @@ export default function AvailabilityTestPage() {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       
-      if (!session) {
+      if (!session?.user?.email) {
         router.push('/login')
         return
       }
       
       // Check portal access (any role is fine)
-      const response = await fetch('/api/auth/check-access')
+      const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email.toLowerCase())}`)
       const data = await response.json()
       
       if (!data.hasAccess) {
