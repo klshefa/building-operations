@@ -70,11 +70,11 @@ export default function AvailabilityTestPage() {
         return
       }
       
-      // Check admin access
+      // Check portal access (any role is fine)
       const response = await fetch('/api/auth/check-access')
       const data = await response.json()
       
-      if (!data.hasAccess || data.role !== 'admin') {
+      if (!data.hasAccess) {
         router.push('/')
         return
       }

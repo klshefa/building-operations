@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import Navbar from '@/components/Navbar'
 import { StaffLookup, type StaffMember } from '@/components/StaffLookup'
@@ -830,13 +831,13 @@ export default function AdminPage() {
                       <p className="text-xs text-blue-600 mb-3">
                         Test the Veracross API integration for checking resource availability.
                       </p>
-                      <a
+                      <Link
                         href="/admin/availability-test"
                         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                       >
                         <MagnifyingGlassIcon className="w-4 h-4" />
                         Open Availability Test
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 </motion.div>
