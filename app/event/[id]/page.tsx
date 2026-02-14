@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { createClient } from '@/lib/supabase/client'
 import type { OpsEvent, EventSource, EventType } from '@/lib/types'
 import {
   ArrowLeftIcon,
@@ -174,9 +175,18 @@ export default function EventDetailPage() {
   }, [user?.email, params.id])
 
   async function checkSubscription() {
-    if (!user?.email) return
+    let email = user?.email
+    
+    if (!email) {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      email = session?.user?.email
+    }
+    
+    if (!email) return
+    
     try {
-      const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`)
+      const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(email)}`)
       const result = await response.json()
       setSubscribed(result.subscribed)
     } catch (error) {
@@ -185,13 +195,24 @@ export default function EventDetailPage() {
   }
 
   async function toggleSubscription() {
-    if (!user?.email) return
+    // Get email - try hook first, then Supabase session
+    let email = user?.email
+    let name = user?.user_metadata?.full_name
+    
+    if (!email) {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      email = session?.user?.email
+      name = session?.user?.user_metadata?.full_name
+    }
+    
+    if (!email) return
     
     setSubscribing(true)
     try {
       if (subscribed) {
         // Unsubscribe
-        const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`, {
+        const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(email)}`, {
           method: 'DELETE'
         })
         const result = await response.json()
@@ -204,8 +225,8 @@ export default function EventDetailPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            email: user.email, 
-            name: user.user_metadata?.full_name || user.email 
+            email: email, 
+            name: name || email 
           })
         })
         const result = await response.json()
@@ -357,7 +378,7 @@ export default function EventDetailPage() {
               {/* Subscribe button */}
               <button
                 onClick={toggleSubscription}
-                disabled={subscribing || !user}
+                disabled={subscribing}
                 title={subscribed ? 'Unsubscribe from notifications' : 'Subscribe to get notifications when this event changes'}
                 className={`p-2 rounded-lg border transition-all ${
                   subscribed
