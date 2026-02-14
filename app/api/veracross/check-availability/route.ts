@@ -290,11 +290,14 @@ export async function POST(request: Request) {
     const accessToken = await getAccessToken(supabase)
     
     // Build query parameters for Veracross API
-    // Query reservations on the specified date
+    // For recurring reservations, we need reservations where:
+    // - start_date <= our_date (reservation started on or before)
+    // - end_date >= our_date (reservation ends on or after)
+    // The API may not support end_date filter, so we query broadly and filter client-side
     const queryParams = new URLSearchParams()
     
-    // Filter by date - get reservations that start on this date
-    queryParams.set('on_or_after_start_date', date)
+    // Get reservations that started on or before our date
+    // We'll filter by end_date client-side
     queryParams.set('on_or_before_start_date', date)
     
     // If we have a resource_id, filter by that too
@@ -312,6 +315,7 @@ export async function POST(request: Request) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json',
+        'X-Page-Size': '1000', // Get more results to catch recurring reservations
       },
     })
 
