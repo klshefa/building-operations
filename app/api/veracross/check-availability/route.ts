@@ -176,15 +176,17 @@ export async function POST(request: Request) {
     const accessToken = await getAccessToken(supabase)
     
     // Build query parameters for Veracross API
-    // Query reservations that could overlap with the requested date
+    // Query reservations on the specified date
     const queryParams = new URLSearchParams()
     
-    // Filter by date range - get reservations that include our date
-    queryParams.set('start_date[lte]', date)  // Reservations that start on or before our date
-    queryParams.set('end_date[gte]', date)    // AND end on or after our date (for recurring)
+    // Filter by date - get reservations that start on this date
+    queryParams.set('on_or_after_start_date', date)
+    queryParams.set('on_or_before_start_date', date)
     
-    // Also get single-day reservations on our date
-    // We may need to make two queries or handle this in post-processing
+    // If we have a resource_id, filter by that too
+    if (resource_id) {
+      queryParams.set('resource_id', resource_id.toString())
+    }
     
     // Veracross v3 API endpoint for resource reservations
     const apiUrl = `${VERACROSS_API_BASE}/resource_reservations/reservations?${queryParams.toString()}`
