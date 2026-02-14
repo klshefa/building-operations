@@ -27,6 +27,7 @@ export async function GET(request: Request) {
   try {
     const supabase = createAdminClient()
     
+    // First check ops_users table
     const { data, error } = await supabase
       .from('ops_users')
       .select('email, role, teams, is_active')
@@ -34,18 +35,33 @@ export async function GET(request: Request) {
       .eq('is_active', true)
       .single()
 
-    if (error || !data) {
-      return NextResponse.json({ 
-        hasAccess: false, 
-        role: null, 
-        teams: [] 
+    if (!error && data) {
+      return NextResponse.json({
+        hasAccess: true,
+        role: data.role,
+        teams: data.teams || [],
       })
     }
 
-    return NextResponse.json({
-      hasAccess: true,
-      role: data.role,
-      teams: data.teams || [],
+    // Fallback: check if user is a super_admin (they get admin access to all portals)
+    const { data: superAdmin } = await supabase
+      .from('super_admins')
+      .select('email')
+      .eq('email', email.toLowerCase())
+      .maybeSingle()
+
+    if (superAdmin) {
+      return NextResponse.json({
+        hasAccess: true,
+        role: 'admin',
+        teams: [], // Super admins see all teams
+      })
+    }
+
+    return NextResponse.json({ 
+      hasAccess: false, 
+      role: null, 
+      teams: [] 
     })
   } catch (error: any) {
     console.error('Check access error:', error)
