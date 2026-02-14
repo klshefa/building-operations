@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
 import { motion } from 'framer-motion'
-import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
 import type { OpsEvent, EventSource, EventType } from '@/lib/types'
 import {
@@ -153,7 +152,6 @@ function cleanLocation(location: string | null | undefined): string {
 export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useAuth()
   const [event, setEvent] = useState<OpsEvent | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -175,13 +173,9 @@ export default function EventDetailPage() {
   }, [user?.email, params.id])
 
   async function checkSubscription() {
-    let email = user?.email
-    
-    if (!email) {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      email = session?.user?.email
-    }
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const email = session?.user?.email
     
     if (!email) return
     
@@ -195,16 +189,10 @@ export default function EventDetailPage() {
   }
 
   async function toggleSubscription() {
-    // Get email - try hook first, then Supabase session
-    let email = user?.email
-    let name = user?.user_metadata?.full_name
-    
-    if (!email) {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      email = session?.user?.email
-      name = session?.user?.user_metadata?.full_name
-    }
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const email = session?.user?.email
+    const name = session?.user?.user_metadata?.full_name
     
     if (!email) return
     

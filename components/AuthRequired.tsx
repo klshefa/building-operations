@@ -1,13 +1,51 @@
 'use client'
 
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { motion } from 'framer-motion'
+import type { User } from '@supabase/supabase-js'
 
 export default function AuthRequired({ children }: { children: React.ReactNode }) {
-  const { user, loading, hasAccess, signIn } = useAuth()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [hasAccess, setHasAccess] = useState(false)
 
-  // Debug logging
-  console.log('[AuthRequired] loading:', loading, 'user:', user?.email, 'hasAccess:', hasAccess)
+  useEffect(() => {
+    checkUser()
+  }, [])
+
+  async function checkUser() {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    setUser(session?.user || null)
+    
+    if (session?.user?.email) {
+      // Check access via API
+      try {
+        const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email.toLowerCase())}`)
+        const data = await response.json()
+        setHasAccess(data.hasAccess)
+      } catch {
+        setHasAccess(false)
+      }
+    }
+    
+    setLoading(false)
+  }
+
+  async function signIn() {
+    const supabase = createClient()
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          hd: 'shefaschool.org'
+        }
+      }
+    })
+  }
 
   if (loading) {
     return (

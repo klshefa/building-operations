@@ -6,7 +6,7 @@ import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import { StaffLookup, type StaffMember } from '@/components/StaffLookup'
 import { createClient } from '@/lib/supabase/client'
-import { useAuth } from '@/lib/hooks/useAuth'
+import type { User } from '@supabase/supabase-js'
 import type { OpsUser, UserRole, TeamType } from '@/lib/types'
 import {
   UserPlusIcon,
@@ -67,7 +67,8 @@ interface EventFilter {
 }
 
 export default function AdminPage() {
-  const { userRole, user } = useAuth()
+  const [user, setUser] = useState<User | null>(null)
+  const [userRole, setUserRole] = useState<UserRole | null>(null)
   const [activeTab, setActiveTab] = useState<AdminTab>('event')
   const [users, setUsers] = useState<OpsUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -102,11 +103,31 @@ export default function AdminPage() {
   const [eventStatus, setEventStatus] = useState<{ success: boolean; message: string } | null>(null)
 
   useEffect(() => {
+    fetchUserInfo()
+  }, [])
+
+  useEffect(() => {
     if (userRole === 'admin') {
       fetchUsers()
       fetchFilters()
     }
   }, [userRole])
+
+  async function fetchUserInfo() {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    setUser(session?.user || null)
+    
+    if (session?.user?.email) {
+      try {
+        const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email.toLowerCase())}`)
+        const data = await response.json()
+        setUserRole(data.role || null)
+      } catch {
+        setUserRole(null)
+      }
+    }
+  }
 
   async function fetchUsers() {
     try {

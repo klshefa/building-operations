@@ -6,7 +6,7 @@ import { format, parseISO, isToday, isTomorrow, addDays } from 'date-fns'
 import AuthRequired from '@/components/AuthRequired'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { createClient } from '@/lib/supabase/client'
 import type { OpsEvent, TeamType } from '@/lib/types'
 import {
   UserGroupIcon,
@@ -33,14 +33,29 @@ const teamLabels: Record<TeamType, string> = {
 }
 
 export default function MyTasksPage() {
-  const { userTeams } = useAuth()
+  const [userTeams, setUserTeams] = useState<TeamType[]>([])
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTeam, setSelectedTeam] = useState<TeamType | 'all'>('all')
 
   useEffect(() => {
+    fetchUserTeams()
     fetchEvents()
   }, [])
+
+  async function fetchUserTeams() {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.email) {
+      try {
+        const response = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email.toLowerCase())}`)
+        const data = await response.json()
+        setUserTeams(data.teams || [])
+      } catch {
+        setUserTeams([])
+      }
+    }
+  }
 
   async function fetchEvents() {
     setLoading(true)
