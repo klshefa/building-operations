@@ -160,6 +160,7 @@ export default function EventDetailPage() {
   const [activeTeamTab, setActiveTeamTab] = useState<string | null>(null)
   const [subscribed, setSubscribed] = useState(false)
   const [subscribing, setSubscribing] = useState(false)
+  const [conflictingEvents, setConflictingEvents] = useState<OpsEvent[]>([])
 
   useEffect(() => {
     fetchEvent()
@@ -246,10 +247,51 @@ export default function EventDetailPage() {
       if (firstAssigned) {
         setActiveTeamTab(firstAssigned.id)
       }
+      
+      // If event has a conflict, fetch conflicting events
+      if (result.data.has_conflict) {
+        fetchConflictingEvents(result.data)
+      }
     } catch (error) {
       console.error('Error:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchConflictingEvents(eventData: OpsEvent) {
+    try {
+      // Fetch events on same date that could conflict
+      const response = await fetch(`/api/events?startDate=${eventData.start_date}&endDate=${eventData.start_date}&hideHidden=false`)
+      const result = await response.json()
+      
+      if (result.data) {
+        // Filter to find actual conflicts (same location or overlapping time)
+        const conflicts = result.data.filter((e: OpsEvent) => {
+          if (e.id === eventData.id) return false
+          
+          // Same location conflict
+          const sameLocation = eventData.location && e.location && 
+            cleanLocation(eventData.location).toLowerCase() === cleanLocation(e.location).toLowerCase()
+          
+          // Time overlap conflict
+          let timeOverlap = false
+          if (eventData.start_time && eventData.end_time && e.start_time && e.end_time) {
+            const eStart = e.start_time.replace(':', '')
+            const eEnd = e.end_time.replace(':', '')
+            const thisStart = eventData.start_time.replace(':', '')
+            const thisEnd = eventData.end_time.replace(':', '')
+            
+            timeOverlap = !(eEnd <= thisStart || eStart >= thisEnd)
+          }
+          
+          return sameLocation && timeOverlap
+        })
+        
+        setConflictingEvents(conflicts)
+      }
+    } catch (error) {
+      console.error('Error fetching conflicts:', error)
     }
   }
 
@@ -512,19 +554,19 @@ export default function EventDetailPage() {
                 <ClockIcon className="w-3 h-3" />
                 Time
               </label>
-              <div className="flex gap-1 mt-1">
+              <div className="flex items-center gap-2 mt-1">
                 <input
                   type="time"
                   value={event.start_time || ''}
                   onChange={(e) => updateField('start_time', e.target.value)}
-                  className="flex-1 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                  className="w-24 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
                 />
-                <span className="self-center text-slate-400">-</span>
+                <span className="text-slate-400 shrink-0">-</span>
                 <input
                   type="time"
                   value={event.end_time || ''}
                   onChange={(e) => updateField('end_time', e.target.value)}
-                  className="flex-1 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                  className="w-24 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -631,7 +673,24 @@ export default function EventDetailPage() {
                 <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <h3 className="font-medium text-red-700">Conflict Detected</h3>
-                  <label className="flex items-center gap-2 mt-2">
+                  
+                  {/* Show conflicting events */}
+                  {conflictingEvents.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-sm text-red-600 font-medium">Conflicts with:</p>
+                      {conflictingEvents.map(ce => (
+                        <div key={ce.id} className="bg-white rounded border border-red-200 p-2 text-sm">
+                          <div className="font-medium text-slate-800">{ce.title}</div>
+                          <div className="text-slate-500 text-xs mt-0.5">
+                            {ce.start_time && ce.end_time && `${ce.start_time} - ${ce.end_time}`}
+                            {ce.location && ` • ${cleanLocation(ce.location)}`}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <label className="flex items-center gap-2 mt-3">
                     <input
                       type="checkbox"
                       checked={event.conflict_ok}
@@ -643,9 +702,9 @@ export default function EventDetailPage() {
                   <textarea
                     value={event.conflict_notes || ''}
                     onChange={(e) => updateField('conflict_notes', e.target.value)}
-                    placeholder="Add notes about this conflict..."
+                    placeholder="Explain why this conflict is acceptable..."
                     rows={2}
-                    className="mt-2 w-full border border-red-200 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none text-sm"
+                    className="mt-2 w-full border border-red-200 rounded-lg px-3 py-2 focus:border-red-500 focus:outline-none text-sm bg-white"
                   />
                 </div>
               </div>
