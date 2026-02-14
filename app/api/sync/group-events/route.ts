@@ -94,6 +94,14 @@ export async function POST(request: Request) {
       return String(d)
     }
 
+    // Helper to extract time value (handles both struct and string formats)
+    const getTimeValue = (t: any) => {
+      if (!t) return null
+      if (typeof t === 'string') return t
+      if (t.value) return t.value
+      return String(t)
+    }
+
     // Transform to raw events
     const rawEvents = rows.map((row: any) => ({
       source: 'bigquery_group',
@@ -102,8 +110,8 @@ export async function POST(request: Request) {
       description: null,
       start_date: getDateValue(row.start_date),
       end_date: getDateValue(row.end_date),
-      start_time: row.start_time,
-      end_time: row.end_time,
+      start_time: getTimeValue(row.start_time),
+      end_time: getTimeValue(row.end_time),
       location: row.location === 'None' ? null : row.location,
       resource: row.resource === 'None' ? null : row.resource,
       contact_person: row.contact_person === 'None' ? null : row.contact_person,

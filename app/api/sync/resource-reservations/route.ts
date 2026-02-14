@@ -125,6 +125,14 @@ export async function POST(request: Request) {
       return String(d)
     }
 
+    // Helper to extract time value (handles both struct and string formats)
+    const getTimeValue = (t: any) => {
+      if (!t) return null
+      if (typeof t === 'string') return t
+      if (t.value) return t.value
+      return String(t)
+    }
+
     if (rows.length === 0) {
       return NextResponse.json({
         success: true,
@@ -178,8 +186,8 @@ export async function POST(request: Request) {
           description: row.event_ref !== 'None' ? `Related event: ${row.event_ref}` : null,
           start_date: dateStr,
           end_date: dateStr,
-          start_time: row.start_time,
-          end_time: row.end_time,
+          start_time: getTimeValue(row.start_time),
+          end_time: getTimeValue(row.end_time),
           location: null,
           resource: row.resource,
           contact_person: row.contact_person === 'None' ? null : row.contact_person,
