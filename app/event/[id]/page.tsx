@@ -152,7 +152,7 @@ function cleanLocation(location: string | null | undefined): string {
 export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [event, setEvent] = useState<OpsEvent | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -166,27 +166,18 @@ export default function EventDetailPage() {
     fetchEvent()
   }, [params.id])
 
-  // Check subscription status when event is loaded
+  // Check subscription status when user and event are loaded
   useEffect(() => {
-    if (params.id && event) {
+    if (params.id && user?.email) {
       checkSubscription()
     }
-  }, [params.id, event?.id])
+  }, [params.id, user?.email])
 
   async function checkSubscription() {
-    let email = user?.email
-    
-    if (!email) {
-      const { createClient } = await import('@/lib/supabase/client')
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      email = session?.user?.email
-    }
-    
-    if (!email) return
+    if (!user?.email) return
     
     try {
-      const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(email)}`)
+      const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`)
       const result = await response.json()
       setSubscribed(result.subscribed)
     } catch (error) {
@@ -195,29 +186,13 @@ export default function EventDetailPage() {
   }
 
   async function toggleSubscription() {
-    // Get email from user or try to get from Supabase session
-    let email = user?.email
-    let name = user?.user_metadata?.full_name
-    
-    if (!email) {
-      // Try to get from Supabase directly
-      const { createClient } = await import('@/lib/supabase/client')
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      email = session?.user?.email
-      name = session?.user?.user_metadata?.full_name
-    }
-    
-    if (!email) {
-      alert('Please log in to subscribe to events')
-      return
-    }
+    if (!user?.email) return
     
     setSubscribing(true)
     try {
       if (subscribed) {
         // Unsubscribe
-        const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(email)}`, {
+        const response = await fetch(`/api/events/${params.id}/subscribe?email=${encodeURIComponent(user.email)}`, {
           method: 'DELETE'
         })
         const result = await response.json()
@@ -230,8 +205,8 @@ export default function EventDetailPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            email: email, 
-            name: name || email 
+            email: user.email, 
+            name: user.user_metadata?.full_name || user.email 
           })
         })
         const result = await response.json()
@@ -383,15 +358,17 @@ export default function EventDetailPage() {
               {/* Subscribe button */}
               <button
                 onClick={toggleSubscription}
-                disabled={subscribing}
+                disabled={subscribing || authLoading || !user}
                 title={subscribed ? 'Unsubscribe from notifications' : 'Subscribe to get notifications when this event changes'}
                 className={`p-2 rounded-lg border transition-all ${
-                  subscribed
-                    ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
-                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  !user || authLoading
+                    ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-wait'
+                    : subscribed
+                      ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
                 }`}
               >
-                {subscribing ? (
+                {subscribing || authLoading ? (
                   <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : subscribed ? (
                   <BellIcon className="w-5 h-5 fill-current" />
