@@ -562,68 +562,75 @@ export default function EventDetailPage() {
             </div>
           </div>
 
-          {/* Quick Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
-            <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
-                <CalendarIcon className="w-3 h-3" />
-                Date
-              </label>
-              <input
-                type="date"
-                value={event.start_date}
-                onChange={(e) => updateField('start_date', e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
-                <ClockIcon className="w-3 h-3" />
-                Time
-              </label>
-              <div className="flex items-center gap-1">
+          {/* Quick Info - 2 rows */}
+          <div className="space-y-4 pt-4 border-t border-slate-100">
+            {/* Row 1: Date and Time */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
+                  <CalendarIcon className="w-3 h-3" />
+                  Date
+                </label>
                 <input
-                  type="time"
-                  value={toTimeInputFormat(event.start_time)}
-                  onChange={(e) => updateField('start_time', e.target.value)}
-                  className="flex-1 min-w-0 text-sm border border-slate-200 rounded px-1 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
-                />
-                <span className="text-slate-400">-</span>
-                <input
-                  type="time"
-                  value={toTimeInputFormat(event.end_time)}
-                  onChange={(e) => updateField('end_time', e.target.value)}
-                  className="flex-1 min-w-0 text-sm border border-slate-200 rounded px-1 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                  type="date"
+                  value={event.start_date}
+                  onChange={(e) => updateField('start_date', e.target.value)}
+                  className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
                 />
               </div>
+              <div>
+                <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
+                  <ClockIcon className="w-3 h-3" />
+                  Time
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={toTimeInputFormat(event.start_time)}
+                    onChange={(e) => updateField('start_time', e.target.value)}
+                    className="flex-1 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                  />
+                  <span className="text-slate-400">-</span>
+                  <input
+                    type="time"
+                    value={toTimeInputFormat(event.end_time)}
+                    onChange={(e) => updateField('end_time', e.target.value)}
+                    className="flex-1 text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
-                <MapPinIcon className="w-3 h-3" />
-                Location
-              </label>
-              <input
-                type="text"
-                value={cleanLocation(event.location)}
-                onChange={(e) => updateField('location', e.target.value)}
-                placeholder="Location"
-                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
-                <DocumentTextIcon className="w-3 h-3" />
-                Type
-              </label>
-              <select
-                value={event.event_type}
-                onChange={(e) => updateField('event_type', e.target.value)}
-                className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
-              >
-                {eventTypes.map(type => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
-                ))}
-              </select>
+            
+            {/* Row 2: Location and Type */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
+                  <MapPinIcon className="w-3 h-3" />
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={cleanLocation(event.location)}
+                  onChange={(e) => updateField('location', e.target.value)}
+                  placeholder="Location"
+                  className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
+                  <DocumentTextIcon className="w-3 h-3" />
+                  Type
+                </label>
+                <select
+                  value={event.event_type}
+                  onChange={(e) => updateField('event_type', e.target.value)}
+                  className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                >
+                  {eventTypes.map(type => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </motion.div>
