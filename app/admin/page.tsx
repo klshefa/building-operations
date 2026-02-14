@@ -22,6 +22,7 @@ import {
   CloudArrowDownIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
+import { AvailabilityCheck } from '@/components/AvailabilityCheck'
 
 type AdminTab = 'event' | 'users' | 'sync' | 'filters'
 
@@ -105,6 +106,11 @@ export default function AdminPage() {
   const [eventAllDay, setEventAllDay] = useState(false)
   const [addingEvent, setAddingEvent] = useState(false)
   const [eventStatus, setEventStatus] = useState<{ success: boolean; message: string } | null>(null)
+  
+  // Resource dropdown for location
+  const [resources, setResources] = useState<{ id: number; description: string }[]>([])
+  const [resourcesLoading, setResourcesLoading] = useState(true)
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false)
 
   useEffect(() => {
     fetchUserInfo()
@@ -114,8 +120,22 @@ export default function AdminPage() {
     if (userRole === 'admin') {
       fetchUsers()
       fetchFilters()
+      fetchResources()
     }
   }, [userRole])
+
+  async function fetchResources() {
+    try {
+      const response = await fetch('/api/resources')
+      const { data } = await response.json()
+      if (data) {
+        setResources(data)
+      }
+    } catch (err) {
+      console.error('Error fetching resources:', err)
+    }
+    setResourcesLoading(false)
+  }
 
   async function fetchUserInfo() {
     const supabase = createClient()
@@ -503,17 +523,61 @@ export default function AdminPage() {
                           className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
                         />
                       </div>
-                      <div>
+                      <div className="relative">
                         <label className="block text-sm font-medium text-slate-700 mb-1">
                           Location
                         </label>
-                        <input
-                          type="text"
-                          value={eventLocation}
-                          onChange={(e) => setEventLocation(e.target.value)}
-                          placeholder="e.g., Conference Room A"
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={eventLocation}
+                            onChange={(e) => {
+                              setEventLocation(e.target.value)
+                              setShowLocationDropdown(true)
+                            }}
+                            onFocus={() => setShowLocationDropdown(true)}
+                            placeholder={resourcesLoading ? "Loading resources..." : "Type to search..."}
+                            className="w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                            disabled={resourcesLoading || resources.length === 0}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
+                        {showLocationDropdown && resources.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                            {resources
+                              .filter(r => r.description.toLowerCase().includes(eventLocation.toLowerCase()))
+                              .slice(0, 50)
+                              .map((r) => (
+                                <button
+                                  key={r.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setEventLocation(r.description)
+                                    setShowLocationDropdown(false)
+                                  }}
+                                  className="w-full text-left px-3 py-2 hover:bg-shefa-blue-50 text-sm text-slate-700"
+                                >
+                                  {r.description}
+                                </button>
+                              ))}
+                            {resources.filter(r => r.description.toLowerCase().includes(eventLocation.toLowerCase())).length === 0 && (
+                              <div className="px-3 py-2 text-sm text-slate-500">
+                                No matches found
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {resources.length > 0 && (
+                          <p className="text-xs text-slate-400 mt-1">{resources.length} resources</p>
+                        )}
                       </div>
                     </div>
 
@@ -579,6 +643,18 @@ export default function AdminPage() {
                         </label>
                       </div>
                     </div>
+
+                    {/* Veracross Availability Check */}
+                    {eventLocation && eventDate && !eventAllDay && eventStartTime && eventEndTime && (
+                      <div className="p-3 bg-slate-50 rounded-lg">
+                        <AvailabilityCheck
+                          resourceName={eventLocation}
+                          date={eventDate}
+                          startTime={eventStartTime}
+                          endTime={eventEndTime}
+                        />
+                      </div>
+                    )}
 
                     <div className="flex justify-end pt-2">
                       <button

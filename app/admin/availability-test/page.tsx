@@ -25,26 +25,24 @@ interface Resource {
 
 interface ConflictInfo {
   type: 'definite' | 'possible'
-  reservation_id: number
+  source: 'class_schedule' | 'reservation'
   description: string
   resource_name?: string
-  start_date: string
+  start_date?: string
   end_date?: string
   start_time?: string
   end_time?: string
-  event_name?: string
-  contact_person?: string
+  class_name?: string
+  days_pattern?: string
 }
 
 interface AdjacentBooking {
-  reservation_id: number
+  source: 'class_schedule' | 'reservation'
   description: string
   resource_name: string
-  start_date: string
-  end_date?: string
   start_time?: string
   end_time?: string
-  event_name?: string
+  days_pattern?: string
   note: string
 }
 
@@ -53,7 +51,15 @@ interface AvailabilityResult {
   conflicts: ConflictInfo[]
   possible_conflicts: ConflictInfo[]
   adjacent_bookings?: AdjacentBooking[]
-  raw_reservations?: any[]
+  debug?: {
+    class_schedules_checked: number
+    class_schedules_total?: number
+    class_schedules_pages?: number
+    class_schedules_error?: string
+    reservations_checked: number
+    checking_day: string
+    requested_time: string
+  }
   error?: string
 }
 
@@ -419,6 +425,27 @@ export default function AvailabilityTestPage() {
                   </div>
                 </div>
 
+                {/* Debug Info */}
+                {result.debug && (
+                  <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <p className="text-xs text-slate-600">
+                      <strong>Checked:</strong> {result.debug.class_schedules_checked}
+                      {result.debug.class_schedules_total && ` of ${result.debug.class_schedules_total}`} class schedules
+                      {result.debug.class_schedules_pages && ` (${result.debug.class_schedules_pages} page${result.debug.class_schedules_pages > 1 ? 's' : ''})`}
+                      , {result.debug.reservations_checked} reservations
+                      <span className="mx-2">|</span>
+                      <strong>Day:</strong> {result.debug.checking_day}
+                      <span className="mx-2">|</span>
+                      <strong>Time:</strong> {result.debug.requested_time}
+                    </p>
+                    {result.debug.class_schedules_error && (
+                      <p className="text-xs text-red-600 mt-1">
+                        <strong>Class schedules error:</strong> {result.debug.class_schedules_error}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Definite Conflicts */}
                 {result.conflicts.length > 0 && (
                   <div className="mb-4">
@@ -429,16 +456,25 @@ export default function AvailabilityTestPage() {
                     <div className="space-y-2">
                       {result.conflicts.map((c, i) => (
                         <div key={i} className="bg-red-50 border border-red-100 rounded-lg p-3">
-                          <div className="flex justify-between items-start">
+                          <div className="flex justify-between items-start gap-2">
                             <p className="font-medium text-slate-800">{c.description}</p>
-                            {c.resource_name && (
-                              <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded">
-                                {c.resource_name}
+                            <div className="flex gap-1 flex-shrink-0">
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                c.source === 'class_schedule' 
+                                  ? 'bg-purple-200 text-purple-800' 
+                                  : 'bg-orange-200 text-orange-800'
+                              }`}>
+                                {c.source === 'class_schedule' ? 'Class' : 'Reservation'}
                               </span>
-                            )}
+                              {c.resource_name && (
+                                <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded">
+                                  {c.resource_name}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          {c.event_name && c.event_name !== c.description && (
-                            <p className="text-sm text-slate-600">Event: {c.event_name}</p>
+                          {c.class_name && c.class_name !== c.description && (
+                            <p className="text-sm text-slate-600">Class: {c.class_name}</p>
                           )}
                           <p className="text-sm text-slate-500">
                             {c.start_time && c.end_time 
@@ -448,8 +484,8 @@ export default function AvailabilityTestPage() {
                             {c.start_date && ` on ${c.start_date}`}
                             {c.end_date && c.end_date !== c.start_date && ` to ${c.end_date}`}
                           </p>
-                          {c.contact_person && (
-                            <p className="text-xs text-slate-400">Contact: {c.contact_person}</p>
+                          {c.days_pattern && (
+                            <p className="text-xs text-slate-400">Days: {c.days_pattern}</p>
                           )}
                         </div>
                       ))}
@@ -465,15 +501,21 @@ export default function AvailabilityTestPage() {
                       Possible Conflicts - Verify Manually ({result.possible_conflicts.length})
                     </h3>
                     <p className="text-xs text-amber-600 mb-2">
-                      These reservations are on the same resource/date but time data is incomplete.
+                      These may conflict but time data is incomplete.
                     </p>
                     <div className="space-y-2">
                       {result.possible_conflicts.map((c, i) => (
                         <div key={i} className="bg-amber-50 border border-amber-100 rounded-lg p-3">
-                          <p className="font-medium text-slate-800">{c.description}</p>
-                          {c.event_name && c.event_name !== c.description && (
-                            <p className="text-sm text-slate-600">Event: {c.event_name}</p>
-                          )}
+                          <div className="flex justify-between items-start gap-2">
+                            <p className="font-medium text-slate-800">{c.description}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              c.source === 'class_schedule' 
+                                ? 'bg-purple-200 text-purple-800' 
+                                : 'bg-orange-200 text-orange-800'
+                            }`}>
+                              {c.source === 'class_schedule' ? 'Class' : 'Reservation'}
+                            </span>
+                          </div>
                           <p className="text-sm text-slate-500">
                             {c.start_time || c.end_time 
                               ? `${c.start_time || '?'} - ${c.end_time || '?'}`
@@ -481,8 +523,8 @@ export default function AvailabilityTestPage() {
                             }
                             {c.start_date && ` on ${c.start_date}`}
                           </p>
-                          {c.contact_person && (
-                            <p className="text-xs text-slate-400">Contact: {c.contact_person}</p>
+                          {c.days_pattern && (
+                            <p className="text-xs text-slate-400">Days: {c.days_pattern}</p>
                           )}
                         </div>
                       ))}
@@ -503,22 +545,30 @@ export default function AvailabilityTestPage() {
                     <div className="space-y-2">
                       {result.adjacent_bookings.map((b, i) => (
                         <div key={i} className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-                          <div className="flex justify-between items-start">
+                          <div className="flex justify-between items-start gap-2">
                             <p className="font-medium text-slate-800">{b.description}</p>
-                            <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded">
-                              {b.resource_name}
-                            </span>
+                            <div className="flex gap-1 flex-shrink-0">
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                b.source === 'class_schedule' 
+                                  ? 'bg-purple-200 text-purple-800' 
+                                  : 'bg-orange-200 text-orange-800'
+                              }`}>
+                                {b.source === 'class_schedule' ? 'Class' : 'Reservation'}
+                              </span>
+                              <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded">
+                                {b.resource_name}
+                              </span>
+                            </div>
                           </div>
-                          {b.event_name && b.event_name !== b.description && (
-                            <p className="text-sm text-slate-600">Event: {b.event_name}</p>
-                          )}
                           <p className="text-sm text-slate-500">
                             {b.start_time && b.end_time 
                               ? `${b.start_time} - ${b.end_time}`
                               : 'Time not specified'
                             }
-                            {b.start_date && ` on ${b.start_date}`}
                           </p>
+                          {b.days_pattern && (
+                            <p className="text-xs text-slate-400">Days: {b.days_pattern}</p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -556,11 +606,10 @@ export default function AvailabilityTestPage() {
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
           <h3 className="font-semibold text-blue-800 mb-2">How it works</h3>
           <ul className="text-sm text-blue-700 space-y-1">
-            <li>• Queries Veracross API directly for real-time reservation data</li>
-            <li>• Matches reservations by resource name and date</li>
-            <li>• <strong>Definite conflicts:</strong> Overlapping time ranges confirmed</li>
-            <li>• <strong>Possible conflicts:</strong> Same resource/date but missing time data</li>
-            <li>• Uses OAuth2 tokens cached in database (auto-refreshes)</li>
+            <li>• <span className="inline-flex items-center gap-1"><span className="text-xs bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded">Check 1</span> Class Schedules:</span> Queries Veracross API for class schedules (includes day/time info)</li>
+            <li>• <span className="inline-flex items-center gap-1"><span className="text-xs bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded">Check 2</span> Reservations:</span> Queries local database (synced from BigQuery with day patterns)</li>
+            <li>• Filters by resource name, day of week, and time overlap</li>
+            <li>• Shows conflicts on the same space AND adjacent/sibling spaces</li>
           </ul>
           
           <div className="mt-4 pt-3 border-t border-blue-200">

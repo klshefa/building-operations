@@ -26,6 +26,7 @@ import {
   BellSlashIcon,
 } from '@heroicons/react/24/outline'
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
+import { RelatedEvents } from '@/components/RelatedEvents'
 
 const sourceLabels: Record<EventSource, string> = {
   bigquery_group: 'VC Event',
@@ -818,6 +819,15 @@ export default function EventDetailPage() {
               </div>
             </div>
           )}
+        </motion.div>
+
+        {/* Related Events Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <RelatedEvents eventId={event.id} />
         </motion.div>
 
         {/* Team Assignments - Tabbed Interface */}

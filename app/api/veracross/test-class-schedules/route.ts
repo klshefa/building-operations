@@ -84,8 +84,14 @@ export async function GET(request: Request) {
     let filteredSchedules = schedules
     if (resourceName) {
       filteredSchedules = schedules.filter((s: any) => {
-        const room = s.room?.name || s.room_name || s.location || ''
-        return room.toLowerCase().includes(resourceName.toLowerCase())
+        // Check all possible room fields
+        const roomDesc = s.room?.description || ''
+        const roomAbbrev = s.room?.abbreviation || ''
+        const roomName = s.room?.name || s.room_name || s.location || ''
+        const searchLower = resourceName.toLowerCase()
+        return roomDesc.toLowerCase().includes(searchLower) ||
+               roomAbbrev.toLowerCase().includes(searchLower) ||
+               roomName.toLowerCase().includes(searchLower)
       })
     }
 
