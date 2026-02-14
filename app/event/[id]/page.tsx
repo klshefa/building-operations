@@ -165,12 +165,12 @@ export default function EventDetailPage() {
     fetchEvent()
   }, [params.id])
 
-  // Check subscription status when user and event are loaded
+  // Check subscription status when event is loaded
   useEffect(() => {
-    if (user?.email && params.id) {
+    if (params.id) {
       checkSubscription()
     }
-  }, [user?.email, params.id])
+  }, [params.id])
 
   async function checkSubscription() {
     const supabase = createClient()
