@@ -1,46 +1,16 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { getCookieDomain } from '@/lib/utils/cookieDomain'
-
-// Fallback values for development
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rkfwphowryckqkozscfi.supabase.co'
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrZndwaG93cnlja3Frb3pzY2ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0Mzg2MTEsImV4cCI6MjA3MzAxNDYxMX0.BRxY8LGo1iVhO-9j6eVc_vQ4UcXWa8uweOsY_DDuhq4'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/api-auth'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/events'
 
-  if (code) {
-    const cookieStore = await cookies()
-    const cookieDomain = getCookieDomain()
-    
-    const supabase = createServerClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set({
-                name,
-                value,
-                ...options,
-                domain: cookieDomain,
-                secure: true,
-                sameSite: 'lax',
-                path: '/',
-              })
-            })
-          },
-        },
-      }
-    )
+  console.log('Auth callback received, code present:', !!code)
 
+  if (code) {
+    const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (error) {
@@ -50,38 +20,48 @@ export async function GET(request: Request) {
 
     // Get user info after successful exchange
     const { data: { user } } = await supabase.auth.getUser()
+    console.log('User after exchange:', user?.email)
     
     if (user?.email) {
       // Check domain restriction
       if (!user.email.endsWith('@shefaschool.org')) {
+        console.log('Domain check failed for:', user.email)
         await supabase.auth.signOut()
         return NextResponse.redirect(`${origin}/?error=unauthorized_domain`)
       }
 
       // Check if user has access to Building Operations via ops_users
-      const { data: accessData } = await supabase
+      // Use admin client to bypass RLS
+      const adminClient = createAdminClient()
+      const { data: accessData, error: accessError } = await adminClient
         .from('ops_users')
         .select('*')
         .eq('email', user.email.toLowerCase())
         .eq('is_active', true)
         .maybeSingle()
 
+      console.log('Access check result:', { accessData: !!accessData, accessError })
+
       if (!accessData) {
         // Also check super_admins for fallback access
-        const { data: superAdmin } = await supabase
+        const { data: superAdmin } = await adminClient
           .from('super_admins')
           .select('*')
           .eq('email', user.email.toLowerCase())
           .maybeSingle()
+        
+        console.log('Super admin check:', !!superAdmin)
           
         if (!superAdmin) {
           return NextResponse.redirect(`${origin}/?error=no_access`)
         }
       }
       
+      console.log('Access granted, redirecting to:', next)
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
 
+  console.log('No code or no user, returning error')
   return NextResponse.redirect(`${origin}/?error=auth_callback_error`)
 }
