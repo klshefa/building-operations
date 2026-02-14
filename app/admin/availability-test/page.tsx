@@ -84,6 +84,22 @@ export default function AvailabilityTestPage() {
     checkAuth()
   }, [router])
 
+  // Common school resources (fallback)
+  const commonResources = [
+    'Beit Midrash',
+    'Gymnasium',
+    'Cafeteria',
+    'Library',
+    'Auditorium',
+    'Conference Room',
+    'Art Room',
+    'Music Room',
+    'Science Lab',
+    'Computer Lab',
+    'Main Office',
+    'Multi-Purpose Room',
+  ]
+
   // Load resources
   useEffect(() => {
     async function loadResources() {
@@ -104,11 +120,17 @@ export default function AvailabilityTestPage() {
           .select('location')
           .not('location', 'is', null)
         
-        if (events) {
+        if (events && events.length > 0) {
           const uniqueLocations = [...new Set(events.map(e => e.location).filter(Boolean))]
           setResources(uniqueLocations.map((loc, i) => ({
             id: i,
             description: loc as string,
+          })))
+        } else {
+          // Use common resources as last fallback
+          setResources(commonResources.map((loc, i) => ({
+            id: i,
+            description: loc,
           })))
         }
       }
@@ -201,34 +223,38 @@ export default function AvailabilityTestPage() {
             Check Availability
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {/* Resource */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                <MapPinIcon className="w-4 h-4 inline mr-1" />
-                Resource / Location
-              </label>
-              <input
-                type="text"
-                list="resource-list"
-                value={selectedResource}
-                onChange={(e) => setSelectedResource(e.target.value)}
-                placeholder="Type or select a location (e.g., Beit Midrash)"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none"
-              />
-              <datalist id="resource-list">
-                {resources.map((r) => (
-                  <option key={r.id} value={r.description}>
-                    {r.abbreviation ? `(${r.abbreviation})` : ''}
-                  </option>
-                ))}
-              </datalist>
-              {resources.length > 0 && (
-                <p className="text-xs text-slate-400 mt-1">
-                  {resources.length} known locations available as suggestions
-                </p>
-              )}
+          {/* Resource Quick Select */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              <MapPinIcon className="w-4 h-4 inline mr-1" />
+              Resource / Location
+            </label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {resources.slice(0, 12).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSelectedResource(r.description)}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                    selectedResource === r.description
+                      ? 'bg-shefa-blue-500 text-white border-shefa-blue-500'
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-shefa-blue-300 hover:bg-shefa-blue-50'
+                  }`}
+                >
+                  {r.description}
+                </button>
+              ))}
             </div>
+            <input
+              type="text"
+              value={selectedResource}
+              onChange={(e) => setSelectedResource(e.target.value)}
+              placeholder="Or type a custom location..."
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-shefa-blue-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
             {/* Date */}
             <div>
