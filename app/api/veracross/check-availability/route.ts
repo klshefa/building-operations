@@ -168,6 +168,65 @@ function timesOverlap(
   return start1 < end2 && end1 > start2
 }
 
+// Detect parent/child/sibling resource relationships
+// Pattern: "Ulam" is parent of "Ulam Side 1" and "Ulam Side 2"
+function getResourceRelationships(resourceName: string): {
+  parent: string | null,
+  siblings: string[],
+  isChild: boolean
+} {
+  // Check if this is a "Side X" resource
+  const sideMatch = resourceName.match(/^(.+?)\s+Side\s+(\d+)$/i)
+  
+  if (sideMatch) {
+    // This is a child resource (e.g., "Ulam Side 1")
+    const parent = sideMatch[1].trim() // "Ulam"
+    const sideNum = parseInt(sideMatch[2])
+    
+    // Generate sibling names (assume Side 1 and Side 2 exist)
+    const siblings: string[] = []
+    for (let i = 1; i <= 2; i++) {
+      if (i !== sideNum) {
+        siblings.push(`${parent} Side ${i}`)
+      }
+    }
+    
+    return { parent, siblings, isChild: true }
+  }
+  
+  // Check if this could be a parent resource
+  // A parent would have children like "X Side 1", "X Side 2"
+  return {
+    parent: null,
+    siblings: [],
+    isChild: false
+  }
+}
+
+// Get all resource names to check for a given resource
+function getRelatedResourceNames(resourceName: string): {
+  blocking: string[],   // Resources that would block this booking
+  adjacent: string[]    // Resources that are adjacent (informational)
+} {
+  const relationships = getResourceRelationships(resourceName)
+  
+  const blocking: string[] = [resourceName] // Always check exact match
+  const adjacent: string[] = []
+  
+  if (relationships.isChild && relationships.parent) {
+    // If booking "Ulam Side 1", also blocked by "Ulam"
+    blocking.push(relationships.parent)
+    // Siblings are adjacent (informational)
+    adjacent.push(...relationships.siblings)
+  } else {
+    // If booking "Ulam" (parent), also blocked by all children
+    blocking.push(`${resourceName} Side 1`)
+    blocking.push(`${resourceName} Side 2`)
+  }
+  
+  return { blocking, adjacent }
+}
+
 export interface AvailabilityRequest {
   resource_name: string       // e.g., "Beit Midrash"
   resource_id?: number        // Optional VC resource ID if known
@@ -180,6 +239,7 @@ export interface ConflictInfo {
   type: 'definite' | 'possible'
   reservation_id: number
   description: string
+  resource_name?: string      // Which resource this conflict is on
   start_date: string
   end_date?: string
   start_time?: string
@@ -188,10 +248,23 @@ export interface ConflictInfo {
   contact_person?: string
 }
 
+export interface AdjacentBooking {
+  reservation_id: number
+  description: string
+  resource_name: string       // e.g., "Ulam Side 2"
+  start_date: string
+  end_date?: string
+  start_time?: string
+  end_time?: string
+  event_name?: string
+  note: string               // e.g., "Adjacent space has booking"
+}
+
 export interface AvailabilityResponse {
   available: boolean
   conflicts: ConflictInfo[]
   possible_conflicts: ConflictInfo[]
+  adjacent_bookings: AdjacentBooking[]  // Sibling resources with bookings
   raw_reservations?: any[]   // For debugging
   error?: string
 }
@@ -206,6 +279,7 @@ export async function POST(request: Request) {
         available: false,
         conflicts: [],
         possible_conflicts: [],
+        adjacent_bookings: [],
         error: 'resource_name and date are required'
       } as AvailabilityResponse, { status: 400 })
     }
@@ -251,6 +325,7 @@ export async function POST(request: Request) {
           available: false,
           conflicts: [],
           possible_conflicts: [],
+          adjacent_bookings: [],
           error: `Veracross API endpoint not found (404). Check VERACROSS_API_BASE and scope. Tried: ${apiUrl}`,
           debug: { url: apiUrl, status: response.status, body: errorText }
         } as AvailabilityResponse, { status: 500 })
@@ -260,6 +335,7 @@ export async function POST(request: Request) {
         available: false,
         conflicts: [],
         possible_conflicts: [],
+        adjacent_bookings: [],
         error: `Veracross API error: ${response.status}`,
         debug: { url: apiUrl, status: response.status, body: errorText }
       } as AvailabilityResponse, { status: 500 })
@@ -270,40 +346,63 @@ export async function POST(request: Request) {
     
     console.log(`Found ${reservations.length} reservations from Veracross`)
 
-    // Filter to matching resource
-    // Resource name might be in various fields depending on API response structure
-    const matchingReservations = reservations.filter((r: any) => {
-      // Try all possible resource name fields
-      const resName = r.resource?.description || r.resource?.name || 
-                      r.resource_description || r.resource_name || 
-                      (typeof r.resource === 'string' ? r.resource : '') || ''
-      const resId = r.resource?.id || r.resource_id
-      
-      console.log(`Checking reservation: resource="${resName}", id=${resId}, looking for="${resource_name}"`)
-      
-      // Match by ID if provided, otherwise by name (case-insensitive partial match)
-      if (resource_id && resId === resource_id) return true
-      if (resName && resource_name && resName.toLowerCase().includes(resource_name.toLowerCase())) return true
-      if (resName && resource_name && resource_name.toLowerCase().includes(resName.toLowerCase())) return true
-      return false
-    })
+    // Get related resources (blocking and adjacent)
+    const { blocking: blockingResources, adjacent: adjacentResources } = getRelatedResourceNames(resource_name)
+    console.log(`Checking resources - Blocking: ${blockingResources.join(', ')} | Adjacent: ${adjacentResources.join(', ')}`)
 
-    console.log(`${matchingReservations.length} match resource "${resource_name}"`)
+    // Helper to get resource name from reservation
+    const getResName = (r: any): string => {
+      return r.resource?.description || r.resource?.name || 
+             r.resource_description || r.resource_name || 
+             (typeof r.resource === 'string' ? r.resource : '') || ''
+    }
+
+    // Helper to check if a reservation matches any of the given resource names
+    const matchesAnyResource = (r: any, resourceNames: string[]): string | null => {
+      const resName = getResName(r)
+      for (const targetName of resourceNames) {
+        if (resName.toLowerCase().includes(targetName.toLowerCase()) ||
+            targetName.toLowerCase().includes(resName.toLowerCase())) {
+          return resName
+        }
+      }
+      return null
+    }
+
+    // Filter reservations into blocking and adjacent categories
+    const blockingReservations: Array<{ res: any, matchedResource: string }> = []
+    const adjacentReservations: Array<{ res: any, matchedResource: string }> = []
+
+    for (const r of reservations) {
+      const blockingMatch = matchesAnyResource(r, blockingResources)
+      if (blockingMatch) {
+        blockingReservations.push({ res: r, matchedResource: blockingMatch })
+        continue
+      }
+      
+      const adjacentMatch = matchesAnyResource(r, adjacentResources)
+      if (adjacentMatch) {
+        adjacentReservations.push({ res: r, matchedResource: adjacentMatch })
+      }
+    }
+
+    console.log(`${blockingReservations.length} blocking, ${adjacentReservations.length} adjacent`)
 
     const conflicts: ConflictInfo[] = []
     const possibleConflicts: ConflictInfo[] = []
+    const adjacentBookings: AdjacentBooking[] = []
     
     const requestedStart = parseTimeToMinutes(start_time)
     const requestedEnd = parseTimeToMinutes(end_time)
 
-    for (const res of matchingReservations) {
-      // Check if this reservation covers our date
+    // Helper to check date and day pattern
+    const isReservationOnDate = (res: any): boolean => {
       const resStartDate = res.start_date || res.begin_date
       const resEndDate = res.end_date || resStartDate
       
       // Skip if date doesn't match
       if (resStartDate > date || (resEndDate && resEndDate < date)) {
-        continue
+        return false
       }
       
       // For recurring reservations, check if our day of week matches
@@ -317,10 +416,19 @@ export async function POST(request: Request) {
         
         // Check if this day is in the pattern
         if (!res.days.includes(dayCode)) {
-          continue
+          return false
         }
       }
       
+      return true
+    }
+
+    // Process blocking reservations (conflicts)
+    for (const { res, matchedResource } of blockingReservations) {
+      if (!isReservationOnDate(res)) continue
+      
+      const resStartDate = res.start_date || res.begin_date
+      const resEndDate = res.end_date || resStartDate
       const resStart = parseTimeToMinutes(res.start_time || res.begin_time)
       const resEnd = parseTimeToMinutes(res.end_time)
       
@@ -328,6 +436,7 @@ export async function POST(request: Request) {
         type: 'possible',
         reservation_id: res.id || res.reservation_id,
         description: res.description || res.event_description || 'Reservation',
+        resource_name: matchedResource,
         start_date: resStartDate,
         end_date: resEndDate,
         start_time: formatTimeForDisplay(res.start_time || res.begin_time),
@@ -352,14 +461,46 @@ export async function POST(request: Request) {
       }
     }
 
+    // Process adjacent reservations (informational - sibling resources)
+    for (const { res, matchedResource } of adjacentReservations) {
+      if (!isReservationOnDate(res)) continue
+      
+      const resStartDate = res.start_date || res.begin_date
+      const resEndDate = res.end_date || resStartDate
+      const resStart = parseTimeToMinutes(res.start_time || res.begin_time)
+      const resEnd = parseTimeToMinutes(res.end_time)
+      
+      // Only show adjacent bookings that overlap with our time
+      const overlaps = (requestedStart !== null && requestedEnd !== null && 
+                        resStart !== null && resEnd !== null)
+        ? timesOverlap(requestedStart, requestedEnd, resStart, resEnd)
+        : true // If time unknown, show it anyway
+      
+      if (overlaps) {
+        adjacentBookings.push({
+          reservation_id: res.id || res.reservation_id,
+          description: res.description || res.event_description || 'Reservation',
+          resource_name: matchedResource,
+          start_date: resStartDate,
+          end_date: resEndDate,
+          start_time: formatTimeForDisplay(res.start_time || res.begin_time),
+          end_time: formatTimeForDisplay(res.end_time),
+          event_name: res.event?.name || res.event_name,
+          note: `Adjacent space (${matchedResource}) has a booking during this time`,
+        })
+      }
+    }
+
     const available = conflicts.length === 0
 
     return NextResponse.json({
       available,
       conflicts,
       possible_conflicts: possibleConflicts,
+      adjacent_bookings: adjacentBookings,
       raw_reservations: reservations, // Full API response for debugging
-      matched_count: matchingReservations.length,
+      blocking_count: blockingReservations.length,
+      adjacent_count: adjacentReservations.length,
       total_count: reservations.length,
     } as AvailabilityResponse)
 
@@ -369,6 +510,7 @@ export async function POST(request: Request) {
       available: false,
       conflicts: [],
       possible_conflicts: [],
+      adjacent_bookings: [],
       error: error.message || 'Failed to check availability'
     } as AvailabilityResponse, { status: 500 })
   }

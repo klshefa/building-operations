@@ -27,6 +27,7 @@ interface ConflictInfo {
   type: 'definite' | 'possible'
   reservation_id: number
   description: string
+  resource_name?: string
   start_date: string
   end_date?: string
   start_time?: string
@@ -35,10 +36,23 @@ interface ConflictInfo {
   contact_person?: string
 }
 
+interface AdjacentBooking {
+  reservation_id: number
+  description: string
+  resource_name: string
+  start_date: string
+  end_date?: string
+  start_time?: string
+  end_time?: string
+  event_name?: string
+  note: string
+}
+
 interface AvailabilityResult {
   available: boolean
   conflicts: ConflictInfo[]
   possible_conflicts: ConflictInfo[]
+  adjacent_bookings?: AdjacentBooking[]
   raw_reservations?: any[]
   error?: string
 }
@@ -469,8 +483,43 @@ export default function AvailabilityTestPage() {
                   </div>
                 )}
 
+                {/* Adjacent Bookings (Informational) */}
+                {result.adjacent_bookings && result.adjacent_bookings.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-blue-700 uppercase mb-2 flex items-center gap-1">
+                      <ExclamationTriangleIcon className="w-4 h-4" />
+                      Adjacent Space Bookings ({result.adjacent_bookings.length})
+                    </h3>
+                    <p className="text-xs text-blue-600 mb-2">
+                      These bookings are on adjacent/sibling spaces. Consider if noise or activity might affect your event.
+                    </p>
+                    <div className="space-y-2">
+                      {result.adjacent_bookings.map((b, i) => (
+                        <div key={i} className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                          <div className="flex justify-between items-start">
+                            <p className="font-medium text-slate-800">{b.description}</p>
+                            <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded">
+                              {b.resource_name}
+                            </span>
+                          </div>
+                          {b.event_name && b.event_name !== b.description && (
+                            <p className="text-sm text-slate-600">Event: {b.event_name}</p>
+                          )}
+                          <p className="text-sm text-slate-500">
+                            {b.start_time && b.end_time 
+                              ? `${b.start_time} - ${b.end_time}`
+                              : 'Time not specified'
+                            }
+                            {b.start_date && ` on ${b.start_date}`}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* No Conflicts Message */}
-                {result.available && result.possible_conflicts.length === 0 && (
+                {result.available && result.possible_conflicts.length === 0 && (!result.adjacent_bookings || result.adjacent_bookings.length === 0) && (
                   <p className="text-sm text-slate-500">
                     The resource appears to be completely available for the requested time.
                   </p>
