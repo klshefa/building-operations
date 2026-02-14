@@ -439,6 +439,20 @@ export async function POST(request: Request) {
       // Build list of all resource names to check (blocking + adjacent)
       const allResourcesToCheck = [...blockingResources, ...adjacentResources]
       
+      // If we have an exclude_event_id, look up related raw_event_ids from ops_event_matches
+      let excludeRawEventIds: string[] = []
+      if (exclude_event_id) {
+        const { data: matches } = await supabase
+          .from('ops_event_matches')
+          .select('raw_event_id')
+          .eq('event_id', exclude_event_id)
+        
+        if (matches && matches.length > 0) {
+          excludeRawEventIds = matches.map(m => m.raw_event_id)
+          console.log(`Found ${excludeRawEventIds.length} related raw events to exclude`)
+        }
+      }
+      
       // Query ops_raw_events for reservations on this date
       // We filter by date range, and then by recurring_pattern client-side
       const { data: reservations, error: dbError } = await supabase
@@ -456,18 +470,29 @@ export async function POST(request: Request) {
         
         for (const res of reservations) {
           // Skip if this is the event we're currently editing
-          if (exclude_event_id && res.id === exclude_event_id) {
-            console.log(`Skipping reservation "${res.title}" - matches exclude_event_id`)
-            continue
+          // Check various ID fields that might match
+          if (exclude_event_id) {
+            if (res.id === exclude_event_id || 
+                res.source_id === exclude_event_id ||
+                res.reservation_id === exclude_event_id ||
+                excludeRawEventIds.includes(res.id)) {
+              console.log(`Skipping reservation "${res.title}" - matches exclude_event_id or related raw event`)
+              continue
+            }
           }
           
           // Also skip by matching name + date + time (fallback for when ID doesn't match)
-          if (exclude_event_name && res.title === exclude_event_name && 
-              res.start_date === date && 
-              formatTimeForDisplay(res.start_time) === formatTimeForDisplay(start_time) &&
-              formatTimeForDisplay(res.end_time) === formatTimeForDisplay(end_time)) {
-            console.log(`Skipping reservation "${res.title}" - matches by name/date/time`)
-            continue
+          // Compare parsed time values instead of formatted strings for reliability
+          if (exclude_event_name) {
+            const titleMatch = res.title?.toLowerCase().trim() === exclude_event_name?.toLowerCase().trim()
+            const dateMatch = res.start_date === date
+            const startTimeMatch = parseTimeToMinutes(res.start_time) === parseTimeToMinutes(start_time)
+            const endTimeMatch = parseTimeToMinutes(res.end_time) === parseTimeToMinutes(end_time)
+            
+            if (titleMatch && dateMatch && startTimeMatch && endTimeMatch) {
+              console.log(`Skipping reservation "${res.title}" - matches by name/date/time`)
+              continue
+            }
           }
           
           // Check if this resource matches our blocking or adjacent resources
