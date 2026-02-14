@@ -25,6 +25,7 @@ import {
   BellIcon,
   BellSlashIcon,
 } from '@heroicons/react/24/outline'
+import { AvailabilityCheck } from '@/components/AvailabilityCheck'
 
 const sourceLabels: Record<EventSource, string> = {
   bigquery_group: 'VC Event',
@@ -190,10 +191,27 @@ export default function EventDetailPage() {
   const [subscribed, setSubscribed] = useState(false)
   const [subscribing, setSubscribing] = useState(false)
   const [conflictingEvents, setConflictingEvents] = useState<OpsEvent[]>([])
+  
+  // Resource dropdown for location
+  const [resources, setResources] = useState<{ id: number; description: string }[]>([])
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false)
 
   useEffect(() => {
     fetchEvent()
+    fetchResources()
   }, [params.id])
+
+  async function fetchResources() {
+    try {
+      const response = await fetch('/api/resources')
+      const { data } = await response.json()
+      if (data) {
+        setResources(data)
+      }
+    } catch (err) {
+      console.error('Error fetching resources:', err)
+    }
+  }
 
   // Check subscription status when event is loaded
   useEffect(() => {
@@ -603,18 +621,59 @@ export default function EventDetailPage() {
             
             {/* Row 2: Location and Type */}
             <div className="grid grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
                   <MapPinIcon className="w-3 h-3" />
                   Location
                 </label>
-                <input
-                  type="text"
-                  value={cleanLocation(event.location)}
-                  onChange={(e) => updateField('location', e.target.value)}
-                  placeholder="Location"
-                  className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={cleanLocation(event.location)}
+                    onChange={(e) => {
+                      updateField('location', e.target.value)
+                      setShowLocationDropdown(true)
+                    }}
+                    onFocus={() => setShowLocationDropdown(true)}
+                    placeholder="Type to search..."
+                    className="w-full text-sm border border-slate-200 rounded px-2 py-1.5 pr-8 focus:border-shefa-blue-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                    disabled={resources.length === 0}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+                {showLocationDropdown && resources.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {resources
+                      .filter(r => r.description.toLowerCase().includes(cleanLocation(event.location).toLowerCase()))
+                      .slice(0, 50)
+                      .map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => {
+                            updateField('location', r.description)
+                            setShowLocationDropdown(false)
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-shefa-blue-50 text-sm text-slate-700"
+                        >
+                          {r.description}
+                        </button>
+                      ))}
+                    {resources.filter(r => r.description.toLowerCase().includes(cleanLocation(event.location).toLowerCase())).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-slate-500">
+                        No matches found
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
@@ -632,6 +691,18 @@ export default function EventDetailPage() {
                 </select>
               </div>
             </div>
+
+            {/* Veracross Availability Check */}
+            {cleanLocation(event.location) && (
+              <div className="pt-3 border-t border-slate-100 mt-3">
+                <AvailabilityCheck
+                  resourceName={cleanLocation(event.location)}
+                  date={event.start_date}
+                  startTime={toTimeInputFormat(event.start_time) || '09:00'}
+                  endTime={toTimeInputFormat(event.end_time) || '17:00'}
+                />
+              </div>
+            )}
           </div>
         </motion.div>
 
