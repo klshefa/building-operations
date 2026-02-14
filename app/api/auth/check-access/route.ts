@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/api-auth'
 
+// Force dynamic rendering - this route depends on user session
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   // This route requires a valid session but doesn't require ops_users access
   // since it's the route that checks for ops_users access
@@ -26,16 +29,22 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createAdminClient()
+    const emailLower = email.toLowerCase()
+    
+    console.log('[check-access] Checking access for:', emailLower)
     
     // First check ops_users table
     const { data, error } = await supabase
       .from('ops_users')
       .select('email, role, teams, is_active')
-      .eq('email', email.toLowerCase())
+      .eq('email', emailLower)
       .eq('is_active', true)
       .single()
 
+    console.log('[check-access] ops_users result:', { found: !!data, error: error?.message })
+
     if (!error && data) {
+      console.log('[check-access] Found in ops_users with role:', data.role)
       return NextResponse.json({
         hasAccess: true,
         role: data.role,
@@ -44,13 +53,16 @@ export async function GET(request: Request) {
     }
 
     // Fallback: check if user is a super_admin (they get admin access to all portals)
-    const { data: superAdmin } = await supabase
+    const { data: superAdmin, error: superError } = await supabase
       .from('super_admins')
       .select('email')
-      .eq('email', email.toLowerCase())
+      .eq('email', emailLower)
       .maybeSingle()
 
+    console.log('[check-access] super_admins result:', { found: !!superAdmin, error: superError?.message })
+
     if (superAdmin) {
+      console.log('[check-access] Found in super_admins, granting admin role')
       return NextResponse.json({
         hasAccess: true,
         role: 'admin',
@@ -58,13 +70,14 @@ export async function GET(request: Request) {
       })
     }
 
+    console.log('[check-access] No access found for:', emailLower)
     return NextResponse.json({ 
       hasAccess: false, 
       role: null, 
       teams: [] 
     })
   } catch (error: any) {
-    console.error('Check access error:', error)
+    console.error('[check-access] Error:', error)
     return NextResponse.json({ 
       hasAccess: false, 
       role: null, 
