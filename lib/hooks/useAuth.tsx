@@ -36,7 +36,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkUser()
     
     const supabase = createClient()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] onAuthStateChange - event:', event, 'user:', session?.user?.email)
       setUser(session?.user ?? null)
       if (session?.user?.email) {
         // User has session, assume access (callback already validated)
@@ -56,7 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function checkUser() {
     const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    console.log('[Auth] checkUser - session:', session?.user?.email, 'error:', error?.message)
     
     setUser(session?.user ?? null)
     
