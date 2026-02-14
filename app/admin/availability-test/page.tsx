@@ -94,20 +94,21 @@ export default function AvailabilityTestPage() {
       setResourcesLoading(true)
       setResourcesError(null)
       
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('ops_resources')
-        .select('*')
-        .order('description')
-      
-      console.log('Resources loaded:', data?.length, error)
-      
-      if (error) {
-        setResourcesError(`Failed to load resources: ${error.message}`)
-      } else if (data && data.length > 0) {
-        setResources(data)
-      } else {
-        setResourcesError('No resources found. Please sync resources from Admin > Data Sync first.')
+      try {
+        const response = await fetch('/api/resources')
+        const { data, error } = await response.json()
+        
+        console.log('Resources loaded:', data?.length, error)
+        
+        if (error) {
+          setResourcesError(`Failed to load resources: ${error}`)
+        } else if (data && data.length > 0) {
+          setResources(data)
+        } else {
+          setResourcesError('No resources found. Please sync resources from Admin > Data Sync first.')
+        }
+      } catch (err: any) {
+        setResourcesError(`Failed to load resources: ${err.message}`)
       }
       
       setResourcesLoading(false)
