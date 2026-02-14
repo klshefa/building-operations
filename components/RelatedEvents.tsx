@@ -45,14 +45,27 @@ interface RelatedEventsProps {
 // Format source name for display
 function formatSource(source: string): string {
   const sourceMap: Record<string, string> = {
-    'bigquery_group': 'Group Calendar',
-    'bigquery_resource': 'Resource Reservation',
-    'calendar_staff': 'Staff Calendar',
-    'calendar_ls': 'LS Calendar',
-    'calendar_ms': 'MS Calendar',
-    'manual': 'Manual Entry'
+    'bigquery_group': 'VC Event',
+    'bigquery_resource': 'VC Resource',
+    'calendar_staff': 'Staff Cal',
+    'calendar_ls': 'LS Cal',
+    'calendar_ms': 'MS Cal',
+    'manual': 'Manual'
   }
   return sourceMap[source] || source
+}
+
+// Get source badge color
+function getSourceColor(source: string): string {
+  const colorMap: Record<string, string> = {
+    'bigquery_group': 'bg-purple-100 text-purple-700',
+    'bigquery_resource': 'bg-blue-100 text-blue-700',
+    'calendar_staff': 'bg-green-100 text-green-700',
+    'calendar_ls': 'bg-orange-100 text-orange-700',
+    'calendar_ms': 'bg-teal-100 text-teal-700',
+    'manual': 'bg-slate-100 text-slate-700'
+  }
+  return colorMap[source] || 'bg-slate-100 text-slate-700'
 }
 
 // Format time for display
@@ -264,21 +277,24 @@ export function RelatedEvents({ eventId, userEmail, className = '' }: RelatedEve
                     className="flex items-center justify-between bg-slate-50 rounded-lg p-3"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${getSourceColor(event.source)}`}>
+                          {formatSource(event.source)}
+                        </span>
                         <span className="font-medium text-sm text-slate-800 truncate">
                           {event.title}
                         </span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                           event.match_type === 'auto' 
                             ? 'bg-green-100 text-green-700' 
-                            : 'bg-blue-100 text-blue-700'
+                            : 'bg-cyan-100 text-cyan-700'
                         }`}>
                           {event.match_type === 'auto' ? 'Auto' : 'Manual'}
                         </span>
                       </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {formatSource(event.source)}
-                        {event.start_time && ` • ${formatTime(event.start_time)}`}
+                      <div className="text-xs text-slate-500 mt-1">
+                        {event.start_date}
+                        {event.start_time && ` ${formatTime(event.start_time)}`}
                         {event.end_time && `-${formatTime(event.end_time)}`}
                         {(event.location || event.resource) && ` • ${event.location || event.resource}`}
                       </div>
@@ -313,7 +329,10 @@ export function RelatedEvents({ eventId, userEmail, className = '' }: RelatedEve
                     className="flex items-center justify-between bg-amber-50 border border-amber-100 rounded-lg p-3"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${getSourceColor(suggestion.event.source)}`}>
+                          {formatSource(suggestion.event.source)}
+                        </span>
                         <span className="font-medium text-sm text-slate-800 truncate">
                           {suggestion.event.title}
                         </span>
@@ -321,11 +340,11 @@ export function RelatedEvents({ eventId, userEmail, className = '' }: RelatedEve
                           {Math.round(suggestion.confidence * 100)}% match
                         </span>
                       </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {formatSource(suggestion.event.source)}
-                        {suggestion.event.start_date && ` • ${suggestion.event.start_date}`}
+                      <div className="text-xs text-slate-500 mt-1">
+                        {suggestion.event.start_date}
                         {suggestion.event.start_time && ` ${formatTime(suggestion.event.start_time)}`}
                         {suggestion.event.end_time && `-${formatTime(suggestion.event.end_time)}`}
+                        {(suggestion.event.location || suggestion.event.resource) && ` • ${suggestion.event.location || suggestion.event.resource}`}
                       </div>
                       <div className="text-xs text-amber-600 mt-1">
                         {suggestion.reasons.join(' • ')}
@@ -429,12 +448,16 @@ export function RelatedEvents({ eventId, userEmail, className = '' }: RelatedEve
                       className="flex items-center justify-between bg-slate-50 rounded-lg p-3 hover:bg-slate-100"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-slate-800 truncate">
-                          {event.title}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${getSourceColor(event.source)}`}>
+                            {formatSource(event.source)}
+                          </span>
+                          <span className="font-medium text-sm text-slate-800 truncate">
+                            {event.title}
+                          </span>
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          {formatSource(event.source)}
-                          {event.start_date && ` • ${event.start_date}`}
+                        <div className="text-xs text-slate-500 mt-1">
+                          {event.start_date}
                           {event.start_time && ` ${formatTime(event.start_time)}`}
                           {event.end_time && `-${formatTime(event.end_time)}`}
                           {(event.location || event.resource) && ` • ${event.location || event.resource}`}
