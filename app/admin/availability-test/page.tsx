@@ -88,13 +88,29 @@ export default function AvailabilityTestPage() {
   useEffect(() => {
     async function loadResources() {
       const supabase = createClient()
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('ops_resources')
         .select('*')
         .order('description')
       
-      if (data) {
+      console.log('Resources loaded:', data?.length, error)
+      
+      if (data && data.length > 0) {
         setResources(data)
+      } else {
+        // If no resources in table, try to get unique locations from events
+        const { data: events } = await supabase
+          .from('ops_events')
+          .select('location')
+          .not('location', 'is', null)
+        
+        if (events) {
+          const uniqueLocations = [...new Set(events.map(e => e.location).filter(Boolean))]
+          setResources(uniqueLocations.map((loc, i) => ({
+            id: i,
+            description: loc as string,
+          })))
+        }
       }
     }
     
@@ -192,28 +208,26 @@ export default function AvailabilityTestPage() {
                 <MapPinIcon className="w-4 h-4 inline mr-1" />
                 Resource / Location
               </label>
-              <select
-                value={selectedResource}
-                onChange={(e) => setSelectedResource(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none"
-              >
-                <option value="">Select a resource...</option>
-                {resources.map((r) => (
-                  <option key={r.id} value={r.description}>
-                    {r.description} {r.abbreviation ? `(${r.abbreviation})` : ''}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-slate-400 mt-1">
-                Or type a custom location name
-              </p>
               <input
                 type="text"
+                list="resource-list"
                 value={selectedResource}
                 onChange={(e) => setSelectedResource(e.target.value)}
-                placeholder="Or type location name..."
-                className="w-full mt-2 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-shefa-blue-500 focus:outline-none"
+                placeholder="Type or select a location (e.g., Beit Midrash)"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none"
               />
+              <datalist id="resource-list">
+                {resources.map((r) => (
+                  <option key={r.id} value={r.description}>
+                    {r.abbreviation ? `(${r.abbreviation})` : ''}
+                  </option>
+                ))}
+              </datalist>
+              {resources.length > 0 && (
+                <p className="text-xs text-slate-400 mt-1">
+                  {resources.length} known locations available as suggestions
+                </p>
+              )}
             </div>
 
             {/* Date */}
