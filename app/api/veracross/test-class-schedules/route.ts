@@ -49,16 +49,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const resourceName = searchParams.get('resource') || ''
-    const limit = searchParams.get('limit') || '50'
     
     // Get token
     const accessToken = await getClassSchedulesToken()
     
     // Build query - the endpoint is /academics/class_schedules
-    const queryParams = new URLSearchParams()
-    queryParams.set('page_size', limit)
-    
-    const apiUrl = `${VERACROSS_API_BASE}/academics/class_schedules?${queryParams.toString()}`
+    const apiUrl = `${VERACROSS_API_BASE}/academics/class_schedules`
     
     console.log('Querying Veracross Class Schedules:', apiUrl)
     
@@ -66,6 +62,7 @@ export async function GET(request: Request) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json',
+        'X-Page-Size': '1000', // Max allowed per page
       },
     })
 
