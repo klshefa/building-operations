@@ -87,6 +87,9 @@ export async function PATCH(
   
   try {
     const body = await request.json()
+    console.log('PATCH request for event:', id)
+    console.log('Body keys:', Object.keys(body))
+    
     const supabase = createAdminClient()
 
     // Get current event data for comparison
@@ -113,6 +116,9 @@ export async function PATCH(
 
     // Add updated timestamp
     updateData.updated_at = new Date().toISOString()
+    
+    console.log('Filtered update data keys:', Object.keys(updateData))
+    console.log('Update data:', JSON.stringify(updateData, null, 2))
 
     const { data, error } = await supabase
       .from('ops_events')
