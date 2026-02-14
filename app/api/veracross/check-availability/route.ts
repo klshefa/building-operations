@@ -27,12 +27,29 @@ async function getAccessToken(supabase: ReturnType<typeof getSupabaseClient>): P
   const now = new Date()
   
   // If we have a valid cached token, use it
+  // BUT also check if the scopes match - if scopes changed, we need a new token
   if (cached?.access_token && cached?.expires_at) {
     const expiresAt = new Date(cached.expires_at)
+    const cachedScopes = cached.scope || ''
+    const requestedScopes = VERACROSS_SCOPES
+    
+    // Check if scopes match (order-independent comparison)
+    const cachedScopeArr: string[] = cachedScopes.split(' ').filter(Boolean)
+    const requestedScopeArr: string[] = requestedScopes.split(' ').filter(Boolean)
+    const requestedScopeSet = new Set<string>(requestedScopeArr)
+    const scopesMatch = cachedScopeArr.length === requestedScopeArr.length && 
+      cachedScopeArr.every((s: string) => requestedScopeSet.has(s))
+    
     // Add 5 minute buffer
-    if (expiresAt > new Date(now.getTime() + 5 * 60 * 1000)) {
-      console.log('Using cached Veracross token')
+    if (scopesMatch && expiresAt > new Date(now.getTime() + 5 * 60 * 1000)) {
+      console.log('Using cached Veracross token (scopes match)')
       return cached.access_token
+    }
+    
+    if (!scopesMatch) {
+      console.log('Cached token scopes do not match requested scopes - refreshing')
+      console.log('Cached:', cachedScopes)
+      console.log('Requested:', requestedScopes)
     }
   }
 
@@ -66,7 +83,7 @@ async function getAccessToken(supabase: ReturnType<typeof getSupabaseClient>): P
   // Calculate expiration (token usually valid for 1 hour)
   const expiresAt = new Date(now.getTime() + (tokenData.expires_in || 3600) * 1000)
 
-  // Cache the token
+  // Cache the token - store the REQUESTED scopes so we can detect changes
   await supabase
     .from('veracross_tokens')
     .upsert({
@@ -74,7 +91,7 @@ async function getAccessToken(supabase: ReturnType<typeof getSupabaseClient>): P
       access_token: tokenData.access_token,
       token_type: tokenData.token_type,
       expires_at: expiresAt.toISOString(),
-      scope: tokenData.scope,
+      scope: VERACROSS_SCOPES, // Store requested scopes, not returned scopes
       updated_at: now.toISOString(),
     })
 
