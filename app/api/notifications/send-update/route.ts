@@ -60,16 +60,24 @@ export async function POST(request: Request) {
       })
     }
     
-    // Filter subscribers who have notifications enabled
-    const { data: activeUsers } = await supabase
+    console.log('Found subscribers:', subscribers.map(s => s.user_email))
+    
+    // Filter subscribers who have notifications enabled (default to all if column doesn't exist)
+    const { data: activeUsers, error: usersError } = await supabase
       .from('ops_users')
       .select('email')
       .in('email', subscribers.map(s => s.user_email))
       .eq('is_active', true)
-      .eq('notify_on_subscribed_changes', true)
     
-    const activeEmails = new Set(activeUsers?.map(u => u.email) || [])
-    const notifySubscribers = subscribers.filter(s => activeEmails.has(s.user_email))
+    // If there's an error or no users found, still try to send to all subscribers
+    // (the notification preference column may not exist yet)
+    let notifySubscribers = subscribers
+    if (!usersError && activeUsers && activeUsers.length > 0) {
+      const activeEmails = new Set(activeUsers.map(u => u.email))
+      notifySubscribers = subscribers.filter(s => activeEmails.has(s.user_email))
+    }
+    
+    console.log('Notifying subscribers:', notifySubscribers.map(s => s.user_email))
     
     if (notifySubscribers.length === 0) {
       return NextResponse.json({ 
