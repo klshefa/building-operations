@@ -19,6 +19,7 @@ import {
   CalendarDaysIcon,
   UsersIcon,
   CloudArrowDownIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 
 type AdminTab = 'event' | 'users' | 'sync' | 'filters'
@@ -822,6 +823,21 @@ export default function AdminPage() {
                         {syncStatus['all'].message}
                       </p>
                     )}
+
+                    {/* Veracross API Test */}
+                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h3 className="text-sm font-medium text-blue-800 mb-2">Real-Time Availability Check</h3>
+                      <p className="text-xs text-blue-600 mb-3">
+                        Test the Veracross API integration for checking resource availability.
+                      </p>
+                      <a
+                        href="/admin/availability-test"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        <MagnifyingGlassIcon className="w-4 h-4" />
+                        Open Availability Test
+                      </a>
+                    </div>
                   </div>
                 </motion.div>
               )}
