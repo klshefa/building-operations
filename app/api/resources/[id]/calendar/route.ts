@@ -272,16 +272,21 @@ export async function GET(
           if (!patternIncludesDay(dayPattern, dayOfWeek)) continue
           
           // Dedupe
-          const key = `${schedule.class_id || schedule.internal_class_id}-${scheduleRoomDesc}`
+          const key = `${schedule.internal_class_id || schedule.class_id}-${scheduleRoomDesc}`
           if (seenKeys.has(key)) continue
           seenKeys.add(key)
           
-          const classId = schedule.class_id || String(schedule.internal_class_id) || ''
+          // Use internal_class_id (system-generated) as primary key - matches cls.id from /academics/classes
+          const internalId = schedule.internal_class_id ? String(schedule.internal_class_id) : ''
+          const userDefinedId = schedule.class_id || ''
           
-          // Skip classes that aren't active/future
-          if (!activeClassIds.has(classId)) continue
+          // Check if this class is active/future using internal_class_id (primary) or class_id (fallback)
+          const isActive = activeClassIds.has(internalId) || activeClassIds.has(userDefinedId)
           
-          const className = classNamesMap[classId] || schedule.block?.description || 'Class'
+          if (!isActive) continue
+          
+          // Get class name using the ID that matched
+          const className = classNamesMap[internalId] || classNamesMap[userDefinedId] || schedule.block?.description || 'Class'
           
           events.push({
             id: `class-${schedule.id}`,

@@ -281,9 +281,10 @@ export async function GET(request: Request) {
         }
         
         // Deduplicate schedules - Veracross often returns multiple records for same class meeting
-        // Group by class_id + day + room, keep earliest start time
+        // Group by internal_class_id + day + room, keep earliest start time
         const scheduleKey = (s: any) => {
-          const classId = s.class_id || s.internal_class_id || s.id
+          // Use internal_class_id (system-generated) as primary key
+          const classId = s.internal_class_id || s.class_id || s.id
           const day = s.day?.id || s.day?.abbreviation || ''
           const room = s.room?.id || s.room?.abbreviation || ''
           return `${classId}-${day}-${room}`
@@ -346,13 +347,17 @@ export async function GET(request: Request) {
           const dayPattern = schedule.day?.description || schedule.day?.abbreviation || 
                             schedule.day_name || schedule.day_of_week || ''
           
-          // Look up the actual class name from our map
-          const classId = schedule.class_id || String(schedule.internal_class_id) || ''
+          // Use internal_class_id (system-generated) as primary key - matches cls.id from /academics/classes
+          const internalId = schedule.internal_class_id ? String(schedule.internal_class_id) : ''
+          const userDefinedId = schedule.class_id || ''
           
-          // Skip classes that aren't active/future
-          if (!activeClassIds.has(classId)) continue
+          // Check if this class is active/future using internal_class_id (primary) or class_id (fallback)
+          const isActive = activeClassIds.has(internalId) || activeClassIds.has(userDefinedId)
           
-          const className = classNamesMap[classId] || 
+          if (!isActive) continue
+          
+          // Get class name using the ID that matched
+          const className = classNamesMap[internalId] || classNamesMap[userDefinedId] || 
                            schedule.block?.description || 
                            'Class'
           
