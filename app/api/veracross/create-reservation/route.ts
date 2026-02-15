@@ -117,14 +117,15 @@ export async function POST(request: Request) {
 
     // Build the reservation payload
     // Veracross API requires data to be wrapped in a "data" field
+    // Field names from Veracross API docs for POST /resource_reservations/reservations
     const reservationData = {
-      description,
-      resource_id,
-      start_date,
+      resource_id: resource_id,
+      start_date: start_date,
       end_date: end_date || start_date,
-      start_time,
-      end_time,
-      requestor_id,
+      start_time: start_time,
+      end_time: end_time,
+      requesting_person_id: String(requestor_id),  // API shows this as string
+      notes: description,  // No title/name field - use notes for the description
     }
     
     const reservationPayload = {
