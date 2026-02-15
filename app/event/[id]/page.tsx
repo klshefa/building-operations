@@ -27,6 +27,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
 import { RelatedEvents } from '@/components/RelatedEvents'
+import { ResourceScheduleSidebar } from '@/components/ResourceScheduleSidebar'
 
 const sourceLabels: Record<EventSource, string> = {
   bigquery_group: 'VC Event',
@@ -196,11 +197,27 @@ export default function EventDetailPage() {
   // Resource dropdown for location
   const [resources, setResources] = useState<{ id: number; description: string }[]>([])
   const [showLocationDropdown, setShowLocationDropdown] = useState(false)
+  const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null)
 
   useEffect(() => {
     fetchEvent()
     fetchResources()
   }, [params.id])
+
+  // Resolve resource ID from location when event or resources change
+  useEffect(() => {
+    if (!event?.location || resources.length === 0) {
+      setSelectedResourceId(null)
+      return
+    }
+    const loc = cleanLocation(event.location).toLowerCase()
+    const match = resources.find(r => 
+      r.description.toLowerCase() === loc ||
+      r.description.toLowerCase().includes(loc) ||
+      loc.includes(r.description.toLowerCase())
+    )
+    setSelectedResourceId(match?.id || null)
+  }, [event?.location, resources])
 
   async function fetchResources() {
     try {
@@ -487,7 +504,10 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content - Left Column */}
+          <div className="lg:col-span-2 space-y-6">
         {/* Event Header Card */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -697,6 +717,7 @@ export default function EventDetailPage() {
             {cleanLocation(event.location) && (
               <div className="pt-3 border-t border-slate-100 mt-3">
                 <AvailabilityCheck
+                  resourceId={selectedResourceId || undefined}
                   resourceName={cleanLocation(event.location)}
                   date={event.start_date}
                   startTime={toTimeInputFormat(event.start_time) || '09:00'}
@@ -992,6 +1013,19 @@ export default function EventDetailPage() {
           {event.updated_at !== event.created_at && (
             <> • Updated: {format(parseISO(event.updated_at), 'MMM d, yyyy h:mm a')}</>
           )}
+        </div>
+          </div>
+
+          {/* Sidebar - Right Column */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-24">
+              <ResourceScheduleSidebar
+                resourceId={selectedResourceId}
+                resourceName={cleanLocation(event.location)}
+                date={event.start_date}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

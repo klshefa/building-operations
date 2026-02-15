@@ -25,6 +25,7 @@ import {
 } from '@heroicons/react/24/outline'
 import type { AuditLogEntry } from '@/lib/types'
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
+import { ResourceScheduleSidebar } from '@/components/ResourceScheduleSidebar'
 
 type AdminTab = 'event' | 'users' | 'sync' | 'filters' | 'audit'
 
@@ -114,6 +115,7 @@ export default function AdminPage() {
   const [resources, setResources] = useState<{ id: number; description: string }[]>([])
   const [resourcesLoading, setResourcesLoading] = useState(true)
   const [showLocationDropdown, setShowLocationDropdown] = useState(false)
+  const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null)
   
   // Audit log
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
@@ -140,6 +142,24 @@ export default function AdminPage() {
       fetchAuditLogs()
     }
   }, [userRole, activeTab, auditPage, auditEntityFilter, auditActionFilter])
+
+  // Resolve resource ID when location changes (for typed entries)
+  useEffect(() => {
+    if (!eventLocation || resources.length === 0) {
+      // Only clear if no location selected
+      if (!eventLocation) setSelectedResourceId(null)
+      return
+    }
+    const loc = eventLocation.toLowerCase()
+    const match = resources.find(r => 
+      r.description.toLowerCase() === loc ||
+      r.description.toLowerCase().includes(loc) ||
+      loc.includes(r.description.toLowerCase())
+    )
+    if (match && match.id !== selectedResourceId) {
+      setSelectedResourceId(match.id)
+    }
+  }, [eventLocation, resources])
 
   async function fetchResources() {
     try {
@@ -600,6 +620,7 @@ export default function AdminPage() {
                                   type="button"
                                   onClick={() => {
                                     setEventLocation(r.description)
+                                    setSelectedResourceId(r.id)
                                     setShowLocationDropdown(false)
                                   }}
                                   className="w-full text-left px-3 py-2 hover:bg-shefa-blue-50 text-sm text-slate-700"
@@ -687,6 +708,7 @@ export default function AdminPage() {
                     {eventLocation && eventDate && !eventAllDay && eventStartTime && eventEndTime && (
                       <div className="p-3 bg-slate-50 rounded-lg">
                         <AvailabilityCheck
+                          resourceId={selectedResourceId || undefined}
                           resourceName={eventLocation}
                           date={eventDate}
                           startTime={eventStartTime}
@@ -706,6 +728,17 @@ export default function AdminPage() {
                       </button>
                     </div>
                   </form>
+
+                  {/* Calendar Sidebar - shown when location and date are selected */}
+                  {selectedResourceId && eventDate && (
+                    <div className="mt-6 pt-6 border-t border-slate-200">
+                      <ResourceScheduleSidebar
+                        resourceId={selectedResourceId}
+                        resourceName={eventLocation}
+                        date={eventDate}
+                      />
+                    </div>
+                  )}
                 </motion.div>
               )}
 
