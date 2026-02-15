@@ -14,12 +14,14 @@ import {
   ExclamationTriangleIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
+  BuildingOfficeIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Calendar', href: '/calendar', icon: CalendarDaysIcon },
   { name: 'All Events', href: '/events', icon: ListBulletIcon },
+  { name: 'Rooms', href: '/rooms', icon: BuildingOfficeIcon },
   { name: 'My Tasks', href: '/my-tasks', icon: ClipboardDocumentCheckIcon },
   { name: 'Conflicts', href: '/conflicts', icon: ExclamationTriangleIcon },
 ]

@@ -1,0 +1,118 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
+
+// GET - Fetch rooms with their events for a date range
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const resourceType = searchParams.get('resourceType')
+    
+    if (!startDate || !endDate) {
+      return NextResponse.json(
+        { error: 'startDate and endDate are required' },
+        { status: 400 }
+      )
+    }
+    
+    const supabase = createAdminClient()
+    
+    // Get all resources
+    let resourceQuery = supabase
+      .from('ops_resources')
+      .select('*')
+      .order('description')
+    
+    if (resourceType) {
+      resourceQuery = resourceQuery.eq('resource_type', resourceType)
+    }
+    
+    const { data: resources, error: resourceError } = await resourceQuery
+    
+    if (resourceError) {
+      return NextResponse.json({ error: resourceError.message }, { status: 500 })
+    }
+    
+    // Get events in date range that have a resource_id
+    const { data: events, error: eventError } = await supabase
+      .from('ops_events')
+      .select('id, title, start_date, end_date, start_time, end_time, all_day, location, resource_id, is_hidden, has_conflict')
+      .gte('start_date', startDate)
+      .lte('start_date', endDate)
+      .eq('is_hidden', false)
+      .not('resource_id', 'is', null)
+      .order('start_date')
+      .order('start_time')
+    
+    if (eventError) {
+      return NextResponse.json({ error: eventError.message }, { status: 500 })
+    }
+    
+    // Group events by resource
+    const eventsByResource: Record<number, typeof events> = {}
+    for (const event of events || []) {
+      if (event.resource_id) {
+        if (!eventsByResource[event.resource_id]) {
+          eventsByResource[event.resource_id] = []
+        }
+        eventsByResource[event.resource_id].push(event)
+      }
+    }
+    
+    // Calculate utilization stats for each resource
+    const roomsWithStats = (resources || []).map(resource => {
+      const resourceEvents = eventsByResource[resource.id] || []
+      const totalEvents = resourceEvents.length
+      
+      // Calculate total hours booked
+      let totalHours = 0
+      for (const event of resourceEvents) {
+        if (event.all_day) {
+          totalHours += 8 // Assume 8 hours for all-day events
+        } else if (event.start_time && event.end_time) {
+          const start = parseTime(event.start_time)
+          const end = parseTime(event.end_time)
+          if (start !== null && end !== null) {
+            totalHours += (end - start) / 60
+          }
+        }
+      }
+      
+      return {
+        ...resource,
+        events: resourceEvents,
+        totalEvents,
+        totalHours: Math.round(totalHours * 10) / 10,
+      }
+    })
+    
+    // Get unique resource types for filtering
+    const resourceTypes = [...new Set((resources || []).map(r => r.resource_type).filter(Boolean))]
+    
+    return NextResponse.json({
+      rooms: roomsWithStats,
+      resourceTypes,
+      dateRange: { startDate, endDate },
+    })
+    
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+function parseTime(timeStr: string): number | null {
+  if (!timeStr) return null
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})/)
+  if (match) {
+    return parseInt(match[1]) * 60 + parseInt(match[2])
+  }
+  return null
+}
