@@ -87,10 +87,19 @@ function patternIncludesDay(pattern: string, dayOfWeek: number): boolean {
 
 function parseTimeToMinutes(timeStr: string | null | undefined): number | null {
   if (!timeStr) return null
+  
+  // Handle ISO datetime format like "1900-01-01T08:10:00Z"
+  const isoMatch = timeStr.match(/T(\d{2}):(\d{2})/)
+  if (isoMatch) {
+    return parseInt(isoMatch[1]) * 60 + parseInt(isoMatch[2])
+  }
+  
+  // Handle HH:MM format
   const match = timeStr.match(/^(\d{1,2}):(\d{2})/)
   if (match) {
     return parseInt(match[1]) * 60 + parseInt(match[2])
   }
+  
   return null
 }
 
