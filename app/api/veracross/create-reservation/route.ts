@@ -180,25 +180,29 @@ export async function POST(request: Request) {
 
     // Log to audit
     const supabase = getSupabaseClient()
-    await supabase.from('ops_audit_log').insert({
-      entity_type: 'veracross_reservation',
-      entity_id: reservationId?.toString() || 'unknown',
-      action: 'CREATE',
-      user_email: requestor_email,
-      new_values: {
-        description,
-        resource_id,
-        resource_name,
-        start_date,
-        end_date: end_date || start_date,
-        start_time,
-        end_time,
-        requestor_id,
-        veracross_reservation_id: reservationId
-      },
-      api_route: '/api/veracross/create-reservation',
-      http_method: 'POST'
-    }).catch(err => console.warn('Audit log failed:', err))
+    try {
+      await supabase.from('ops_audit_log').insert({
+        entity_type: 'veracross_reservation',
+        entity_id: reservationId?.toString() || 'unknown',
+        action: 'CREATE',
+        user_email: requestor_email,
+        new_values: {
+          description,
+          resource_id,
+          resource_name,
+          start_date,
+          end_date: end_date || start_date,
+          start_time,
+          end_time,
+          requestor_id,
+          veracross_reservation_id: reservationId
+        },
+        api_route: '/api/veracross/create-reservation',
+        http_method: 'POST'
+      })
+    } catch (err) {
+      console.warn('Audit log failed:', err)
+    }
 
     return NextResponse.json({
       success: true,
