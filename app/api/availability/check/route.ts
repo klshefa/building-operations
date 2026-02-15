@@ -296,6 +296,13 @@ export async function GET(request: Request) {
         const roomAbbrev = resource?.abbreviation?.toLowerCase() || ''
         const roomNumber = (resource?.description || '').match(/^\d+/)?.[0] || ''
         
+        console.log('[Availability] Resource matching info:', {
+          resourceId,
+          roomDesc,
+          roomAbbrev,
+          roomNumber
+        })
+        
         // Deduplicate schedules
         const seenKeys = new Set<string>()
         
@@ -309,21 +316,30 @@ export async function GET(request: Request) {
           
           // Match room - STRICT matching only
           let matches = false
+          let matchReason = ''
           // 1. Exact room number match (e.g., "404" === "404")
           if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) {
             matches = true
+            matchReason = `room number: "${roomNumber}" === "${scheduleRoomNumber}"`
           }
           // 2. Exact description match (e.g., "ulam" === "ulam")
           else if (roomDesc && scheduleRoomDesc && roomDesc === scheduleRoomDesc) {
             matches = true
+            matchReason = `description: "${roomDesc}" === "${scheduleRoomDesc}"`
           }
           // 3. Exact abbreviation match
           else if (roomAbbrev && scheduleRoomAbbrev && roomAbbrev === scheduleRoomAbbrev) {
             matches = true
+            matchReason = `abbreviation: "${roomAbbrev}" === "${scheduleRoomAbbrev}"`
           }
-          // 4. Resource description matches schedule room description exactly
-          else if (roomDesc && scheduleRoomDesc && scheduleRoomDesc === roomDesc) {
-            matches = true
+          
+          if (matches) {
+            console.log('[Availability] Class MATCHED:', {
+              className: schedule.block?.description || 'Unknown',
+              scheduleRoomDesc,
+              scheduleRoomAbbrev,
+              matchReason
+            })
           }
           
           if (!matches) continue
