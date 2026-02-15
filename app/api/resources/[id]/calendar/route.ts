@@ -92,7 +92,7 @@ function normalizeTime(timeStr: string | null | undefined): string | null {
 }
 
 // Convert any time format to minutes for comparison
-function timeToMinutes(timeStr: string | null | undefined): number | null {
+function convertTimeToMinutes(timeStr: string | null | undefined): number | null {
   if (!timeStr) return null
   const str = timeStr.toLowerCase().trim()
   
@@ -184,8 +184,9 @@ export async function GET(
         veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
       }
       // Track time slots for fallback dedup (convert to minutes)
-      const startMins = timeToMinutes(event.start_time)
-      const endMins = timeToMinutes(event.end_time)
+      const startMins = convertTimeToMinutes(event.start_time)
+      const endMins = convertTimeToMinutes(event.end_time)
+      console.log(`[Calendar] ops_event "${event.title}" times: start_time="${event.start_time}" (${startMins}min), end_time="${event.end_time}" (${endMins}min)`)
       if (startMins !== null && endMins !== null) {
         opsEventTimeSlots.push({ start: startMins, end: endMins })
       }
@@ -220,6 +221,13 @@ export async function GET(
         if (event.veracross_reservation_id) {
           veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
         }
+        // Also track time slots for fallback dedup
+        const startMins = convertTimeToMinutes(event.start_time)
+        const endMins = convertTimeToMinutes(event.end_time)
+        console.log(`[Calendar] locationEvent "${event.title}" times: start_time="${event.start_time}" (${startMins}min), end_time="${event.end_time}" (${endMins}min)`)
+        if (startMins !== null && endMins !== null) {
+          opsEventTimeSlots.push({ start: startMins, end: endMins })
+        }
         const title = event.status === 'cancelled' ? `[CANCELLED] ${event.title}` : event.title
         events.push({
           id: event.id,
@@ -231,6 +239,8 @@ export async function GET(
         })
       }
     }
+    
+    console.log(`[Calendar] Final opsEventTimeSlots:`, JSON.stringify(opsEventTimeSlots))
     
     // 2. Get Veracross reservations directly from API
     const existingEventIds = new Set(events.map(e => e.id))
@@ -270,13 +280,34 @@ export async function GET(
             continue
           }
           
-          // Fallback: skip if we have an ops_event at the same time (for events created before ID tracking)
-          const vcStartMins = timeToMinutes(res.start_time)
-          const vcEndMins = timeToMinutes(res.end_time)
+          // Fallback: skip if we have an ops_event that overlaps (for events created before ID tracking)
+          const vcStartMins = convertTimeToMinutes(res.start_time)
+          const vcEndMins = convertTimeToMinutes(res.end_time)
+          console.log(`[Calendar] Veracross res times: start_time="${res.start_time}" (${vcStartMins}min), end_time="${res.end_time}" (${vcEndMins}min)`)
+          console.log(`[Calendar] opsEventTimeSlots:`, JSON.stringify(opsEventTimeSlots))
+          
           if (vcStartMins !== null && vcEndMins !== null) {
-            const hasDupe = opsEventTimeSlots.some(slot => slot.start === vcStartMins && slot.end === vcEndMins)
-            if (hasDupe) {
-              console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - already in ops_events by time slot (${vcStartMins}-${vcEndMins})`)
+            // Check for significant overlap (>80% of either event's duration)
+            const hasOverlap = opsEventTimeSlots.some(slot => {
+              // Calculate overlap
+              const overlapStart = Math.max(slot.start, vcStartMins)
+              const overlapEnd = Math.min(slot.end, vcEndMins)
+              const overlapMins = Math.max(0, overlapEnd - overlapStart)
+              
+              const vcDuration = vcEndMins - vcStartMins
+              const slotDuration = slot.end - slot.start
+              
+              // Skip if >80% overlap with either event
+              const vcOverlapPct = vcDuration > 0 ? overlapMins / vcDuration : 0
+              const slotOverlapPct = slotDuration > 0 ? overlapMins / slotDuration : 0
+              
+              const isDupe = vcOverlapPct > 0.8 || slotOverlapPct > 0.8
+              console.log(`[Calendar] Overlap check: VC(${vcStartMins}-${vcEndMins}) vs OPS(${slot.start}-${slot.end}) | overlap=${overlapMins}min vcPct=${(vcOverlapPct*100).toFixed(0)}% slotPct=${(slotOverlapPct*100).toFixed(0)}% isDupe=${isDupe}`)
+              return isDupe
+            })
+            
+            if (hasOverlap) {
+              console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - overlaps with ops_events`)
               continue
             }
           }
@@ -474,32 +505,13 @@ export async function GET(
       })
     }
     
-    // Convert time string to minutes for sorting
-    const timeToMinutes = (time: string | null): number => {
-      if (!time) return 9999
-      // Handle 24-hour format "HH:MM"
-      const match24 = time.match(/^(\d{1,2}):(\d{2})$/)
-      if (match24) {
-        return parseInt(match24[1]) * 60 + parseInt(match24[2])
-      }
-      // Handle 12-hour format "H:MM am/pm"
-      const match12 = time.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i)
-      if (match12) {
-        let hours = parseInt(match12[1])
-        const mins = parseInt(match12[2])
-        const isPM = match12[3].toLowerCase() === 'pm'
-        if (isPM && hours !== 12) hours += 12
-        if (!isPM && hours === 12) hours = 0
-        return hours * 60 + mins
-      }
-      return 9999
-    }
-    
     // Sort by time (all-day first, then by start time)
     events.sort((a, b) => {
       if (a.allDay && !b.allDay) return -1
       if (!a.allDay && b.allDay) return 1
-      return timeToMinutes(a.startTime) - timeToMinutes(b.startTime)
+      const aMin = convertTimeToMinutes(a.startTime) ?? 9999
+      const bMin = convertTimeToMinutes(b.startTime) ?? 9999
+      return aMin - bMin
     })
     
     return NextResponse.json({
@@ -510,7 +522,34 @@ export async function GET(
       },
       date,
       events,
-      classDebug
+      classDebug,
+      dedupDebug: {
+        opsEventTimeSlots,
+        veracrossIdsInOpsEvents: Array.from(veracrossIdsInOpsEvents),
+        opsEventsCount: opsEvents?.length ?? 0,
+        locationEventsCount: locationEvents?.length ?? 0,
+        opsEventsRaw: (opsEvents || []).map(e => ({ 
+          id: e.id, 
+          title: e.title, 
+          start_time: e.start_time, 
+          end_time: e.end_time,
+          start_mins: convertTimeToMinutes(e.start_time),
+          end_mins: convertTimeToMinutes(e.end_time),
+          resource_id: e.resource_id,
+          veracross_reservation_id: e.veracross_reservation_id
+        })),
+        locationEventsMatched: (locationEvents || []).filter(e => {
+          if (!e.location) return false
+          const loc = e.location.toLowerCase()
+          return locationMatches.some(m => loc.includes(m.toLowerCase()) || m.toLowerCase().includes(loc))
+        }).map(e => ({
+          id: e.id,
+          title: e.title,
+          start_time: e.start_time,
+          end_time: e.end_time,
+          location: e.location
+        }))
+      }
     })
     
   } catch (error: any) {
