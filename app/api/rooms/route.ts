@@ -180,10 +180,15 @@ export async function GET(request: Request) {
     // Build room lookup for class schedules - try multiple matching strategies
     const resourceByRoomKey: Record<string, number> = {}
     for (const r of resources || []) {
-      // Match by room number at start (e.g., "301B" -> "301")
-      const roomNum = (r.description || r.abbreviation || '').match(/^\d+/)?.[0]
-      if (roomNum) {
-        resourceByRoomKey[roomNum] = r.id
+      // Match by room number at start of description (e.g., "301B Classroom" -> "301")
+      const roomNumFromDesc = (r.description || '').match(/^\d+/)?.[0]
+      if (roomNumFromDesc) {
+        resourceByRoomKey[roomNumFromDesc] = r.id
+      }
+      // Match by room number at start of abbreviation (e.g., "301B" -> "301")
+      const roomNumFromAbbr = (r.abbreviation || '').match(/^\d+/)?.[0]
+      if (roomNumFromAbbr) {
+        resourceByRoomKey[roomNumFromAbbr] = r.id
       }
       // Match by full abbreviation
       if (r.abbreviation) {
