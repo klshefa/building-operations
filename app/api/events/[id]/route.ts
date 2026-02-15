@@ -154,15 +154,73 @@ export async function GET(
       console.log(`[Event API] Looking for Veracross reservation: ${vcId}`)
       
       // First, check if this reservation has been synced to ops_events
-      const { data: syncedEvent } = await supabase
+      // Try multiple formats since the ID might be stored as string or number
+      console.log(`[Event API] Checking ops_events for veracross_reservation_id: "${vcId}"`)
+      
+      const { data: syncedEvents, error: syncError } = await supabase
         .from('ops_events')
         .select('*')
-        .eq('veracross_reservation_id', vcId)
-        .single()
+        .or(`veracross_reservation_id.eq.${vcId},veracross_reservation_id.eq."${vcId}"`)
       
-      if (syncedEvent) {
+      console.log(`[Event API] ops_events query result:`, { 
+        count: syncedEvents?.length || 0, 
+        error: syncError?.message,
+        firstMatch: syncedEvents?.[0]?.id 
+      })
+      
+      if (syncedEvents && syncedEvents.length > 0) {
         console.log(`[Event API] Found synced ops_event for VC reservation ${vcId}`)
-        return NextResponse.json({ data: syncedEvent })
+        return NextResponse.json({ data: syncedEvents[0] })
+      }
+      
+      // Also check ops_raw_events (BigQuery sync destination)
+      console.log(`[Event API] Checking ops_raw_events for reservation_id: "${vcId}"`)
+      
+      const { data: rawEvents, error: rawError } = await supabase
+        .from('ops_raw_events')
+        .select('*')
+        .or(`reservation_id.eq.${vcId},reservation_id.eq."${vcId}"`)
+      
+      console.log(`[Event API] ops_raw_events query result:`, {
+        count: rawEvents?.length || 0,
+        error: rawError?.message,
+        firstMatch: rawEvents?.[0]?.title
+      })
+      
+      if (rawEvents && rawEvents.length > 0) {
+        console.log(`[Event API] Found ${rawEvents.length} raw events for VC reservation ${vcId}`)
+        // Convert raw event to ops_event format
+        const raw = rawEvents[0]
+        const data = {
+          id: id,
+          veracross_reservation_id: vcId,
+          title: raw.title || 'Resource Reservation',
+          description: raw.description || null,
+          start_date: raw.start_date,
+          end_date: raw.end_date || raw.start_date,
+          start_time: raw.start_time,
+          end_time: raw.end_time,
+          all_day: false,
+          location: raw.resource || null,
+          resource_id: null,
+          primary_source: 'bigquery_resource',
+          sources: ['bigquery_resource'],
+          is_hidden: false,
+          status: 'confirmed',
+          event_type: 'other',
+          created_at: raw.synced_at || new Date().toISOString(),
+          updated_at: raw.synced_at || new Date().toISOString(),
+          needs_program_director: false,
+          needs_office: false,
+          needs_it: false,
+          needs_security: false,
+          needs_facilities: false,
+          // From raw data
+          contact_person: raw.contact_person,
+          _isRawEvent: true,
+          _vcReadOnly: true, // Still read-only since it's not in ops_events
+        }
+        return NextResponse.json({ data })
       }
       
       console.log(`[Event API] No synced event found, fetching from Veracross API`)
