@@ -1095,12 +1095,19 @@ export default function AdminPage() {
                             try {
                               const res = await fetch('/api/cron/weekly-digest', { method: 'POST' })
                               const data = await res.json()
+                              console.log('[Weekly Digest] Response:', data)
                               if (res.ok) {
-                                setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: true, message: `Sent to ${data.sent} users` } }))
+                                const msg = data.sent > 0 
+                                  ? `Sent to ${data.sent} user${data.sent > 1 ? 's' : ''}`
+                                  : data.skipped > 0 
+                                    ? `${data.skipped} user${data.skipped > 1 ? 's' : ''} skipped (no relevant events)`
+                                    : data.message || 'No emails sent'
+                                setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: data.sent > 0, message: msg } }))
                               } else {
                                 setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: false, message: data.error || 'Failed' } }))
                               }
-                            } catch {
+                            } catch (err) {
+                              console.error('[Weekly Digest] Error:', err)
                               setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: false, message: 'Network error' } }))
                             }
                             setSyncing(null)
