@@ -215,7 +215,16 @@ export async function GET(
         const roomAbbrev = resource.abbreviation?.toLowerCase() || ''
         const roomNumber = (resource.description || '').match(/^\d+/)?.[0] || ''
         
+        console.log('[Calendar] Resource matching:', { 
+          resourceId, 
+          roomDesc, 
+          roomAbbrev, 
+          roomNumber,
+          totalSchedules: schedules.length 
+        })
+        
         const seenKeys = new Set<string>()
+        let matchCount = 0
         
         for (const schedule of schedules) {
           const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
@@ -227,17 +236,33 @@ export async function GET(
           
           // Match room - STRICT matching only
           let matches = false
+          let matchReason = ''
           // 1. Exact room number match (e.g., "404" === "404")
           if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) {
             matches = true
+            matchReason = 'room number'
           }
           // 2. Exact description match (e.g., "ulam" === "ulam")
           else if (roomDesc && scheduleRoomDesc && roomDesc === scheduleRoomDesc) {
             matches = true
+            matchReason = 'description'
           }
           // 3. Exact abbreviation match
           else if (roomAbbrev && scheduleRoomAbbrev && roomAbbrev === scheduleRoomAbbrev) {
             matches = true
+            matchReason = 'abbreviation'
+          }
+          
+          if (matches) {
+            matchCount++
+            if (matchCount <= 5) {
+              console.log('[Calendar] Schedule matched:', { 
+                scheduleRoomDesc, 
+                scheduleRoomNumber, 
+                matchReason,
+                dayPattern: schedule.day?.description || schedule.day?.abbreviation || ''
+              })
+            }
           }
           
           if (!matches) continue
@@ -267,9 +292,10 @@ export async function GET(
             type: 'class'
           })
         }
+        console.log('[Calendar] Total class matches:', matchCount, 'Classes added to events:', events.filter(e => e.type === 'class').length)
       }
-    } catch (err) {
-      console.warn('Class schedule fetch failed:', err)
+    } catch (err: any) {
+      console.error('Class schedule fetch failed:', err?.message || err)
     }
     
     // 3. Get school-wide calendar events

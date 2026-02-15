@@ -99,6 +99,8 @@ export default function RequestPage() {
   const [resources, setResources] = useState<Resource[]>([])
   const [resourceTypes, setResourceTypes] = useState<string[]>([])
   const [selectedType, setSelectedType] = useState<string>('')
+  const [resourceSearch, setResourceSearch] = useState('')
+  const [showResourceDropdown, setShowResourceDropdown] = useState(false)
   
   // Form state - Step 1: Reservation
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null)
@@ -139,6 +141,18 @@ export default function RequestPage() {
 
   useEffect(() => {
     checkUser()
+  }, [])
+
+  // Close resource dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('.resource-search-container')) {
+        setShowResourceDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   useEffect(() => {
@@ -416,9 +430,9 @@ export default function RequestPage() {
     setError(null)
   }
 
-  const filteredResources = selectedType 
-    ? resources.filter(r => r.resource_type === selectedType)
-    : resources
+  const filteredResources = resources
+    .filter(r => !selectedType || r.resource_type === selectedType)
+    .filter(r => !resourceSearch || r.description.toLowerCase().includes(resourceSearch.toLowerCase()))
 
   // Show loading spinner while checking auth
   if (loading) {
@@ -617,44 +631,57 @@ export default function RequestPage() {
                   </select>
                 </div>
 
-                {/* Resource Selection */}
-                <div>
+                {/* Resource Selection - Searchable */}
+                <div className="relative resource-search-container">
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Resource <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={selectedResource?.id || ''}
-                    onChange={(e) => {
-                      const res = resources.find(r => r.id === parseInt(e.target.value))
-                      setSelectedResource(res || null)
-                    }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select a resource...</option>
-                    {filteredResources.map(res => (
-                      <option key={res.id} value={res.id}>
-                        {res.description} {res.capacity ? `(Capacity: ${res.capacity})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Date */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Date <span className="text-red-500">*</span>
-                  </label>
                   <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    min={format(new Date(), 'yyyy-MM-dd')}
+                    type="text"
+                    value={selectedResource ? selectedResource.description : resourceSearch}
+                    onChange={(e) => {
+                      setResourceSearch(e.target.value)
+                      setSelectedResource(null)
+                      setShowResourceDropdown(true)
+                    }}
+                    onFocus={() => setShowResourceDropdown(true)}
+                    placeholder="Type to search resources..."
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  {showResourceDropdown && filteredResources.length > 0 && !selectedResource && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredResources.map(res => (
+                        <button
+                          key={res.id}
+                          onClick={() => {
+                            setSelectedResource(res)
+                            setResourceSearch('')
+                            setShowResourceDropdown(false)
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-50 flex justify-between items-center"
+                        >
+                          <span>{res.description}</span>
+                          {res.capacity && <span className="text-xs text-slate-500">Cap: {res.capacity}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {/* Time Selection */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Date & Time - All on one row */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Date <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      min={format(new Date(), 'yyyy-MM-dd')}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
                       Start Time <span className="text-red-500">*</span>

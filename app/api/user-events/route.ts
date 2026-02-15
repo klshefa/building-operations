@@ -9,7 +9,9 @@ function createAdminClient() {
   )
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResendClient() {
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 // GET /api/user-events?email=user@shefaschool.org
 // Returns the user's upcoming events
@@ -176,7 +178,7 @@ export async function POST(request: Request) {
     
     // Send email notification to ops team
     try {
-      await resend.emails.send({
+      await getResendClient().emails.send({
         from: 'ops@shefaschool.org',
         to: 'ops@shefaschool.org',
         subject: `[Action Required] Event Cancellation Request: ${existing.title}`,

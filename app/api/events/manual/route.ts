@@ -10,7 +10,9 @@ function createAdminClient() {
   )
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResendClient() {
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 export async function POST(request: Request) {
   try {
@@ -124,7 +126,7 @@ export async function POST(request: Request) {
 
       // Send confirmation to requester
       try {
-        await resend.emails.send({
+        await getResendClient().emails.send({
           from: 'ops@shefaschool.org',
           to: requested_by,
           subject: `Reservation Confirmed: ${title}`,
@@ -163,7 +165,7 @@ export async function POST(request: Request) {
       // Send single notification to ops team
       if (teamEmails.length > 0) {
         try {
-          await resend.emails.send({
+          await getResendClient().emails.send({
             from: 'ops@shefaschool.org',
             to: 'ops@shefaschool.org',
             subject: `New Event Request: ${title}`,
