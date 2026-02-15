@@ -265,6 +265,8 @@ export async function GET(request: Request) {
       // Fetch class names and status - only include active/future classes
       const classNamesMap: Record<string, string> = {}
       const activeClassIds = new Set<string>()
+      let sampleClass: any = null
+      let sampleSchedule: any = null
       let classPage = 1
       while (classPage <= 5) {
         const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
@@ -278,12 +280,25 @@ export async function GET(request: Request) {
         if (!classesRes.ok) break
         const classesData = await classesRes.json()
         const classes = classesData.data || classesData || []
+        
+        // Capture sample class for debug
+        if (classPage === 1 && classes.length > 0) {
+          sampleClass = {
+            id: classes[0].id,
+            class_id: classes[0].class_id,
+            internal_class_id: classes[0].internal_class_id,
+            status: classes[0].status,
+            name: classes[0].name
+          }
+        }
+        
         for (const cls of classes) {
           const status = String(cls.status || '').toLowerCase()
           // Only include active or future classes
           if (status !== 'active' && status !== 'future') continue
           
           const name = cls.name || cls.description || cls.course_name || ''
+          // Add all possible ID fields
           if (cls.class_id) {
             classNamesMap[cls.class_id] = name
             activeClassIds.add(cls.class_id)
@@ -291,6 +306,10 @@ export async function GET(request: Request) {
           if (cls.id) {
             classNamesMap[String(cls.id)] = name
             activeClassIds.add(String(cls.id))
+          }
+          if (cls.internal_class_id) {
+            classNamesMap[String(cls.internal_class_id)] = name
+            activeClassIds.add(String(cls.internal_class_id))
           }
         }
         if (classes.length < 1000) break
@@ -370,6 +389,19 @@ export async function GET(request: Request) {
           const internalId = schedule.internal_class_id ? String(schedule.internal_class_id) : ''
           const userDefinedId = schedule.class_id || ''
           
+          // Capture first schedule that passes room+day for debug
+          if (!sampleSchedule) {
+            sampleSchedule = {
+              id: schedule.id,
+              class_id: schedule.class_id,
+              internal_class_id: schedule.internal_class_id,
+              internalIdUsed: internalId,
+              userDefinedIdUsed: userDefinedId,
+              room: schedule.room?.description,
+              day: schedule.day?.description
+            }
+          }
+          
           // Check if this class is active/future using internal_class_id (primary) or class_id (fallback)
           const isActive = activeClassIds.has(internalId) || activeClassIds.has(userDefinedId)
           
@@ -426,7 +458,11 @@ export async function GET(request: Request) {
             timeOverlaps
           },
           requestedDay: dayOfWeek,
-          requestedTime: { start: requestStart, end: requestEnd }
+          requestedTime: { start: requestStart, end: requestEnd },
+          sampleClass,
+          sampleSchedule,
+          activeClassIdsCount: activeClassIds.size,
+          sampleActiveIds: Array.from(activeClassIds).slice(0, 3)
         }
         
         return NextResponse.json({
