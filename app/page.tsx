@@ -26,6 +26,7 @@ export default function DashboardPage() {
   useEffect(() => {
     checkUser()
     
+    // Check URL for auth errors
     const params = new URLSearchParams(window.location.search)
     const urlError = params.get('error')
     if (urlError === 'unauthorized_domain') {
@@ -36,6 +37,7 @@ export default function DashboardPage() {
       setError('Authentication failed. Please try again.')
     }
     
+    // Clear URL params
     if (urlError) {
       window.history.replaceState({}, '', '/')
     }
@@ -85,6 +87,8 @@ export default function DashboardPage() {
       if (res.ok) {
         const { data } = await res.json()
         setEvents(data || [])
+      } else {
+        console.error('Error fetching events:', await res.text())
       }
     } catch (err) {
       console.error('Error fetching events:', err)
@@ -92,18 +96,21 @@ export default function DashboardPage() {
     setLoadingEvents(false)
   }
 
+  // Show loading spinner while checking auth
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
       </div>
     )
   }
 
+  // Show login screen if not authenticated
   if (!user) {
     return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={error || undefined} />
   }
 
+  // User is authenticated - show dashboard
   const todayEvents = events.filter(e => isToday(parseISO(e.start_date)))
   const tomorrowEvents = events.filter(e => isTomorrow(parseISO(e.start_date)))
   const thisWeekEvents = events.filter(e => {
@@ -116,6 +123,7 @@ export default function DashboardPage() {
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-800">Building Operations Dashboard</h1>
           <p className="text-slate-600 mt-1">
@@ -123,6 +131,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
+        {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -130,8 +139,8 @@ export default function DashboardPage() {
             className="bg-white rounded-xl p-5 shadow-sm border border-slate-200"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <CalendarDaysIcon className="w-6 h-6 text-blue-600" />
+              <div className="p-2 bg-shefa-blue-100 rounded-lg">
+                <CalendarDaysIcon className="w-6 h-6 text-shefa-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-800">{todayEvents.length}</p>
@@ -177,10 +186,11 @@ export default function DashboardPage() {
 
         {loadingEvents ? (
           <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Today */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -188,7 +198,7 @@ export default function DashboardPage() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                  <span className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" />
+                  <span className="w-3 h-3 bg-shefa-blue-500 rounded-full animate-pulse" />
                   Today
                 </h2>
                 <span className="text-sm text-slate-500">{todayEvents.length} events</span>
@@ -206,6 +216,7 @@ export default function DashboardPage() {
               </div>
             </motion.div>
 
+            {/* Tomorrow */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -228,6 +239,7 @@ export default function DashboardPage() {
               </div>
             </motion.div>
 
+            {/* This Week */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -250,7 +262,7 @@ export default function DashboardPage() {
                 {thisWeekEvents.length > 5 && (
                   <Link
                     href="/events"
-                    className="flex items-center justify-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium py-2"
+                    className="flex items-center justify-center gap-2 text-sm text-shefa-blue-600 hover:text-shefa-blue-700 font-medium py-2"
                   >
                     View all {thisWeekEvents.length} events
                     <ArrowRightIcon className="w-4 h-4" />
@@ -260,6 +272,7 @@ export default function DashboardPage() {
             </motion.div>
           </div>
         )}
+
       </main>
     </div>
   )
