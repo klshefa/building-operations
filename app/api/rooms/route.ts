@@ -34,23 +34,38 @@ async function getClassSchedulesToken(): Promise<string> {
   return data.access_token
 }
 
-// Map day of week number to possible day codes
-const dayCodeMap: Record<number, string[]> = {
-  0: ['U', 'Su', 'SU', 'Sun'],
-  1: ['M', 'Mo', 'MO', 'Mon'],
-  2: ['T', 'Tu', 'TU', 'Tue'],
-  3: ['W', 'We', 'WE', 'Wed'],
-  4: ['R', 'Th', 'TH', 'Thu'],
-  5: ['F', 'Fr', 'FR', 'Fri'],
-  6: ['S', 'Sa', 'SA', 'Sat'],
+// Map day names to day of week numbers
+const dayNameToNumber: Record<string, number> = {
+  'sunday': 0, 'sun': 0, 'su': 0, 'u': 0,
+  'monday': 1, 'mon': 1, 'mo': 1, 'm': 1,
+  'tuesday': 2, 'tue': 2, 'tu': 2, 't': 2,
+  'wednesday': 3, 'wed': 3, 'we': 3, 'w': 3,
+  'thursday': 4, 'thu': 4, 'th': 4, 'r': 4,
+  'friday': 5, 'fri': 5, 'fr': 5, 'f': 5,
+  'saturday': 6, 'sat': 6, 'sa': 6,
 }
 
-// Check if a days pattern includes a specific day of week
+// Check if a day pattern matches a specific day of week
 function patternIncludesDay(pattern: string, dayOfWeek: number): boolean {
   if (!pattern) return false
-  const validCodes = dayCodeMap[dayOfWeek]
-  const patternUpper = pattern.toUpperCase()
-  return validCodes.some(code => patternUpper.includes(code.toUpperCase()))
+  const patternLower = pattern.toLowerCase().trim()
+  
+  // Check for exact match of full day name or abbreviation
+  const mappedDay = dayNameToNumber[patternLower]
+  if (mappedDay !== undefined) {
+    return mappedDay === dayOfWeek
+  }
+  
+  // For compound patterns like "MWF" or "M,W,F", check each part
+  // But be careful: "Monday" should NOT match Saturday just because it contains 'a'
+  // Only split on non-letter characters
+  const parts = patternLower.split(/[^a-z]+/).filter(Boolean)
+  for (const part of parts) {
+    const partDay = dayNameToNumber[part]
+    if (partDay === dayOfWeek) return true
+  }
+  
+  return false
 }
 
 // GET - Fetch rooms with their events for a date range
@@ -162,16 +177,21 @@ export async function GET(request: Request) {
       }
     }
     
-    // Build room number lookup for class schedules
-    const resourceByRoomNumber: Record<string, number> = {}
+    // Build room lookup for class schedules - try multiple matching strategies
+    const resourceByRoomKey: Record<string, number> = {}
     for (const r of resources || []) {
+      // Match by room number at start (e.g., "301B" -> "301")
       const roomNum = (r.description || r.abbreviation || '').match(/^\d+/)?.[0]
       if (roomNum) {
-        resourceByRoomNumber[roomNum] = r.id
+        resourceByRoomKey[roomNum] = r.id
       }
-      // Also try abbreviation directly
+      // Match by full abbreviation
       if (r.abbreviation) {
-        resourceByRoomNumber[r.abbreviation.toLowerCase()] = r.id
+        resourceByRoomKey[r.abbreviation.toLowerCase()] = r.id
+      }
+      // Match by full description (for rooms like "Beit Midrash")
+      if (r.description) {
+        resourceByRoomKey[r.description.toLowerCase()] = r.id
       }
     }
     
@@ -244,21 +264,64 @@ export async function GET(request: Request) {
           datesInRange.push(new Date(d))
         }
         
-        // Process class schedules and expand to dates
+        // Deduplicate schedules - Veracross often returns multiple records for same class meeting
+        // Group by class_id + day + room, keep earliest start time
+        const scheduleKey = (s: any) => {
+          const classId = s.class_id || s.internal_class_id || s.id
+          const day = s.day?.id || s.day?.abbreviation || ''
+          const room = s.room?.id || s.room?.abbreviation || ''
+          return `${classId}-${day}-${room}`
+        }
+        
+        const dedupedSchedules: any[] = []
+        const seenKeys = new Map<string, any>()
+        
         for (const schedule of allSchedules) {
+          const key = scheduleKey(schedule)
+          const existing = seenKeys.get(key)
+          
+          if (!existing) {
+            seenKeys.set(key, schedule)
+            dedupedSchedules.push(schedule)
+          } else {
+            // Keep the one with earliest start time, but extend end time if needed
+            const existingStart = parseTime(normalizeTime(existing.start_time) || '')
+            const newStart = parseTime(normalizeTime(schedule.start_time) || '')
+            const existingEnd = parseTime(normalizeTime(existing.end_time) || '')
+            const newEnd = parseTime(normalizeTime(schedule.end_time) || '')
+            
+            if (newStart !== null && existingStart !== null && newStart < existingStart) {
+              existing.start_time = schedule.start_time
+            }
+            if (newEnd !== null && existingEnd !== null && newEnd > existingEnd) {
+              existing.end_time = schedule.end_time
+            }
+          }
+        }
+        
+        // Process deduplicated class schedules
+        for (const schedule of dedupedSchedules) {
           const roomDesc = (schedule.room?.description || '').trim()
           const roomAbbrev = (schedule.room?.abbreviation || '').trim()
           
           if (!roomDesc && !roomAbbrev) continue
           if (roomDesc === '<None Specified>') continue
           
-          // Extract room number
-          const apiRoomNumber = roomDesc.match(/^\d+/)?.[0] || roomAbbrev.toLowerCase()
+          // Find matching resource - try multiple strategies
+          let resourceId: number | undefined
           
-          // Find matching resource
-          let resourceId = resourceByRoomNumber[apiRoomNumber]
+          // Try room number at start (e.g., "301B Classroom" -> "301")
+          const apiRoomNumber = roomDesc.match(/^\d+/)?.[0]
+          if (apiRoomNumber) {
+            resourceId = resourceByRoomKey[apiRoomNumber]
+          }
+          // Try full room description
+          if (!resourceId && roomDesc) {
+            resourceId = resourceByRoomKey[roomDesc.toLowerCase()]
+          }
+          // Try abbreviation
           if (!resourceId && roomAbbrev) {
-            resourceId = resourceByRoomNumber[roomAbbrev.toLowerCase()]
+            resourceId = resourceByRoomKey[roomAbbrev.toLowerCase()]
           }
           
           if (!resourceId) continue
@@ -385,24 +448,28 @@ function normalizeTime(timeStr: string | null | undefined): string | null {
   return null
 }
 
-// Natural sort for room numbers (311 before 1011)
+// Natural sort for room numbers (101 before 1012, 311 before 1011)
 function naturalSort(a: string, b: string): number {
-  const aParts = a.split(/(\d+)/)
-  const bParts = b.split(/(\d+)/)
+  // Extract leading number if present
+  const aMatch = a.match(/^(\d+)/)
+  const bMatch = b.match(/^(\d+)/)
   
-  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-    const aPart = aParts[i] || ''
-    const bPart = bParts[i] || ''
-    
-    const aNum = parseInt(aPart)
-    const bNum = parseInt(bPart)
-    
-    if (!isNaN(aNum) && !isNaN(bNum)) {
-      if (aNum !== bNum) return aNum - bNum
-    } else {
-      const cmp = aPart.localeCompare(bPart)
-      if (cmp !== 0) return cmp
-    }
+  const aNum = aMatch ? parseInt(aMatch[1]) : null
+  const bNum = bMatch ? parseInt(bMatch[1]) : null
+  
+  // Both have leading numbers - sort numerically
+  if (aNum !== null && bNum !== null) {
+    if (aNum !== bNum) return aNum - bNum
+    // Same number, sort by rest of string
+    const aRest = a.slice(aMatch![0].length)
+    const bRest = b.slice(bMatch![0].length)
+    return aRest.localeCompare(bRest)
   }
-  return 0
+  
+  // Numbers come before non-numbers
+  if (aNum !== null) return -1
+  if (bNum !== null) return 1
+  
+  // Neither has leading number - alphabetical
+  return a.localeCompare(b)
 }
