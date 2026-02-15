@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit, getChangedFields, extractUserAuditFields } from '@/lib/audit'
 
 function createAdminClient() {
   return createClient(
@@ -32,7 +33,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { email, name, role, teams } = body
+    const { email, name, role, teams, performed_by } = body
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
@@ -59,6 +60,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // Audit log
+    await logAudit({
+      entityType: 'ops_users',
+      entityId: data.id,
+      action: 'CREATE',
+      userEmail: performed_by,
+      newValues: extractUserAuditFields(data),
+      apiRoute: '/api/users',
+      httpMethod: 'POST',
+    })
+
     return NextResponse.json({ success: true, data })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -69,13 +81,20 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json()
-    const { id, ...updates } = body
+    const { id, performed_by, ...updates } = body
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     const supabase = createAdminClient()
+    
+    // Get old values for audit
+    const { data: oldData } = await supabase
+      .from('ops_users')
+      .select('*')
+      .eq('id', id)
+      .single()
     
     const { data, error } = await supabase
       .from('ops_users')
@@ -86,6 +105,27 @@ export async function PATCH(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Audit log
+    if (oldData) {
+      const oldValues = extractUserAuditFields(oldData)
+      const newValues = extractUserAuditFields(data)
+      const changedFields = getChangedFields(oldValues, newValues)
+      
+      if (changedFields) {
+        await logAudit({
+          entityType: 'ops_users',
+          entityId: id,
+          action: 'UPDATE',
+          userEmail: performed_by,
+          changedFields,
+          oldValues,
+          newValues,
+          apiRoute: '/api/users',
+          httpMethod: 'PATCH',
+        })
+      }
     }
 
     return NextResponse.json({ success: true, data })
@@ -99,12 +139,20 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
+    const performed_by = searchParams.get('performed_by')
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
     const supabase = createAdminClient()
+    
+    // Get old values for audit before delete
+    const { data: oldData } = await supabase
+      .from('ops_users')
+      .select('*')
+      .eq('id', id)
+      .single()
     
     const { error } = await supabase
       .from('ops_users')
@@ -113,6 +161,19 @@ export async function DELETE(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Audit log
+    if (oldData) {
+      await logAudit({
+        entityType: 'ops_users',
+        entityId: id,
+        action: 'DELETE',
+        userEmail: performed_by || undefined,
+        oldValues: extractUserAuditFields(oldData),
+        apiRoute: '/api/users',
+        httpMethod: 'DELETE',
+      })
     }
 
     return NextResponse.json({ success: true })

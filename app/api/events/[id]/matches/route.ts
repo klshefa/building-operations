@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/audit'
 
 function createAdminClient() {
   return createClient(
@@ -299,6 +300,22 @@ export async function POST(
       console.error('Error creating match:', insertError)
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
+    
+    // Audit log
+    await logAudit({
+      entityType: 'ops_event_matches',
+      entityId: `${id}:${raw_event_id}`,
+      action: 'CREATE',
+      userEmail: matched_by,
+      newValues: {
+        event_id: id,
+        raw_event_id: raw_event_id,
+        match_type: 'manual',
+        raw_event_title: rawEvent.title,
+      },
+      apiRoute: '/api/events/[id]/matches',
+      httpMethod: 'POST',
+    })
     
     return NextResponse.json({
       success: true,

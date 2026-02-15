@@ -150,3 +150,30 @@ export interface CalendarSyncMeta {
   error_count: number
   last_error?: string
 }
+
+// Audit log entry
+export type AuditEntityType = 
+  | 'ops_events'
+  | 'ops_raw_events'
+  | 'ops_users'
+  | 'ops_event_filters'
+  | 'ops_event_matches'
+  | 'ops_resources'
+  | 'event_subscriptions'
+
+export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE'
+
+export interface AuditLogEntry {
+  id: string
+  entity_type: AuditEntityType
+  entity_id: string
+  action: AuditAction
+  user_email?: string
+  changed_fields?: Record<string, { old: unknown; new: unknown }>
+  old_values?: Record<string, unknown>
+  new_values?: Record<string, unknown>
+  api_route?: string
+  http_method?: string
+  metadata?: Record<string, unknown>
+  created_at: string
+}

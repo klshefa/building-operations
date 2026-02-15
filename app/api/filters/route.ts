@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit, getChangedFields, extractFilterAuditFields } from '@/lib/audit'
 
 // Use service role to bypass RLS
 function createAdminClient() {
@@ -79,6 +80,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     
+    // Audit log
+    await logAudit({
+      entityType: 'ops_event_filters',
+      entityId: data.id,
+      action: 'CREATE',
+      userEmail: created_by,
+      newValues: extractFilterAuditFields(data),
+      apiRoute: '/api/filters',
+      httpMethod: 'POST',
+    })
+    
     return NextResponse.json({ data })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -91,11 +103,18 @@ export async function PUT(request: Request) {
   
   try {
     const body = await request.json()
-    const { id, ...updates } = body
+    const { id, performed_by, ...updates } = body
     
     if (!id) {
       return NextResponse.json({ error: 'Missing filter ID' }, { status: 400 })
     }
+    
+    // Get old values for audit
+    const { data: oldData } = await supabase
+      .from('ops_event_filters')
+      .select('*')
+      .eq('id', id)
+      .single()
     
     const { data, error } = await supabase
       .from('ops_event_filters')
@@ -109,6 +128,27 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     
+    // Audit log
+    if (oldData) {
+      const oldValues = extractFilterAuditFields(oldData)
+      const newValues = extractFilterAuditFields(data)
+      const changedFields = getChangedFields(oldValues, newValues)
+      
+      if (changedFields) {
+        await logAudit({
+          entityType: 'ops_event_filters',
+          entityId: id,
+          action: 'UPDATE',
+          userEmail: performed_by,
+          changedFields,
+          oldValues,
+          newValues,
+          apiRoute: '/api/filters',
+          httpMethod: 'PUT',
+        })
+      }
+    }
+    
     return NextResponse.json({ data })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -120,10 +160,18 @@ export async function DELETE(request: Request) {
   const supabase = createAdminClient()
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
+  const performed_by = searchParams.get('performed_by')
   
   if (!id) {
     return NextResponse.json({ error: 'Missing filter ID' }, { status: 400 })
   }
+  
+  // Get old values for audit before delete
+  const { data: oldData } = await supabase
+    .from('ops_event_filters')
+    .select('*')
+    .eq('id', id)
+    .single()
   
   const { error } = await supabase
     .from('ops_event_filters')
@@ -133,6 +181,19 @@ export async function DELETE(request: Request) {
   if (error) {
     console.error('Error deleting filter:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  
+  // Audit log
+  if (oldData) {
+    await logAudit({
+      entityType: 'ops_event_filters',
+      entityId: id,
+      action: 'DELETE',
+      userEmail: performed_by || undefined,
+      oldValues: extractFilterAuditFields(oldData),
+      apiRoute: '/api/filters',
+      httpMethod: 'DELETE',
+    })
   }
   
   return NextResponse.json({ success: true })

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { TeamType, OpsEvent } from '@/lib/types'
 import { buildTeamAssignmentEmail, buildEventUpdateEmail, getTeamDisplayName } from '@/lib/notifications'
+import { logAudit, getChangedFields, extractEventAuditFields } from '@/lib/audit'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 
@@ -164,6 +165,25 @@ export async function PATCH(
     if (error) {
       console.error('Supabase update error:', error)
       return NextResponse.json({ error: error.message, details: error }, { status: 500 })
+    }
+
+    // Audit log
+    const oldAuditValues = extractEventAuditFields(currentEvent)
+    const newAuditValues = extractEventAuditFields(data)
+    const auditChangedFields = getChangedFields(oldAuditValues, newAuditValues)
+    
+    if (auditChangedFields) {
+      await logAudit({
+        entityType: 'ops_events',
+        entityId: id,
+        action: 'UPDATE',
+        userEmail: body.updated_by,
+        changedFields: auditChangedFields,
+        oldValues: oldAuditValues,
+        newValues: newAuditValues,
+        apiRoute: '/api/events/[id]',
+        httpMethod: 'PATCH',
+      })
     }
 
     // Check for newly assigned teams and send notifications

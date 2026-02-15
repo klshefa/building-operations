@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit, extractEventAuditFields } from '@/lib/audit'
 
 function createAdminClient() {
   return createClient(
@@ -70,6 +71,17 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
+
+    // Audit log
+    await logAudit({
+      entityType: 'ops_events',
+      entityId: data.id,
+      action: 'CREATE',
+      userEmail: created_by,
+      newValues: extractEventAuditFields(data),
+      apiRoute: '/api/events/manual',
+      httpMethod: 'POST',
+    })
 
     return NextResponse.json({ 
       success: true, 

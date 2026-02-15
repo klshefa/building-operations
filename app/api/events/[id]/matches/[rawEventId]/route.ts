@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/audit'
 
 function createAdminClient() {
   return createClient(
@@ -15,6 +16,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; rawEventId: string }> }
 ) {
   const { id, rawEventId } = await params
+  const { searchParams } = new URL(request.url)
+  const performed_by = searchParams.get('performed_by')
   
   try {
     const supabase = createAdminClient()
@@ -47,6 +50,22 @@ export async function DELETE(
     }
     
     const rawEventTitle = (match.ops_raw_events as any)?.title || 'event'
+    
+    // Audit log
+    await logAudit({
+      entityType: 'ops_event_matches',
+      entityId: `${id}:${rawEventId}`,
+      action: 'DELETE',
+      userEmail: performed_by || undefined,
+      oldValues: {
+        event_id: id,
+        raw_event_id: rawEventId,
+        match_type: match.match_type,
+        raw_event_title: rawEventTitle,
+      },
+      apiRoute: '/api/events/[id]/matches/[rawEventId]',
+      httpMethod: 'DELETE',
+    })
     
     return NextResponse.json({
       success: true,

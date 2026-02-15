@@ -21,16 +21,19 @@ import {
   UsersIcon,
   CloudArrowDownIcon,
   MagnifyingGlassIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline'
+import type { AuditLogEntry } from '@/lib/types'
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
 
-type AdminTab = 'event' | 'users' | 'sync' | 'filters'
+type AdminTab = 'event' | 'users' | 'sync' | 'filters' | 'audit'
 
 const tabs: { id: AdminTab; label: string; icon: React.ElementType }[] = [
   { id: 'event', label: 'Add Event', icon: CalendarDaysIcon },
   { id: 'users', label: 'Users', icon: UsersIcon },
   { id: 'sync', label: 'Data Sync', icon: CloudArrowDownIcon },
   { id: 'filters', label: 'Filters', icon: FunnelIcon },
+  { id: 'audit', label: 'Audit Log', icon: ClipboardDocumentListIcon },
 ]
 
 const roleOptions: { value: UserRole; label: string }[] = [
@@ -111,6 +114,14 @@ export default function AdminPage() {
   const [resources, setResources] = useState<{ id: number; description: string }[]>([])
   const [resourcesLoading, setResourcesLoading] = useState(true)
   const [showLocationDropdown, setShowLocationDropdown] = useState(false)
+  
+  // Audit log
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
+  const [auditLoading, setAuditLoading] = useState(true)
+  const [auditPage, setAuditPage] = useState(1)
+  const [auditTotal, setAuditTotal] = useState(0)
+  const [auditEntityFilter, setAuditEntityFilter] = useState<string>('')
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('')
 
   useEffect(() => {
     fetchUserInfo()
@@ -123,6 +134,12 @@ export default function AdminPage() {
       fetchResources()
     }
   }, [userRole])
+
+  useEffect(() => {
+    if (userRole === 'admin' && activeTab === 'audit') {
+      fetchAuditLogs()
+    }
+  }, [userRole, activeTab, auditPage, auditEntityFilter, auditActionFilter])
 
   async function fetchResources() {
     try {
@@ -183,6 +200,28 @@ export default function AdminPage() {
       console.error('Error fetching filters:', err)
     }
     setFiltersLoading(false)
+  }
+
+  async function fetchAuditLogs() {
+    setAuditLoading(true)
+    try {
+      const params = new URLSearchParams({
+        page: auditPage.toString(),
+        limit: '25',
+      })
+      if (auditEntityFilter) params.set('entity_type', auditEntityFilter)
+      if (auditActionFilter) params.set('action', auditActionFilter)
+      
+      const res = await fetch(`/api/audit?${params}`)
+      if (res.ok) {
+        const { data, total } = await res.json()
+        setAuditLogs(data || [])
+        setAuditTotal(total || 0)
+      }
+    } catch (err) {
+      console.error('Error fetching audit logs:', err)
+    }
+    setAuditLoading(false)
   }
 
   async function addFilter(e: React.FormEvent) {
@@ -1037,6 +1076,143 @@ export default function AdminPage() {
                         </div>
                       ))}
                     </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Audit Log Tab */}
+              {activeTab === 'audit' && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  <div className="mb-4">
+                    <h2 className="text-lg font-semibold text-slate-800">Audit Log</h2>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Track all changes made in Building Operations.
+                    </p>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex gap-3 mb-4">
+                    <select
+                      value={auditEntityFilter}
+                      onChange={(e) => { setAuditEntityFilter(e.target.value); setAuditPage(1) }}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500"
+                    >
+                      <option value="">All Entities</option>
+                      <option value="ops_events">Events</option>
+                      <option value="ops_users">Users</option>
+                      <option value="ops_event_filters">Filters</option>
+                      <option value="ops_event_matches">Event Matches</option>
+                      <option value="event_subscriptions">Subscriptions</option>
+                    </select>
+                    <select
+                      value={auditActionFilter}
+                      onChange={(e) => { setAuditActionFilter(e.target.value); setAuditPage(1) }}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500"
+                    >
+                      <option value="">All Actions</option>
+                      <option value="CREATE">Create</option>
+                      <option value="UPDATE">Update</option>
+                      <option value="DELETE">Delete</option>
+                    </select>
+                    <button
+                      onClick={fetchAuditLogs}
+                      className="px-3 py-2 text-shefa-blue-600 hover:bg-shefa-blue-50 rounded-lg transition-colors"
+                    >
+                      <ArrowPathIcon className={`w-5 h-5 ${auditLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Audit Log Table */}
+                  {auditLoading ? (
+                    <div className="flex justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
+                    </div>
+                  ) : auditLogs.length === 0 ? (
+                    <p className="text-center text-slate-500 py-8">No audit logs found</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="text-left py-3 px-3 font-medium text-slate-600">Time</th>
+                              <th className="text-left py-3 px-3 font-medium text-slate-600">User</th>
+                              <th className="text-left py-3 px-3 font-medium text-slate-600">Action</th>
+                              <th className="text-left py-3 px-3 font-medium text-slate-600">Entity</th>
+                              <th className="text-left py-3 px-3 font-medium text-slate-600">Changes</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {auditLogs.map((log) => (
+                              <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="py-3 px-3 text-slate-600 whitespace-nowrap">
+                                  {new Date(log.created_at).toLocaleString()}
+                                </td>
+                                <td className="py-3 px-3 text-slate-800">
+                                  {log.user_email?.split('@')[0] || '-'}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                    log.action === 'CREATE' ? 'bg-green-100 text-green-700' :
+                                    log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
+                                    log.action === 'DELETE' ? 'bg-red-100 text-red-700' :
+                                    'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {log.action}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-slate-600">
+                                  <span className="text-xs">
+                                    {log.entity_type.replace('ops_', '').replace('_', ' ')}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-slate-600 max-w-xs">
+                                  {log.changed_fields ? (
+                                    <span className="text-xs">
+                                      {Object.keys(log.changed_fields).join(', ')}
+                                    </span>
+                                  ) : log.action === 'CREATE' && log.new_values ? (
+                                    <span className="text-xs text-green-600">
+                                      {(log.new_values as any).title || (log.new_values as any).email || (log.new_values as any).name || 'New record'}
+                                    </span>
+                                  ) : log.action === 'DELETE' && log.old_values ? (
+                                    <span className="text-xs text-red-600">
+                                      {(log.old_values as any).title || (log.old_values as any).email || (log.old_values as any).name || 'Deleted'}
+                                    </span>
+                                  ) : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination */}
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
+                        <span className="text-sm text-slate-600">
+                          Showing {((auditPage - 1) * 25) + 1} - {Math.min(auditPage * 25, auditTotal)} of {auditTotal}
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setAuditPage(p => Math.max(1, p - 1))}
+                            disabled={auditPage === 1}
+                            className="px-3 py-1 border border-slate-300 rounded text-sm disabled:opacity-50 hover:bg-slate-50"
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setAuditPage(p => p + 1)}
+                            disabled={auditPage * 25 >= auditTotal}
+                            className="px-3 py-1 border border-slate-300 rounded text-sm disabled:opacity-50 hover:bg-slate-50"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </motion.div>
               )}

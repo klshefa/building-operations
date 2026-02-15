@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/audit'
 
 function createAdminClient() {
   return createClient(
@@ -110,6 +111,21 @@ export async function POST(
       )
     }
     
+    // Audit log
+    await logAudit({
+      entityType: 'event_subscriptions',
+      entityId: `${id}:${email.toLowerCase()}`,
+      action: 'CREATE',
+      userEmail: email.toLowerCase(),
+      newValues: {
+        event_id: id,
+        event_title: event.title,
+        user_email: email.toLowerCase(),
+      },
+      apiRoute: '/api/events/[id]/subscribe',
+      httpMethod: 'POST',
+    })
+    
     return NextResponse.json({
       success: true,
       subscribed: true,
@@ -157,6 +173,20 @@ export async function DELETE(
         { status: 500 }
       )
     }
+    
+    // Audit log
+    await logAudit({
+      entityType: 'event_subscriptions',
+      entityId: `${id}:${email.toLowerCase()}`,
+      action: 'DELETE',
+      userEmail: email.toLowerCase(),
+      oldValues: {
+        event_id: id,
+        user_email: email.toLowerCase(),
+      },
+      apiRoute: '/api/events/[id]/subscribe',
+      httpMethod: 'DELETE',
+    })
     
     return NextResponse.json({
       success: true,
