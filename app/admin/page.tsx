@@ -1089,16 +1089,31 @@ export default function AdminPage() {
                       </p>
                       <div className="flex items-center gap-3">
                         <button
-                          onClick={() => triggerSync('cron/weekly-digest')}
-                          disabled={syncing === 'cron/weekly-digest'}
+                          onClick={async () => {
+                            setSyncing('weekly-digest')
+                            setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: false, message: 'Sending...' } }))
+                            try {
+                              const res = await fetch('/api/cron/weekly-digest', { method: 'POST' })
+                              const data = await res.json()
+                              if (res.ok) {
+                                setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: true, message: `Sent to ${data.sent} users` } }))
+                              } else {
+                                setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: false, message: data.error || 'Failed' } }))
+                              }
+                            } catch {
+                              setSyncStatus(prev => ({ ...prev, 'weekly-digest': { success: false, message: 'Network error' } }))
+                            }
+                            setSyncing(null)
+                          }}
+                          disabled={syncing === 'weekly-digest'}
                           className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                         >
                           <EnvelopeIcon className="w-4 h-4" />
-                          {syncing === 'cron/weekly-digest' ? 'Sending...' : 'Send Now'}
+                          {syncing === 'weekly-digest' ? 'Sending...' : 'Send Now'}
                         </button>
-                        {syncStatus['cron/weekly-digest'] && (
-                          <span className={`text-sm ${syncStatus['cron/weekly-digest'].success ? 'text-green-600' : 'text-red-600'}`}>
-                            {syncStatus['cron/weekly-digest'].message}
+                        {syncStatus['weekly-digest'] && (
+                          <span className={`text-sm ${syncStatus['weekly-digest'].success ? 'text-green-600' : 'text-red-600'}`}>
+                            {syncStatus['weekly-digest'].message}
                           </span>
                         )}
                       </div>
