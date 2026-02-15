@@ -153,17 +153,40 @@ export async function GET(
       const vcId = id.replace('vc-res-', '')
       console.log(`[Event API] Fetching Veracross reservation: ${vcId}`)
       
+      // Get optional date hint from query params
+      const { searchParams } = new URL(request.url)
+      const dateHint = searchParams.get('date')
+      
       try {
         const token = await getReservationsToken()
-        // Veracross API doesn't have single-item endpoint, use list with filter
-        const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_reservation_id=${vcId}`
+        
+        // Build date range for search - use hint or search recent 60 days
+        let startDate: string
+        let endDate: string
+        
+        if (dateHint) {
+          // Search just that date
+          startDate = dateHint
+          endDate = dateHint
+        } else {
+          // Search recent 60 days
+          const today = new Date()
+          const pastDate = new Date(today)
+          pastDate.setDate(pastDate.getDate() - 30)
+          const futureDate = new Date(today)
+          futureDate.setDate(futureDate.getDate() + 30)
+          startDate = pastDate.toISOString().split('T')[0]
+          endDate = futureDate.toISOString().split('T')[0]
+        }
+        
+        const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?on_or_after_start_date=${startDate}&on_or_before_start_date=${endDate}`
         console.log(`[Event API] Veracross URL: ${url}`)
         
         const res = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
-            'X-Page-Size': '10',
+            'X-Page-Size': '500',
           },
         })
         
@@ -177,13 +200,19 @@ export async function GET(
         
         const vcData = await res.json()
         const reservations = vcData.data || vcData || []
-        console.log(`[Event API] Found ${reservations.length} reservations`)
+        console.log(`[Event API] Found ${reservations.length} reservations, looking for ID ${vcId}`)
         
-        if (reservations.length === 0) {
+        // Find the specific reservation by ID
+        const vcRes = reservations.find((r: any) => 
+          String(r.resource_reservation_id) === vcId || String(r.id) === vcId
+        )
+        
+        if (!vcRes) {
+          console.log(`[Event API] Reservation ${vcId} not found in results`)
           return NextResponse.json({ error: 'Veracross reservation not found' }, { status: 404 })
         }
         
-        const vcRes = reservations[0]
+        console.log(`[Event API] Found reservation:`, JSON.stringify(vcRes).substring(0, 200))
         
         // Get resource name
         const resourceId = vcRes.resource_id || vcRes.resource?.id

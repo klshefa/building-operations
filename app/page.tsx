@@ -239,7 +239,7 @@ export default function DashboardPage() {
                 {recentRequests.map((event) => (
                   <Link
                     key={event.id}
-                    href={`/event/${event.id}`}
+                    href={`/event/${event.id}${event.id.startsWith('vc-res-') ? `?date=${event.start_date}` : ''}`}
                     className="flex items-center justify-between px-4 py-3 hover:bg-purple-50 transition-colors"
                   >
                     <div>

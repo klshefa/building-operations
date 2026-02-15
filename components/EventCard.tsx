@@ -54,7 +54,12 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
     if (onClick) {
       onClick()
     } else {
-      router.push(`/event/${event.id}`)
+      // For Veracross-only reservations, pass the date as a hint
+      if (event.id.startsWith('vc-res-')) {
+        router.push(`/event/${event.id}?date=${event.start_date}`)
+      } else {
+        router.push(`/event/${event.id}`)
+      }
     }
   }
 

@@ -387,7 +387,7 @@ export default function RoomsPage() {
                           {allDayEvents.map(event => (
                             <div
                               key={event.id}
-                              onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}`)}
+                              onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}${event.id.startsWith('vc-res-') ? `?date=${event.start_date}` : ''}`)}
                               className={`${fontSize} p-1 mb-1 rounded truncate cursor-pointer ${
                                 event.is_class
                                   ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
@@ -431,7 +431,7 @@ export default function RoomsPage() {
                             return (
                               <div
                                 key={event.id}
-                                onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}`)}
+                                onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}${event.id.startsWith('vc-res-') ? `?date=${event.start_date}` : ''}`)}
                                 className={`absolute px-1 py-0.5 ${fontSize} rounded-sm overflow-hidden cursor-pointer border-l-2 ${
                                   event.has_conflict
                                     ? 'bg-red-100 text-red-700 border-red-500 hover:bg-red-200'

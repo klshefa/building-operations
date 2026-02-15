@@ -367,7 +367,7 @@ export default function CalendarPage() {
                           return (
                             <div
                               key={event.id}
-                              onClick={() => router.push(`/event/${event.id}`)}
+                              onClick={() => router.push(`/event/${event.id}${event.id.startsWith('vc-res-') ? `?date=${event.start_date}` : ''}`)}
                               className="p-2 rounded-lg text-xs cursor-pointer hover:opacity-80 transition-opacity bg-slate-100 border border-slate-200 hover:bg-slate-200"
                             >
                               <div className="font-medium text-slate-800 truncate">{event.title}</div>
