@@ -208,18 +208,22 @@ export async function POST(request: Request) {
     }
     
     // Audit log
-    await supabase.from('ops_audit_log').insert({
-      entity_type: 'ops_events',
-      entity_id: eventId,
-      action: 'UPDATE',
-      user_email: email,
-      changed_fields: {
-        status: { old: 'active', new: 'cancelled' }
-      },
-      api_route: '/api/user-events',
-      http_method: 'POST',
-      metadata: { action: 'cancel', veracross_reservation_id: existing.veracross_reservation_id }
-    }).catch(err => console.warn('Audit log failed:', err))
+    try {
+      await supabase.from('ops_audit_log').insert({
+        entity_type: 'ops_events',
+        entity_id: eventId,
+        action: 'UPDATE',
+        user_email: email,
+        changed_fields: {
+          status: { old: 'active', new: 'cancelled' }
+        },
+        api_route: '/api/user-events',
+        http_method: 'POST',
+        metadata: { action: 'cancel', veracross_reservation_id: existing.veracross_reservation_id }
+      })
+    } catch (err) {
+      console.warn('Audit log failed:', err)
+    }
     
     return NextResponse.json({ success: true })
     
