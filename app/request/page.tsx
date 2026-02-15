@@ -171,6 +171,12 @@ export default function RequestPage() {
 
   useEffect(() => {
     // Auto-check availability when all required fields are filled
+    console.log('Availability check state:', { 
+      selectedResource: selectedResource?.description || null, 
+      date, 
+      startTime, 
+      endTime 
+    })
     if (selectedResource && date && startTime && endTime) {
       const debounceTimer = setTimeout(() => {
         checkAvailability()
