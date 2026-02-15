@@ -272,7 +272,7 @@ export async function GET(
           dayMatches++
           
           // Dedupe
-          const key = `${schedule.internal_class_id || schedule.class_id}-${scheduleRoomDesc}`
+          const key = `${schedule.internal_class_id || schedule.class_id}-${scheduleRoomLower}`
           if (seenKeys.has(key)) continue
           seenKeys.add(key)
           
