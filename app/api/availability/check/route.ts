@@ -331,6 +331,34 @@ export async function GET(request: Request) {
         const roomAbbrev = resource?.abbreviation?.toLowerCase() || ''
         const roomNumber = (resource?.description || '').match(/^\d+/)?.[0] || ''
         
+        // Room grouping: 313 includes 313A, 313B; Ulam includes Ulam 1, Ulam 2; etc.
+        const roomMatchesGroup = (scheduleRoomDesc: string, scheduleRoomNumber: string): boolean => {
+          // Skip empty rooms
+          if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') return false
+          
+          // For numbered rooms (313, 404, etc): match if schedule room STARTS with that number
+          if (roomNumber && scheduleRoomNumber) {
+            if (scheduleRoomNumber === roomNumber || scheduleRoomDesc.startsWith(roomNumber)) {
+              return true
+            }
+          }
+          
+          // For named rooms (Ulam, Playroof): match if schedule room STARTS with the base name
+          if (roomDesc && scheduleRoomDesc) {
+            // Exact match
+            if (roomDesc === scheduleRoomDesc) return true
+            // Base name match (ulam matches ulam 1, ulam 2)
+            if (scheduleRoomDesc.startsWith(roomDesc + ' ') || scheduleRoomDesc.startsWith(roomDesc + '-')) return true
+            // Reverse: if we're booking "ulam 1", also show parent "ulam" events
+            if (roomDesc.startsWith(scheduleRoomDesc + ' ') || roomDesc.startsWith(scheduleRoomDesc + '-')) return true
+          }
+          
+          // Abbreviation match
+          if (roomAbbrev && roomAbbrev === scheduleRoomDesc) return true
+          
+          return false
+        }
+        
         // Deduplicate schedules
         const seenKeys = new Set<string>()
         
@@ -343,28 +371,10 @@ export async function GET(request: Request) {
         
         for (const schedule of schedules) {
           const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
-          const scheduleRoomAbbrev = (schedule.room?.abbreviation || '').toLowerCase().trim()
           const scheduleRoomNumber = (schedule.room?.description || '').match(/^\d+/)?.[0] || ''
           
-          // Skip classes with no room assigned
-          if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') continue
-          
-          // Match room - STRICT matching only
-          let matches = false
-          // 1. Exact room number match (e.g., "404" === "404")
-          if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) {
-            matches = true
-          }
-          // 2. Exact description match (e.g., "ulam" === "ulam")
-          else if (roomDesc && scheduleRoomDesc && roomDesc === scheduleRoomDesc) {
-            matches = true
-          }
-          // 3. Exact abbreviation match
-          else if (roomAbbrev && scheduleRoomAbbrev && roomAbbrev === scheduleRoomAbbrev) {
-            matches = true
-          }
-          
-          if (!matches) continue
+          // Check room grouping
+          if (!roomMatchesGroup(scheduleRoomDesc, scheduleRoomNumber)) continue
           roomMatches++
           
           // Check day pattern
