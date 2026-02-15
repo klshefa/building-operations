@@ -205,41 +205,50 @@ export async function POST(request: Request) {
     // This prevents double-booking before BigQuery sync runs
     let opsEventId: string | null = null
     let opsEventError: string | null = null
+    
+    const opsEventData = {
+      title: description,
+      description: description,
+      start_date: start_date,
+      end_date: end_date || start_date,
+      start_time: start_time,
+      end_time: end_time,
+      resource_id: resource_id,
+      location: resource_name,
+      event_type: 'other',
+      primary_source: 'manual',
+      sources: ['manual'],
+      source_events: [],
+      is_hidden: false,
+      has_conflict: false,
+      conflict_ok: false,
+      all_day: false,
+      needs_program_director: false,
+      needs_office: false,
+      needs_it: false,
+      needs_security: false,
+      needs_facilities: false,
+      food_served: false,
+      building_open: false,
+      status: 'active',
+      requested_by: requestor_email,
+      requested_at: new Date().toISOString(),
+      veracross_reservation_id: reservationId?.toString(),
+      created_by: requestor_email,
+    }
+    
+    console.log('[Create Reservation] Inserting ops_events with:', {
+      resource_id: opsEventData.resource_id,
+      start_date: opsEventData.start_date,
+      start_time: opsEventData.start_time,
+      end_time: opsEventData.end_time,
+      title: opsEventData.title
+    })
+    
     try {
       const { data: newEvent, error: insertError } = await supabase
         .from('ops_events')
-        .insert({
-          title: description,
-          description: description,
-          start_date: start_date,
-          end_date: end_date || start_date,
-          start_time: start_time,
-          end_time: end_time,
-          resource_id: resource_id,
-          location: resource_name,
-          event_type: 'other',
-          // Required fields for ops_events schema
-          primary_source: 'manual',
-          sources: ['manual'],
-          source_events: [],
-          is_hidden: false,
-          has_conflict: false,
-          conflict_ok: false,
-          all_day: false,
-          needs_program_director: false,
-          needs_office: false,
-          needs_it: false,
-          needs_security: false,
-          needs_facilities: false,
-          food_served: false,
-          building_open: false,
-          // Self-service fields
-          status: 'active',
-          requested_by: requestor_email,
-          requested_at: new Date().toISOString(),
-          veracross_reservation_id: reservationId?.toString(),
-          created_by: requestor_email,
-        })
+        .insert(opsEventData)
         .select('id')
         .single()
       

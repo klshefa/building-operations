@@ -115,12 +115,18 @@ export async function GET(
     }
     
     // 1. Get ops_events for this resource/date
-    const { data: opsEvents } = await supabase
+    const { data: opsEvents, error: opsEventsError } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, location, status')
+      .select('id, title, start_time, end_time, all_day, location, status, resource_id')
       .eq('resource_id', resourceId)
       .eq('start_date', date)
       .eq('is_hidden', false)
+    
+    console.log(`[Calendar] Query: resource_id=${resourceId}, date=${date}`)
+    console.log(`[Calendar] Found ${opsEvents?.length || 0} ops_events, error:`, opsEventsError)
+    if (opsEvents?.length) {
+      console.log('[Calendar] ops_events:', opsEvents.map(e => ({ id: e.id, title: e.title, resource_id: e.resource_id })))
+    }
     
     for (const event of opsEvents || []) {
       // Show cancelled events greyed out

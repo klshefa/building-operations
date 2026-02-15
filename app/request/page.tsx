@@ -346,6 +346,12 @@ export default function RequestPage() {
       
       const data = await res.json()
       console.log('Reservation response:', data)
+      console.log('ops_event_id:', data.ops_event_id)
+      console.log('ops_event_error:', data.ops_event_error)
+      
+      if (data.ops_event_error) {
+        console.error('WARNING: ops_events record failed to create:', data.ops_event_error)
+      }
       
       if (!data.success) {
         console.error('Reservation failed:', data)
