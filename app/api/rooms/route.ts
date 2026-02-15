@@ -453,9 +453,37 @@ function normalizeTime(timeStr: string | null | undefined): string | null {
   return null
 }
 
+// Priority rooms that should appear first (common spaces)
+const PRIORITY_ROOMS = [
+  'beit midrash', 'chadar ochel', 'ulam', 'mercaz', 'playroof', 'lobby'
+]
+
+// Check if a room name is a priority room
+function getPriorityIndex(name: string): number {
+  const lower = name.toLowerCase()
+  for (let i = 0; i < PRIORITY_ROOMS.length; i++) {
+    if (lower.includes(PRIORITY_ROOMS[i])) return i
+  }
+  return -1
+}
+
 // Natural sort for room numbers (101 before 1012, 311 before 1011)
+// Priority rooms come first, then numbered rooms
 function naturalSort(a: string, b: string): number {
-  // Extract leading number if present
+  // Check if either is a priority room
+  const aPriority = getPriorityIndex(a)
+  const bPriority = getPriorityIndex(b)
+  
+  // Both priority - sort by priority order
+  if (aPriority >= 0 && bPriority >= 0) {
+    return aPriority - bPriority
+  }
+  // Only a is priority - a comes first
+  if (aPriority >= 0) return -1
+  // Only b is priority - b comes first
+  if (bPriority >= 0) return 1
+  
+  // Neither is priority - sort by number
   const aMatch = a.match(/^(\d+)/)
   const bMatch = b.match(/^(\d+)/)
   
@@ -465,13 +493,12 @@ function naturalSort(a: string, b: string): number {
   // Both have leading numbers - sort numerically
   if (aNum !== null && bNum !== null) {
     if (aNum !== bNum) return aNum - bNum
-    // Same number, sort by rest of string
     const aRest = a.slice(aMatch![0].length)
     const bRest = b.slice(bMatch![0].length)
     return aRest.localeCompare(bRest)
   }
   
-  // Numbers come before non-numbers
+  // Numbers come before other non-priority names
   if (aNum !== null) return -1
   if (bNum !== null) return 1
   
