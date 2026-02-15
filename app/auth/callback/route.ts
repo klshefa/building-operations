@@ -55,11 +55,6 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/?error=unauthorized_domain`)
       }
 
-      // If redirecting to /request page, allow any @shefaschool.org user
-      if (redirect === '/request' || next.startsWith('/request')) {
-        return NextResponse.redirect(`${origin}${redirect || next}`)
-      }
-      
       // Check if user has access to Building Operations via ops_users
       const { data: accessData } = await supabase
         .from('ops_users')
@@ -68,20 +63,32 @@ export async function GET(request: Request) {
         .eq('is_active', true)
         .maybeSingle()
 
-      if (!accessData) {
-        // Also check super_admins for fallback access
-        const { data: superAdmin } = await supabase
-          .from('super_admins')
-          .select('*')
-          .eq('email', user.email.toLowerCase())
-          .maybeSingle()
-          
-        if (!superAdmin) {
-          return NextResponse.redirect(`${origin}/?error=no_access`)
+      // Also check super_admins for fallback access
+      const { data: superAdmin } = await supabase
+        .from('super_admins')
+        .select('*')
+        .eq('email', user.email.toLowerCase())
+        .maybeSingle()
+      
+      const isOpsUser = !!accessData || !!superAdmin
+      
+      // If explicitly going to /request, allow any @shefaschool.org user
+      if (redirect === '/request' || next.startsWith('/request')) {
+        // But if they're an ops user, redirect them to dashboard instead
+        if (isOpsUser && !next.startsWith('/request/event')) {
+          return NextResponse.redirect(`${origin}/`)
         }
+        return NextResponse.redirect(`${origin}${redirect || next}`)
       }
       
-      return NextResponse.redirect(`${origin}${next}`)
+      // For main site access:
+      // - Ops users go to dashboard
+      // - Non-ops users go to /request
+      if (isOpsUser) {
+        return NextResponse.redirect(`${origin}${next}`)
+      } else {
+        return NextResponse.redirect(`${origin}/request`)
+      }
     }
   }
 

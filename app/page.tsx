@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { LoginScreen } from '@/components/LoginScreen'
 import { motion } from 'framer-motion'
@@ -17,6 +18,7 @@ import {
 import Link from 'next/link'
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [signingIn, setSigningIn] = useState(false)
@@ -56,6 +58,20 @@ export default function DashboardPage() {
   async function checkUser() {
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
+    
+    if (session?.user?.email) {
+      // Check if user has ops access
+      const res = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email)}`)
+      if (res.ok) {
+        const { hasAccess } = await res.json()
+        if (!hasAccess) {
+          // Non-ops user - redirect to request page
+          router.push('/request')
+          return
+        }
+      }
+    }
+    
     setUser(session?.user || null)
     setLoading(false)
   }
