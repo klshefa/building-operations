@@ -222,52 +222,48 @@ export async function GET(
         const schedules = scheduleData.data || scheduleData || []
         classDebug.totalSchedules = schedules.length
         
-        const roomDesc = resource.description?.toLowerCase() || ''
-        const roomAbbrev = resource.abbreviation?.toLowerCase() || ''
-        const roomNumber = (resource.description || '').match(/^\d+/)?.[0] || ''
-        classDebug.roomInfo = { roomDesc, roomAbbrev, roomNumber }
-        
-        // Room grouping: 313 includes 313A, 313B; Ulam includes Ulam 1, Ulam 2; etc.
-        const roomMatchesGroup = (scheduleRoomDesc: string, scheduleRoomNumber: string): boolean => {
-          // Skip empty rooms
-          if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') return false
-          
-          // For numbered rooms (313, 404, etc): match if schedule room STARTS with that number
-          // e.g., "313 classroom" matches "313a classroom", "313b classroom"
-          if (roomNumber && scheduleRoomNumber) {
-            if (scheduleRoomNumber === roomNumber || scheduleRoomDesc.startsWith(roomNumber)) {
-              return true
-            }
-          }
-          
-          // For named rooms (Ulam, Playroof): match if schedule room STARTS with the base name
-          // e.g., "ulam" matches "ulam 1", "ulam 2"
-          if (roomDesc && scheduleRoomDesc) {
-            // Exact match
-            if (roomDesc === scheduleRoomDesc) return true
-            // Base name match (ulam matches ulam 1, ulam 2)
-            if (scheduleRoomDesc.startsWith(roomDesc + ' ') || scheduleRoomDesc.startsWith(roomDesc + '-')) return true
-            // Reverse: if we're booking "ulam 1", also show parent "ulam" events
-            if (roomDesc.startsWith(scheduleRoomDesc + ' ') || roomDesc.startsWith(scheduleRoomDesc + '-')) return true
-          }
-          
-          // Abbreviation match
-          if (roomAbbrev && (roomAbbrev === (scheduleRoomDesc) || roomAbbrev === resource.abbreviation?.toLowerCase())) {
-            return true
-          }
-          
-          return false
-        }
+        const targetRoomDesc = resource.description?.toLowerCase().trim() || ''
+        const targetRoomNumber = (resource.description || '').match(/^\d+/)?.[0] || ''
+        classDebug.roomInfo = { targetRoomDesc, targetRoomNumber }
         
         const seenKeys = new Set<string>()
         let roomMatches = 0, dayMatches = 0, activeMatches = 0
         
         for (const schedule of schedules) {
-          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
-          const scheduleRoomNumber = (schedule.room?.description || '').match(/^\d+/)?.[0] || ''
+          // Get the schedule's room
+          const scheduleRoom = schedule.room?.description || ''
+          const scheduleRoomLower = scheduleRoom.toLowerCase().trim()
+          const scheduleRoomNumber = scheduleRoom.match(/^\d+/)?.[0] || ''
           
-          // Check room grouping
-          if (!roomMatchesGroup(scheduleRoomDesc, scheduleRoomNumber)) continue
+          // SKIP if schedule has no room assigned
+          if (!scheduleRoomLower || scheduleRoomLower === '<none specified>' || scheduleRoomLower === 'none') {
+            continue
+          }
+          
+          // CHECK: Does this schedule's room match our target room?
+          let roomMatched = false
+          
+          // For numbered rooms (313, 404): match by room number
+          if (targetRoomNumber && scheduleRoomNumber) {
+            // Exact number match OR starts with number (313 matches 313A, 313B)
+            if (scheduleRoomNumber === targetRoomNumber) {
+              roomMatched = true
+            }
+          }
+          
+          // For named rooms (Ulam, Playroof): exact match or prefix match
+          if (!roomMatched && targetRoomDesc && scheduleRoomLower) {
+            if (scheduleRoomLower === targetRoomDesc) {
+              roomMatched = true
+            } else if (scheduleRoomLower.startsWith(targetRoomDesc + ' ')) {
+              roomMatched = true
+            }
+          }
+          
+          // SKIP if room doesn't match
+          if (!roomMatched) {
+            continue
+          }
           roomMatches++
           
           // Check day pattern
@@ -295,7 +291,7 @@ export async function GET(
           if (classDebug.matchedRooms.length < 5) {
             classDebug.matchedRooms.push({
               className,
-              scheduleRoomDesc,
+              scheduleRoom: scheduleRoomLower,
               scheduleRoomNumber
             })
           }
