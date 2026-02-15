@@ -204,37 +204,55 @@ export async function POST(request: Request) {
     // IMMEDIATELY create ops_events record so the slot shows as booked
     // This prevents double-booking before BigQuery sync runs
     let opsEventId: string | null = null
+    let opsEventError: string | null = null
     try {
       const { data: newEvent, error: insertError } = await supabase
         .from('ops_events')
         .insert({
           title: description,
+          description: description,
           start_date: start_date,
           end_date: end_date || start_date,
           start_time: start_time,
           end_time: end_time,
           resource_id: resource_id,
           location: resource_name,
-          status: 'active',
-          requested_by: requestor_email,
-          requested_at: new Date().toISOString(),
-          veracross_reservation_id: reservationId?.toString(),
+          event_type: 'other',
+          // Required fields for ops_events schema
+          primary_source: 'manual',
+          sources: ['manual'],
+          source_events: [],
           is_hidden: false,
           has_conflict: false,
           conflict_ok: false,
           all_day: false,
+          needs_program_director: false,
+          needs_office: false,
+          needs_it: false,
+          needs_security: false,
+          needs_facilities: false,
+          food_served: false,
+          building_open: false,
+          // Self-service fields
+          status: 'active',
+          requested_by: requestor_email,
+          requested_at: new Date().toISOString(),
+          veracross_reservation_id: reservationId?.toString(),
+          created_by: requestor_email,
         })
         .select('id')
         .single()
       
       if (insertError) {
         console.error('Failed to create ops_events record:', insertError)
+        opsEventError = insertError.message
       } else {
         opsEventId = newEvent?.id
         console.log('Created ops_events record:', opsEventId)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('ops_events insert failed:', err)
+      opsEventError = err.message || 'Unknown error'
     }
 
     // Log to audit
@@ -267,6 +285,7 @@ export async function POST(request: Request) {
       success: true,
       reservation_id: reservationId?.toString(),
       ops_event_id: opsEventId,
+      ops_event_error: opsEventError,
       veracross_response: responseData
     } as CreateReservationResponse)
 
