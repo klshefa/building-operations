@@ -116,8 +116,8 @@ export async function POST(request: Request) {
     const accessToken = await getReservationToken()
 
     // Build the reservation payload
-    // Based on Veracross API docs for POST /resource_reservations/reservations
-    const reservationPayload = {
+    // Veracross API requires data to be wrapped in a "data" field
+    const reservationData = {
       description,
       resource_id,
       start_date,
@@ -125,11 +125,13 @@ export async function POST(request: Request) {
       start_time,
       end_time,
       requestor_id,
-      // Optional fields that might be available:
-      // event_id: null, // If linking to an event
-      // approval_status: 'pending', // or 'approved'
-      // notes: '',
     }
+    
+    const reservationPayload = {
+      data: reservationData
+    }
+
+    console.log('Sending to Veracross:', JSON.stringify(reservationPayload, null, 2))
 
     // Call Veracross API to create reservation
     const response = await fetch(`${VERACROSS_API_BASE}/resource_reservations/reservations`, {
