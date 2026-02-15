@@ -236,6 +236,27 @@ export async function GET(request: Request) {
           const dayPattern = schedule.day?.name || schedule.day?.abbreviation || 
                             schedule.day_name || schedule.day_of_week || ''
           
+          // Extract class name - try many possible field names
+          const className = schedule.class?.name || 
+                           schedule.class?.description ||
+                           schedule.class_name || 
+                           schedule.course?.name ||
+                           schedule.course?.description ||
+                           schedule.course_name ||
+                           schedule.section?.name ||
+                           schedule.section_name ||
+                           schedule.description ||
+                           schedule.name ||
+                           'Class'
+          
+          // Extract teacher info
+          const teacher = schedule.teacher?.name_full ||
+                         schedule.teacher?.display_name ||
+                         schedule.teacher?.last_name ||
+                         schedule.teacher_name ||
+                         schedule.primary_teacher?.name_full ||
+                         ''
+          
           // Expand to actual dates
           for (const date of datesInRange) {
             const dayOfWeek = date.getDay()
@@ -243,8 +264,6 @@ export async function GET(request: Request) {
             if (!patternIncludesDay(dayPattern, dayOfWeek)) continue
             
             const dateStr = date.toISOString().split('T')[0]
-            const className = schedule.class?.name || schedule.class_name || 
-                             schedule.course?.name || 'Class'
             
             if (!eventsByResource[resourceId]) {
               eventsByResource[resourceId] = []
@@ -262,7 +281,10 @@ export async function GET(request: Request) {
               resource_id: resourceId,
               is_hidden: false,
               has_conflict: false,
-              is_class: true, // Flag to distinguish from regular events
+              is_class: true,
+              // Additional class details for popup
+              teacher: teacher,
+              day_pattern: dayPattern,
             } as any)
           }
         }

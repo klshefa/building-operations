@@ -13,6 +13,10 @@ import {
   ClockIcon,
   CalendarDaysIcon,
   FunnelIcon,
+  XMarkIcon,
+  AcademicCapIcon,
+  UserIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline'
 
 interface RoomEvent {
@@ -28,6 +32,8 @@ interface RoomEvent {
   is_hidden: boolean
   has_conflict: boolean
   is_class?: boolean
+  teacher?: string
+  day_pattern?: string
 }
 
 interface Room {
@@ -53,6 +59,7 @@ export default function RoomsPage() {
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [resourceTypes, setResourceTypes] = useState<string[]>([])
   const [selectedType, setSelectedType] = useState<string>('')
+  const [selectedClass, setSelectedClass] = useState<RoomEvent | null>(null)
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd')
 
@@ -298,11 +305,11 @@ export default function RoomsPage() {
                           {allDayEvents.map(event => (
                             <div
                               key={event.id}
-                              onClick={() => !event.is_class && router.push(`/event/${event.id}`)}
-                              className={`text-xs p-1 mb-1 rounded truncate ${
+                              onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}`)}
+                              className={`text-xs p-1 mb-1 rounded truncate cursor-pointer ${
                                 event.is_class
-                                  ? 'bg-purple-100 text-purple-700'
-                                  : 'bg-amber-100 text-amber-700 cursor-pointer hover:bg-amber-200'
+                                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                  : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                               }`}
                               title={event.title}
                             >
@@ -340,13 +347,13 @@ export default function RoomsPage() {
                             return (
                               <div
                                 key={event.id}
-                                onClick={() => !event.is_class && router.push(`/event/${event.id}`)}
-                                className={`absolute left-0 right-0 mx-0.5 px-1 py-0.5 text-xs rounded overflow-hidden ${
+                                onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}`)}
+                                className={`absolute left-0 right-0 mx-0.5 px-1 py-0.5 text-xs rounded overflow-hidden cursor-pointer ${
                                   event.has_conflict
-                                    ? 'bg-red-100 text-red-700 border-l-2 border-red-500'
+                                    ? 'bg-red-100 text-red-700 border-l-2 border-red-500 hover:bg-red-200'
                                     : event.is_class
-                                    ? 'bg-purple-100 text-purple-700 border-l-2 border-purple-400'
-                                    : 'bg-shefa-blue-100 text-shefa-blue-700 border-l-2 border-shefa-blue-400 cursor-pointer hover:bg-shefa-blue-200'
+                                    ? 'bg-purple-100 text-purple-700 border-l-2 border-purple-400 hover:bg-purple-200'
+                                    : 'bg-shefa-blue-100 text-shefa-blue-700 border-l-2 border-shefa-blue-400 hover:bg-shefa-blue-200'
                                 }`}
                                 style={{ 
                                   height: `${heightPx}px`,
@@ -393,6 +400,66 @@ export default function RoomsPage() {
           </span>
         </div>
       </main>
+
+      {/* Class Detail Modal */}
+      {selectedClass && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedClass(null)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-purple-600 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AcademicCapIcon className="w-6 h-6" />
+                <span className="font-semibold">Class Schedule</span>
+              </div>
+              <button onClick={() => setSelectedClass(null)} className="hover:bg-purple-700 p-1 rounded">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <h3 className="text-lg font-semibold text-slate-800">{selectedClass.title}</h3>
+              
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <ClockIcon className="w-4 h-4 text-slate-400" />
+                  <span>
+                    {formatTime(selectedClass.start_time)}
+                    {selectedClass.end_time && ` - ${formatTime(selectedClass.end_time)}`}
+                  </span>
+                </div>
+                
+                {selectedClass.location && (
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <MapPinIcon className="w-4 h-4 text-slate-400" />
+                    <span>{selectedClass.location}</span>
+                  </div>
+                )}
+                
+                {selectedClass.teacher && (
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <UserIcon className="w-4 h-4 text-slate-400" />
+                    <span>{selectedClass.teacher}</span>
+                  </div>
+                )}
+                
+                {selectedClass.day_pattern && (
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <CalendarDaysIcon className="w-4 h-4 text-slate-400" />
+                    <span>Days: {selectedClass.day_pattern}</span>
+                  </div>
+                )}
+              </div>
+              
+              <p className="text-xs text-slate-400 pt-2 border-t border-slate-100">
+                This is a recurring class from Veracross. Click outside to close.
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }
