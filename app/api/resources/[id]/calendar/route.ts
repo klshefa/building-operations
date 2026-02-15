@@ -195,8 +195,8 @@ export async function GET(
     
     try {
       const reservationsToken = await getReservationsToken()
-      // Simple: fetch reservations for THIS resource on THIS date
-      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&start_date=${date}&end_date=${date}`
+      // Fetch reservations for this resource on this date
+      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&on_or_after_start_date=${date}&on_or_before_start_date=${date}`
       console.log(`[Calendar] Fetching Veracross reservations: ${url}`)
       
       const reservationsRes = await fetch(url, {

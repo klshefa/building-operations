@@ -286,8 +286,8 @@ export async function GET(request: Request) {
       const reservationsToken = await getReservationsToken()
       veracrossReservationsDebug.tokenObtained = true
       
-      // Simple: fetch reservations for THIS resource on THIS date
-      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&start_date=${date}&end_date=${date}`
+      // Fetch reservations for this resource on this date
+      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&on_or_after_start_date=${date}&on_or_before_start_date=${date}`
       veracrossReservationsDebug.url = url
       
       const reservationsRes = await fetch(url, {
