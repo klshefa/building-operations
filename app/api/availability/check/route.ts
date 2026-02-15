@@ -280,12 +280,15 @@ export async function GET(request: Request) {
     
     // 1.5 Check Veracross reservations directly from API
     const checkedReservationIds = new Set<string>()
+    let veracrossReservationsDebug: any = { status: 'not_started' }
     
     try {
       const reservationsToken = await getReservationsToken()
+      veracrossReservationsDebug.tokenObtained = true
+      
       // Simple: fetch reservations for THIS resource on THIS date
       const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&start_date=${date}&end_date=${date}`
-      console.log(`[Availability] Fetching Veracross reservations: ${url}`)
+      veracrossReservationsDebug.url = url
       
       const reservationsRes = await fetch(url, {
         headers: {
@@ -295,19 +298,15 @@ export async function GET(request: Request) {
         },
       })
       
-      console.log(`[Availability] Veracross reservations response status: ${reservationsRes.status}`)
+      veracrossReservationsDebug.httpStatus = reservationsRes.status
       
       if (reservationsRes.ok) {
         const reservationsData = await reservationsRes.json()
-        console.log(`[Availability] Veracross raw response:`, JSON.stringify(reservationsData).substring(0, 500))
-        
         const reservations = reservationsData.data || reservationsData || []
-        console.log(`[Availability] Found ${reservations.length} Veracross reservations for resource ${resourceId} on ${date}`)
         
-        // Log first reservation to see structure
-        if (reservations.length > 0) {
-          console.log(`[Availability] First reservation:`, JSON.stringify(reservations[0]))
-        }
+        veracrossReservationsDebug.status = 'success'
+        veracrossReservationsDebug.count = reservations.length
+        veracrossReservationsDebug.rawSample = reservations.length > 0 ? reservations[0] : null
         
         for (const res of reservations) {
           const resId = res.resource_reservation_id || res.id
@@ -317,16 +316,10 @@ export async function GET(request: Request) {
           const resStart = parseTimeToMinutes(res.start_time)
           const resEnd = parseTimeToMinutes(res.end_time)
           
-          console.log(`[Availability] Checking reservation ${resId}: ${res.start_time}-${res.end_time} vs requested ${startTime}-${endTime}`)
-          
-          if (resStart === null || resEnd === null) {
-            console.log(`[Availability] Skipping - could not parse times`)
-            continue
-          }
+          if (resStart === null || resEnd === null) continue
           
           if (timesOverlap(requestStart, requestEnd, resStart, resEnd)) {
             const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
-            console.log(`[Availability] CONFLICT FOUND: ${resTitle}`)
             conflicts.push({
               type: 'conflict',
               title: resTitle,
@@ -338,10 +331,12 @@ export async function GET(request: Request) {
         }
       } else {
         const errorText = await reservationsRes.text()
-        console.log(`[Availability] Veracross API error: ${reservationsRes.status} - ${errorText}`)
+        veracrossReservationsDebug.status = 'api_error'
+        veracrossReservationsDebug.error = errorText.substring(0, 200)
       }
-    } catch (err) {
-      console.error('[Availability] Error fetching Veracross reservations:', err)
+    } catch (err: any) {
+      veracrossReservationsDebug.status = 'exception'
+      veracrossReservationsDebug.error = err?.message || String(err)
     }
     
     // 2. Check Veracross class schedules
@@ -541,6 +536,7 @@ export async function GET(request: Request) {
             abbreviation: resource?.abbreviation,
             roomNumber
           },
+          veracrossReservations: veracrossReservationsDebug,
           classSchedules: {
             totalSchedules,
             roomMatches,
@@ -573,7 +569,10 @@ export async function GET(request: Request) {
       available: conflicts.length === 0,
       conflicts,
       warnings,
-      debug: { error: 'Class schedule check failed or no data' }
+      debug: { 
+        veracrossReservations: veracrossReservationsDebug,
+        error: 'Class schedule check failed or no data' 
+      }
     })
     
   } catch (error: any) {
