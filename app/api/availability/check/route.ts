@@ -296,8 +296,10 @@ export async function GET(request: Request) {
         const roomAbbrev = resource?.abbreviation?.toLowerCase() || ''
         const roomNumber = (resource?.description || '').match(/^\d+/)?.[0] || ''
         
-        console.log('[Availability] Resource matching info:', {
+        console.log('[Availability] RESOURCE DATA:', {
           resourceId,
+          rawDescription: resource?.description,
+          rawAbbreviation: resource?.abbreviation,
           roomDesc,
           roomAbbrev,
           roomNumber
@@ -306,6 +308,9 @@ export async function GET(request: Request) {
         // Deduplicate schedules
         const seenKeys = new Set<string>()
         
+        // Log first 3 schedules to see structure
+        console.log('[Availability] First 3 schedules sample:', JSON.stringify(schedules.slice(0, 3), null, 2))
+        
         for (const schedule of schedules) {
           const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
           const scheduleRoomAbbrev = (schedule.room?.abbreviation || '').toLowerCase().trim()
@@ -313,6 +318,23 @@ export async function GET(request: Request) {
           
           // Skip classes with no room assigned
           if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') continue
+          
+          // DEBUG: Log C-06 Hebrew class specifically
+          const className = schedule.block?.description || schedule.class?.description || ''
+          if (className.toLowerCase().includes('hebrew') || className.toLowerCase().includes('c-06')) {
+            console.log('[Availability] FOUND HEBREW CLASS:', {
+              className,
+              scheduleRoomDesc,
+              scheduleRoomAbbrev,
+              scheduleRoomNumber,
+              resourceRoomDesc: roomDesc,
+              resourceRoomAbbrev: roomAbbrev,
+              resourceRoomNumber: roomNumber,
+              wouldMatchByNumber: roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber,
+              wouldMatchByDesc: roomDesc && scheduleRoomDesc && roomDesc === scheduleRoomDesc,
+              wouldMatchByAbbrev: roomAbbrev && scheduleRoomAbbrev && roomAbbrev === scheduleRoomAbbrev,
+            })
+          }
           
           // Match room - STRICT matching only
           let matches = false
@@ -338,6 +360,7 @@ export async function GET(request: Request) {
               className: schedule.block?.description || 'Unknown',
               scheduleRoomDesc,
               scheduleRoomAbbrev,
+              scheduleRoomNumber,
               matchReason
             })
           }
