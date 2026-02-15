@@ -223,11 +223,11 @@ export async function GET(
         return NextResponse.json({ data })
       }
       
-      console.log(`[Event API] No synced event found, fetching from Veracross API`)
-      
       // Get optional date hint from query params
       const { searchParams } = new URL(request.url)
       const dateHint = searchParams.get('date')
+      
+      console.log(`[Event API] No synced event found by ID, trying Veracross API to get details for matching`)
       
       try {
         const token = await getReservationsToken()
@@ -301,7 +301,43 @@ export async function GET(
           }
         }
         
-        // Build ops_event-like object
+        // Try to find matching ops_event by title + date + resource (for events created before ID tracking)
+        const vcTitle = vcRes.notes || vcRes.description || vcRes.name || ''
+        const vcDate = vcRes.start_date
+        
+        if (vcTitle && vcDate) {
+          console.log(`[Event API] Trying to match by title="${vcTitle}" date="${vcDate}" resource=${resourceId}`)
+          
+          let matchQuery = supabase
+            .from('ops_events')
+            .select('*')
+            .eq('start_date', vcDate)
+            .ilike('title', vcTitle)
+          
+          if (resourceId) {
+            matchQuery = matchQuery.eq('resource_id', resourceId)
+          }
+          
+          const { data: matchedEvents } = await matchQuery
+          
+          if (matchedEvents && matchedEvents.length > 0) {
+            console.log(`[Event API] Found matching ops_event by title/date: ${matchedEvents[0].id}`)
+            
+            // Update the ops_event with the veracross_reservation_id for future lookups
+            const { error: updateError } = await supabase
+              .from('ops_events')
+              .update({ veracross_reservation_id: vcId })
+              .eq('id', matchedEvents[0].id)
+            
+            if (!updateError) {
+              console.log(`[Event API] Updated ops_event ${matchedEvents[0].id} with veracross_reservation_id=${vcId}`)
+            }
+            
+            return NextResponse.json({ data: matchedEvents[0] })
+          }
+        }
+        
+        // Build ops_event-like object (read-only since no match found)
         const data = {
           id: id,
           veracross_reservation_id: vcId,
