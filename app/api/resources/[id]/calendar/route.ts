@@ -332,12 +332,32 @@ export async function GET(
       })
     }
     
+    // Convert time string to minutes for sorting
+    const timeToMinutes = (time: string | null): number => {
+      if (!time) return 9999
+      // Handle 24-hour format "HH:MM"
+      const match24 = time.match(/^(\d{1,2}):(\d{2})$/)
+      if (match24) {
+        return parseInt(match24[1]) * 60 + parseInt(match24[2])
+      }
+      // Handle 12-hour format "H:MM am/pm"
+      const match12 = time.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i)
+      if (match12) {
+        let hours = parseInt(match12[1])
+        const mins = parseInt(match12[2])
+        const isPM = match12[3].toLowerCase() === 'pm'
+        if (isPM && hours !== 12) hours += 12
+        if (!isPM && hours === 12) hours = 0
+        return hours * 60 + mins
+      }
+      return 9999
+    }
+    
     // Sort by time (all-day first, then by start time)
     events.sort((a, b) => {
       if (a.allDay && !b.allDay) return -1
       if (!a.allDay && b.allDay) return 1
-      if (!a.startTime || !b.startTime) return 0
-      return a.startTime.localeCompare(b.startTime)
+      return timeToMinutes(a.startTime) - timeToMinutes(b.startTime)
     })
     
     return NextResponse.json({
