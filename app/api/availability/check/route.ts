@@ -315,20 +315,15 @@ export async function GET(request: Request) {
         const roomAbbrev = resource?.abbreviation?.toLowerCase() || ''
         const roomNumber = (resource?.description || '').match(/^\d+/)?.[0] || ''
         
-        console.log('[Availability] RESOURCE DATA:', {
-          resourceId,
-          rawDescription: resource?.description,
-          rawAbbreviation: resource?.abbreviation,
-          roomDesc,
-          roomAbbrev,
-          roomNumber
-        })
-        
         // Deduplicate schedules
         const seenKeys = new Set<string>()
         
-        // Log first 3 schedules to see structure
-        console.log('[Availability] First 3 schedules sample:', JSON.stringify(schedules.slice(0, 3), null, 2))
+        // Tracking counters
+        let totalSchedules = schedules.length
+        let roomMatches = 0
+        let dayMatches = 0
+        let activeMatches = 0
+        let timeOverlaps = 0
         
         for (const schedule of schedules) {
           const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
@@ -338,57 +333,28 @@ export async function GET(request: Request) {
           // Skip classes with no room assigned
           if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') continue
           
-          // DEBUG: Log C-06 Hebrew class specifically
-          const debugClassName = schedule.block?.description || schedule.class?.description || ''
-          if (debugClassName.toLowerCase().includes('hebrew') || debugClassName.toLowerCase().includes('c-06')) {
-            console.log('[Availability] FOUND HEBREW CLASS:', {
-              className: debugClassName,
-              scheduleRoomDesc,
-              scheduleRoomAbbrev,
-              scheduleRoomNumber,
-              resourceRoomDesc: roomDesc,
-              resourceRoomAbbrev: roomAbbrev,
-              resourceRoomNumber: roomNumber,
-              wouldMatchByNumber: roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber,
-              wouldMatchByDesc: roomDesc && scheduleRoomDesc && roomDesc === scheduleRoomDesc,
-              wouldMatchByAbbrev: roomAbbrev && scheduleRoomAbbrev && roomAbbrev === scheduleRoomAbbrev,
-            })
-          }
-          
           // Match room - STRICT matching only
           let matches = false
-          let matchReason = ''
           // 1. Exact room number match (e.g., "404" === "404")
           if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) {
             matches = true
-            matchReason = `room number: "${roomNumber}" === "${scheduleRoomNumber}"`
           }
           // 2. Exact description match (e.g., "ulam" === "ulam")
           else if (roomDesc && scheduleRoomDesc && roomDesc === scheduleRoomDesc) {
             matches = true
-            matchReason = `description: "${roomDesc}" === "${scheduleRoomDesc}"`
           }
           // 3. Exact abbreviation match
           else if (roomAbbrev && scheduleRoomAbbrev && roomAbbrev === scheduleRoomAbbrev) {
             matches = true
-            matchReason = `abbreviation: "${roomAbbrev}" === "${scheduleRoomAbbrev}"`
-          }
-          
-          if (matches) {
-            console.log('[Availability] Class MATCHED:', {
-              className: schedule.block?.description || 'Unknown',
-              scheduleRoomDesc,
-              scheduleRoomAbbrev,
-              scheduleRoomNumber,
-              matchReason
-            })
           }
           
           if (!matches) continue
+          roomMatches++
           
           // Check day pattern
           const dayPattern = schedule.day?.description || schedule.day?.abbreviation || ''
           if (!patternIncludesDay(dayPattern, dayOfWeek)) continue
+          dayMatches++
           
           // Dedupe by class_id + room
           const key = `${schedule.class_id || schedule.internal_class_id}-${scheduleRoomDesc}`
@@ -404,17 +370,12 @@ export async function GET(request: Request) {
           
           // Skip classes that aren't active/future
           if (!activeClassIds.has(classId)) continue
+          activeMatches++
           
           const className = classNamesMap[classId] || schedule.block?.description || 'Class'
           
           if (timesOverlap(requestStart, requestEnd, classStart, classEnd)) {
-            console.log('[Availability] ADDING CONFLICT from CLASS:', {
-              className,
-              scheduleRoomDesc,
-              scheduleRoomAbbrev,
-              classStart,
-              classEnd
-            })
+            timeOverlaps++
             conflicts.push({
               type: 'conflict',
               title: className,
@@ -443,25 +404,45 @@ export async function GET(request: Request) {
             }
           }
         }
+        
+        // Build debug info
+        const debug = {
+          resource: {
+            id: resourceId,
+            description: resource?.description,
+            abbreviation: resource?.abbreviation,
+            roomNumber
+          },
+          classSchedules: {
+            totalSchedules,
+            roomMatches,
+            dayMatches,
+            activeMatches,
+            timeOverlaps
+          },
+          requestedDay: dayOfWeek,
+          requestedTime: { start: requestStart, end: requestEnd }
+        }
+        
+        return NextResponse.json({
+          available: conflicts.length === 0,
+          conflicts,
+          warnings,
+          debug
+        })
       }
     } catch (err: any) {
       console.error('Class schedule check failed:', err?.message || err)
       // Don't fail the whole request, just skip class checking
     }
     
-    console.log('[Availability] FINAL CONFLICTS:', JSON.stringify(conflicts))
-    console.log('[Availability] FINAL WARNINGS:', JSON.stringify(warnings))
-    
-    // Note: All-day calendar events are shown in the resource calendar sidebar,
-    // so we don't duplicate them in the warnings section here
-    
-    const result: AvailabilityResult = {
+    // Fallback response
+    return NextResponse.json({
       available: conflicts.length === 0,
       conflicts,
-      warnings
-    }
-    
-    return NextResponse.json(result)
+      warnings,
+      debug: { error: 'Class schedule check failed or no data' }
+    })
     
   } catch (error: any) {
     console.error('Availability check error:', error)

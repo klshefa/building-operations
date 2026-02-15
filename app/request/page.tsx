@@ -278,6 +278,10 @@ export default function RequestPage() {
       if (res.ok) {
         const data = await res.json()
         setAvailability(data)
+        // Debug info
+        if (data.debug) {
+          console.log('🔍 Availability Debug:', data.debug)
+        }
       }
     } catch (err) {
       console.error('Error checking availability:', err)
