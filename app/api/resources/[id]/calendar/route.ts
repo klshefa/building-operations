@@ -199,6 +199,8 @@ export async function GET(
         }
       }
       
+      classDebug.activeClassIdsCount = activeClassIds.size
+      
       // Fetch schedules
       const scheduleRes = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules?X-Page-Size=1000`, {
         headers: {
@@ -208,6 +210,11 @@ export async function GET(
       })
       
       classDebug.step = 'fetching schedules'
+      classDebug.scheduleStatus = scheduleRes.status
+      if (!scheduleRes.ok) {
+        const errorText = await scheduleRes.text()
+        classDebug.scheduleError = errorText.substring(0, 200)
+      }
       if (scheduleRes.ok) {
         const scheduleData = await scheduleRes.json()
         const schedules = scheduleData.data || scheduleData || []
