@@ -341,6 +341,9 @@ export async function GET(request: Request) {
                            schedule.block?.description || 
                            'Class'
           
+          // Skip archived/old classes
+          if (className.toLowerCase().includes(' old') || className.toLowerCase().endsWith(' old')) continue
+          
           // Extract teacher info
           const teacher = schedule.primary_teacher_name && schedule.primary_teacher_name !== 'None'
                          ? schedule.primary_teacher_name

@@ -289,15 +289,18 @@ export async function GET(request: Request) {
         const seenKeys = new Set<string>()
         
         for (const schedule of schedules) {
-          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase()
-          const scheduleRoomAbbrev = (schedule.room?.abbreviation || '').toLowerCase()
+          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
+          const scheduleRoomAbbrev = (schedule.room?.abbreviation || '').toLowerCase().trim()
           const scheduleRoomNumber = (schedule.room?.description || '').match(/^\d+/)?.[0] || ''
           
-          // Match room
+          // Skip classes with no room assigned
+          if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') continue
+          
+          // Match room - require non-empty strings on both sides
           let matches = false
-          if (roomNumber && scheduleRoomNumber === roomNumber) matches = true
-          else if (roomDesc && (scheduleRoomDesc.includes(roomDesc) || roomDesc.includes(scheduleRoomDesc))) matches = true
-          else if (roomAbbrev && (scheduleRoomAbbrev.includes(roomAbbrev) || roomAbbrev.includes(scheduleRoomAbbrev))) matches = true
+          if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) matches = true
+          else if (roomDesc && scheduleRoomDesc && scheduleRoomDesc.length > 2 && (scheduleRoomDesc.includes(roomDesc) || roomDesc.includes(scheduleRoomDesc))) matches = true
+          else if (roomAbbrev && scheduleRoomAbbrev && scheduleRoomAbbrev.length > 1 && (scheduleRoomAbbrev.includes(roomAbbrev) || roomAbbrev.includes(scheduleRoomAbbrev))) matches = true
           
           if (!matches) continue
           
@@ -317,6 +320,9 @@ export async function GET(request: Request) {
           
           const classId = schedule.class_id || String(schedule.internal_class_id) || ''
           const className = classNamesMap[classId] || schedule.block?.description || 'Class'
+          
+          // Skip archived/old classes
+          if (className.toLowerCase().includes(' old') || className.toLowerCase().endsWith(' old')) continue
           
           if (timesOverlap(requestStart, requestEnd, classStart, classEnd)) {
             conflicts.push({
@@ -353,25 +359,8 @@ export async function GET(request: Request) {
       // Don't fail the whole request, just skip class checking
     }
     
-    // 3. Check Google Calendar all-day events (from ops_raw_events)
-    const { data: calendarEvents } = await supabase
-      .from('ops_raw_events')
-      .select('title, start_date, end_date')
-      .in('source', ['calendar_staff', 'calendar_ls', 'calendar_ms'])
-      .lte('start_date', date)
-      .gte('end_date', date)
-    
-    // Calendar events are typically school-wide, not resource-specific
-    // We show them as warnings for context
-    for (const calEvent of calendarEvents || []) {
-      warnings.push({
-        type: 'warning',
-        title: calEvent.title,
-        startTime: 'All day',
-        endTime: '',
-        message: `📅 School Calendar: ${calEvent.title}`
-      })
-    }
+    // Note: All-day calendar events are shown in the resource calendar sidebar,
+    // so we don't duplicate them in the warnings section here
     
     const result: AvailabilityResult = {
       available: conflicts.length === 0,

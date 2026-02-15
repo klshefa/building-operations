@@ -207,15 +207,18 @@ export async function GET(
         const seenKeys = new Set<string>()
         
         for (const schedule of schedules) {
-          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase()
-          const scheduleRoomAbbrev = (schedule.room?.abbreviation || '').toLowerCase()
+          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
+          const scheduleRoomAbbrev = (schedule.room?.abbreviation || '').toLowerCase().trim()
           const scheduleRoomNumber = (schedule.room?.description || '').match(/^\d+/)?.[0] || ''
           
-          // Match room
+          // Skip classes with no room assigned
+          if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') continue
+          
+          // Match room - require non-empty strings on both sides
           let matches = false
-          if (roomNumber && scheduleRoomNumber === roomNumber) matches = true
-          else if (roomDesc && (scheduleRoomDesc.includes(roomDesc) || roomDesc.includes(scheduleRoomDesc))) matches = true
-          else if (roomAbbrev && (scheduleRoomAbbrev.includes(roomAbbrev) || roomAbbrev.includes(scheduleRoomAbbrev))) matches = true
+          if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) matches = true
+          else if (roomDesc && scheduleRoomDesc && scheduleRoomDesc.length > 2 && (scheduleRoomDesc.includes(roomDesc) || roomDesc.includes(scheduleRoomDesc))) matches = true
+          else if (roomAbbrev && scheduleRoomAbbrev && scheduleRoomAbbrev.length > 1 && (scheduleRoomAbbrev.includes(roomAbbrev) || roomAbbrev.includes(scheduleRoomAbbrev))) matches = true
           
           if (!matches) continue
           
@@ -230,6 +233,9 @@ export async function GET(
           
           const classId = schedule.class_id || String(schedule.internal_class_id) || ''
           const className = classNamesMap[classId] || schedule.block?.description || 'Class'
+          
+          // Skip archived/old classes
+          if (className.toLowerCase().includes(' old') || className.toLowerCase().endsWith(' old')) continue
           
           events.push({
             id: `class-${schedule.id}`,
