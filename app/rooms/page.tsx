@@ -17,7 +17,16 @@ import {
   AcademicCapIcon,
   UserIcon,
   MapPinIcon,
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
 } from '@heroicons/react/24/outline'
+
+type ZoomLevel = 'compact' | 'normal' | 'expanded'
+const ZOOM_CONFIG: Record<ZoomLevel, { rowHeight: number; colWidth: number; fontSize: string }> = {
+  compact: { rowHeight: 40, colWidth: 100, fontSize: 'text-[10px]' },
+  normal: { rowHeight: 60, colWidth: 140, fontSize: 'text-xs' },
+  expanded: { rowHeight: 80, colWidth: 180, fontSize: 'text-sm' },
+}
 
 interface RoomEvent {
   id: string
@@ -60,8 +69,10 @@ export default function RoomsPage() {
   const [resourceTypes, setResourceTypes] = useState<string[]>([])
   const [selectedType, setSelectedType] = useState<string>('')
   const [selectedClass, setSelectedClass] = useState<RoomEvent | null>(null)
+  const [zoom, setZoom] = useState<ZoomLevel>('normal')
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd')
+  const { rowHeight, colWidth, fontSize } = ZOOM_CONFIG[zoom]
 
   useEffect(() => {
     checkUser()
@@ -157,6 +168,52 @@ export default function RoomsPage() {
     return Math.floor(startHour) === slotHour
   }
 
+  // Get all events that START in a slot (for rendering)
+  function getEventsStartingInSlot(room: Room, slotHour: number): RoomEvent[] {
+    return room.events.filter(event => {
+      if (event.all_day || !event.start_time) return false
+      return eventStartsInSlot(event, slotHour)
+    })
+  }
+
+  // Calculate horizontal position for overlapping events
+  function getEventPosition(event: RoomEvent, allRoomEvents: RoomEvent[]): { left: string; width: string } {
+    const startHour = parseTimeToHour(event.start_time)
+    const endHour = parseTimeToHour(event.end_time) || (startHour || 0) + 1
+    
+    // Find all events that overlap with this one
+    const overlapping = allRoomEvents.filter(e => {
+      if (e.all_day || !e.start_time) return false
+      const eStart = parseTimeToHour(e.start_time)
+      const eEnd = parseTimeToHour(e.end_time) || (eStart || 0) + 1
+      if (eStart === null || startHour === null) return false
+      // Check if they overlap
+      return eStart < endHour && eEnd > startHour!
+    })
+
+    if (overlapping.length <= 1) {
+      return { left: '2px', width: 'calc(100% - 4px)' }
+    }
+
+    // Sort by start time, then by id for consistent ordering
+    overlapping.sort((a, b) => {
+      const aStart = parseTimeToHour(a.start_time) || 0
+      const bStart = parseTimeToHour(b.start_time) || 0
+      if (aStart !== bStart) return aStart - bStart
+      return a.id.localeCompare(b.id)
+    })
+
+    const index = overlapping.findIndex(e => e.id === event.id)
+    const count = overlapping.length
+    const widthPercent = 100 / count
+    const leftPercent = index * widthPercent
+
+    return {
+      left: `${leftPercent}%`,
+      width: `${widthPercent}%`,
+    }
+  }
+
   // Get all-day events for a room
   function getAllDayEvents(room: Room): RoomEvent[] {
     return room.events.filter(event => event.all_day || !event.start_time)
@@ -225,7 +282,7 @@ export default function RoomsPage() {
               </span>
             </div>
 
-            {/* Stats & Filters */}
+            {/* Stats, Zoom & Filters */}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-4 text-sm">
                 <span className="flex items-center gap-1">
@@ -237,7 +294,27 @@ export default function RoomsPage() {
                   <span className="text-slate-600">{totalClasses} Classes</span>
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 border-l border-slate-200 pl-4">
+                <button
+                  onClick={() => setZoom(z => z === 'expanded' ? 'normal' : z === 'normal' ? 'compact' : 'compact')}
+                  className={`p-1.5 rounded transition-colors ${zoom === 'compact' ? 'bg-slate-200' : 'hover:bg-slate-100'}`}
+                  title="Zoom out"
+                >
+                  <MagnifyingGlassMinusIcon className="w-4 h-4 text-slate-600" />
+                </button>
+                <span className="text-xs text-slate-500 w-16 text-center capitalize">{zoom}</span>
+                <button
+                  onClick={() => setZoom(z => z === 'compact' ? 'normal' : z === 'normal' ? 'expanded' : 'expanded')}
+                  className={`p-1.5 rounded transition-colors ${zoom === 'expanded' ? 'bg-slate-200' : 'hover:bg-slate-100'}`}
+                  title="Zoom in"
+                >
+                  <MagnifyingGlassPlusIcon className="w-4 h-4 text-slate-600" />
+                </button>
+              </div>
+              
+              <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
                 <FunnelIcon className="w-4 h-4 text-slate-400" />
                 <select
                   value={selectedType}
@@ -271,21 +348,22 @@ export default function RoomsPage() {
             animate={{ opacity: 1 }}
             className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto"
           >
-            <table className="w-full border-collapse min-w-[800px]">
+            <table className="border-collapse" style={{ minWidth: `${60 + rooms.length * colWidth}px` }}>
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="p-2 text-left text-xs font-medium text-slate-500 border-b border-r border-slate-200 w-16 sticky left-0 bg-slate-50 z-10">
+                  <th className="p-2 text-left text-xs font-medium text-slate-500 border-b border-r border-slate-200 sticky left-0 bg-slate-50 z-10" style={{ width: 60 }}>
                     Time
                   </th>
                   {rooms.map(room => (
                     <th 
                       key={room.id} 
-                      className="p-2 text-center text-xs font-medium text-slate-700 border-b border-r border-slate-200 min-w-[120px]"
+                      className="p-2 text-center text-xs font-medium text-slate-700 border-b border-r border-slate-200"
+                      style={{ minWidth: colWidth, width: colWidth }}
                       title={room.description}
                     >
-                      <div>{room.abbreviation || room.description?.slice(0, 15)}</div>
-                      {room.capacity && (
-                        <div className="text-slate-400 font-normal">Cap: {room.capacity}</div>
+                      <div className="truncate">{room.abbreviation || room.description?.slice(0, 15)}</div>
+                      {zoom !== 'compact' && room.capacity && (
+                        <div className="text-slate-400 font-normal text-[10px]">Cap: {room.capacity}</div>
                       )}
                     </th>
                   ))}
@@ -306,7 +384,7 @@ export default function RoomsPage() {
                             <div
                               key={event.id}
                               onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}`)}
-                              className={`text-xs p-1 mb-1 rounded truncate cursor-pointer ${
+                              className={`${fontSize} p-1 mb-1 rounded truncate cursor-pointer ${
                                 event.is_class
                                   ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                                   : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
@@ -324,49 +402,55 @@ export default function RoomsPage() {
                 
                 {/* Time slot rows */}
                 {TIME_SLOTS.map(hour => (
-                  <tr key={hour} className={hour % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                    <td className={`p-2 text-xs text-slate-500 border-b border-r border-slate-200 sticky left-0 z-10 ${hour % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                  <tr key={hour} className={hour % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
+                    <td 
+                      className={`p-2 text-xs text-slate-500 border-b border-r border-slate-200 sticky left-0 z-10 ${hour % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                      style={{ height: rowHeight }}
+                    >
                       {formatHour(hour)}
                     </td>
                     {rooms.map(room => {
-                      const slotEvents = getEventsForSlot(room, hour)
+                      const startingEvents = getEventsStartingInSlot(room, hour)
                       return (
                         <td 
                           key={room.id} 
-                          className="p-0 border-b border-r border-slate-200 align-top h-12 relative"
+                          className="p-0 border-b border-r border-slate-200 align-top relative"
+                          style={{ height: rowHeight }}
                         >
-                          {slotEvents.map(event => {
-                            const startsHere = eventStartsInSlot(event, hour)
-                            if (!startsHere) return null // Only render where event starts
-                            
+                          {startingEvents.map(event => {
                             const startHour = parseTimeToHour(event.start_time) || hour
                             const endHour = parseTimeToHour(event.end_time) || startHour + 1
                             const duration = endHour - startHour
-                            const heightPx = Math.max(duration * 48, 20) // 48px per hour, min 20px
+                            const heightPx = Math.max(duration * rowHeight, 20)
+                            const position = getEventPosition(event, room.events)
                             
                             return (
                               <div
                                 key={event.id}
                                 onClick={() => event.is_class ? setSelectedClass(event) : router.push(`/event/${event.id}`)}
-                                className={`absolute left-0 right-0 mx-0.5 px-1 py-0.5 text-xs rounded overflow-hidden cursor-pointer ${
+                                className={`absolute px-1 py-0.5 ${fontSize} rounded-sm overflow-hidden cursor-pointer border-l-2 ${
                                   event.has_conflict
-                                    ? 'bg-red-100 text-red-700 border-l-2 border-red-500 hover:bg-red-200'
+                                    ? 'bg-red-100 text-red-700 border-red-500 hover:bg-red-200'
                                     : event.is_class
-                                    ? 'bg-purple-100 text-purple-700 border-l-2 border-purple-400 hover:bg-purple-200'
-                                    : 'bg-shefa-blue-100 text-shefa-blue-700 border-l-2 border-shefa-blue-400 hover:bg-shefa-blue-200'
+                                    ? 'bg-purple-100 text-purple-700 border-purple-400 hover:bg-purple-200'
+                                    : 'bg-shefa-blue-100 text-shefa-blue-700 border-shefa-blue-400 hover:bg-shefa-blue-200'
                                 }`}
                                 style={{ 
                                   height: `${heightPx}px`,
-                                  top: `${(startHour - hour) * 48}px`,
+                                  top: `${(startHour - hour) * rowHeight}px`,
+                                  left: position.left,
+                                  width: position.width,
                                   zIndex: 5,
                                 }}
-                                title={`${event.title} (${formatTime(event.start_time)} - ${formatTime(event.end_time)})`}
+                                title={`${event.title}\n${formatTime(event.start_time)} - ${formatTime(event.end_time)}${event.teacher ? `\n${event.teacher}` : ''}`}
                               >
-                                <div className="font-medium truncate">{event.title}</div>
-                                <div className="text-[10px] opacity-75">
-                                  {formatTime(event.start_time)}
-                                  {event.end_time && ` - ${formatTime(event.end_time)}`}
-                                </div>
+                                <div className="font-medium truncate leading-tight">{event.title}</div>
+                                {zoom !== 'compact' && (
+                                  <div className="text-[9px] opacity-75 leading-tight">
+                                    {formatTime(event.start_time)}
+                                    {event.end_time && ` - ${formatTime(event.end_time)}`}
+                                  </div>
+                                )}
                               </div>
                             )
                           })}
