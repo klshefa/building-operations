@@ -290,6 +290,16 @@ export async function GET(
           // Get class name using the internal ID
           const className = classNamesMap[internalId] || schedule.block?.description || 'Class'
           
+          // Debug: capture matched rooms
+          if (!classDebug.matchedRooms) classDebug.matchedRooms = []
+          if (classDebug.matchedRooms.length < 5) {
+            classDebug.matchedRooms.push({
+              className,
+              scheduleRoomDesc,
+              scheduleRoomNumber
+            })
+          }
+          
           events.push({
             id: `class-${schedule.id}`,
             title: className,
