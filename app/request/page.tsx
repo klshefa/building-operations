@@ -265,6 +265,8 @@ export default function RequestPage() {
       const res = await fetch(`/api/resources/${selectedResource.id}/calendar?date=${date}`)
       if (res.ok) {
         const data = await res.json()
+        console.log('📅 Calendar Debug:', data.classDebug)
+        console.log('📅 Calendar Events:', data.events)
         setCalendarEvents(data.events || [])
       }
     } catch (err) {

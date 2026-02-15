@@ -164,10 +164,13 @@ export async function GET(
     }
     
     // 2. Get class schedules for this resource
+    let classDebug: any = { step: 'start' }
     try {
       const accessToken = await getClassSchedulesToken()
+      classDebug.step = 'got token'
       const dateObj = new Date(date + 'T12:00:00')
       const dayOfWeek = dateObj.getDay()
+      classDebug.dayOfWeek = dayOfWeek
       
       // Fetch class names and status - only include active/future classes
       const classNamesMap: Record<string, string> = {}
@@ -204,13 +207,16 @@ export async function GET(
         },
       })
       
+      classDebug.step = 'fetching schedules'
       if (scheduleRes.ok) {
         const scheduleData = await scheduleRes.json()
         const schedules = scheduleData.data || scheduleData || []
+        classDebug.totalSchedules = schedules.length
         
         const roomDesc = resource.description?.toLowerCase() || ''
         const roomAbbrev = resource.abbreviation?.toLowerCase() || ''
         const roomNumber = (resource.description || '').match(/^\d+/)?.[0] || ''
+        classDebug.roomInfo = { roomDesc, roomAbbrev, roomNumber }
         
         // Room grouping: 313 includes 313A, 313B; Ulam includes Ulam 1, Ulam 2; etc.
         const roomMatchesGroup = (scheduleRoomDesc: string, scheduleRoomNumber: string): boolean => {
@@ -245,6 +251,7 @@ export async function GET(
         }
         
         const seenKeys = new Set<string>()
+        let roomMatches = 0, dayMatches = 0, activeMatches = 0
         
         for (const schedule of schedules) {
           const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
@@ -252,10 +259,12 @@ export async function GET(
           
           // Check room grouping
           if (!roomMatchesGroup(scheduleRoomDesc, scheduleRoomNumber)) continue
+          roomMatches++
           
           // Check day pattern
           const dayPattern = schedule.day?.description || schedule.day?.abbreviation || ''
           if (!patternIncludesDay(dayPattern, dayOfWeek)) continue
+          dayMatches++
           
           // Dedupe
           const key = `${schedule.internal_class_id || schedule.class_id}-${scheduleRoomDesc}`
@@ -267,6 +276,7 @@ export async function GET(
           
           // Check if this class is active using internal_class_id
           if (!internalId || !activeClassIds.has(internalId)) continue
+          activeMatches++
           
           // Get class name using the internal ID
           const className = classNamesMap[internalId] || schedule.block?.description || 'Class'
@@ -280,9 +290,11 @@ export async function GET(
             type: 'class'
           })
         }
+        classDebug.matches = { roomMatches, dayMatches, activeMatches }
       }
     } catch (err: any) {
       console.error('Class schedule fetch failed:', err?.message || err)
+      classDebug.error = err?.message || String(err)
     }
     
     // 3. Get school-wide calendar events
@@ -320,7 +332,8 @@ export async function GET(
         abbreviation: resource.abbreviation
       },
       date,
-      events
+      events,
+      classDebug
     })
     
   } catch (error: any) {
