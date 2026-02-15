@@ -183,18 +183,15 @@ export async function GET(
         const classesData = await classesRes.json()
         const classes = classesData.data || classesData || []
         for (const cls of classes) {
-          const status = String(cls.status || '').toLowerCase()
-          // Only include active or future classes
-          if (status !== 'active' && status !== 'future') continue
+          // Status is an integer: skip if explicitly inactive (0)
+          if (cls.status === 0) continue
           
           const name = cls.name || cls.description || cls.course_name || ''
-          if (cls.class_id) {
-            classNamesMap[cls.class_id] = name
-            activeClassIds.add(cls.class_id)
-          }
-          if (cls.id) {
-            classNamesMap[String(cls.id)] = name
-            activeClassIds.add(String(cls.id))
+          // Use internal class ID (cls.id) - matches schedule.internal_class_id
+          if (cls.id != null) {
+            const internalId = String(cls.id)
+            classNamesMap[internalId] = name
+            activeClassIds.add(internalId)
           }
         }
       }
@@ -276,17 +273,14 @@ export async function GET(
           if (seenKeys.has(key)) continue
           seenKeys.add(key)
           
-          // Use internal_class_id (system-generated) as primary key - matches cls.id from /academics/classes
-          const internalId = schedule.internal_class_id ? String(schedule.internal_class_id) : ''
-          const userDefinedId = schedule.class_id || ''
+          // Use internal_class_id - matches cls.id from /academics/classes
+          const internalId = schedule.internal_class_id != null ? String(schedule.internal_class_id) : ''
           
-          // Check if this class is active/future using internal_class_id (primary) or class_id (fallback)
-          const isActive = activeClassIds.has(internalId) || activeClassIds.has(userDefinedId)
+          // Check if this class is active using internal_class_id
+          if (!internalId || !activeClassIds.has(internalId)) continue
           
-          if (!isActive) continue
-          
-          // Get class name using the ID that matched
-          const className = classNamesMap[internalId] || classNamesMap[userDefinedId] || schedule.block?.description || 'Class'
+          // Get class name using the internal ID
+          const className = classNamesMap[internalId] || schedule.block?.description || 'Class'
           
           events.push({
             id: `class-${schedule.id}`,

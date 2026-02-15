@@ -293,23 +293,20 @@ export async function GET(request: Request) {
         }
         
         for (const cls of classes) {
-          const status = String(cls.status || '').toLowerCase()
-          // Only include active or future classes
-          if (status !== 'active' && status !== 'future') continue
+          // Status is an integer: typically 1=active, check for active status values
+          // Include classes where status is 1 (active) or missing/null
+          const statusNum = cls.status
+          // Skip if status is explicitly set to an inactive value (commonly 0 or 2+)
+          // Status 1 is typically "active", 0 might be "inactive"
+          if (statusNum === 0) continue
           
           const name = cls.name || cls.description || cls.course_name || ''
-          // Add all possible ID fields
-          if (cls.class_id) {
-            classNamesMap[cls.class_id] = name
-            activeClassIds.add(cls.class_id)
-          }
-          if (cls.id) {
-            classNamesMap[String(cls.id)] = name
-            activeClassIds.add(String(cls.id))
-          }
-          if (cls.internal_class_id) {
-            classNamesMap[String(cls.internal_class_id)] = name
-            activeClassIds.add(String(cls.internal_class_id))
+          // Use internal class ID (cls.id) as the primary key
+          // This matches schedule.internal_class_id from Class Schedules API
+          if (cls.id != null) {
+            const internalId = String(cls.id)
+            classNamesMap[internalId] = name
+            activeClassIds.add(internalId)
           }
         }
         if (classes.length < 1000) break
@@ -385,9 +382,8 @@ export async function GET(request: Request) {
           
           if (classStart === null || classEnd === null) continue
           
-          // Use internal_class_id (system-generated) as primary key - matches cls.id from /academics/classes
-          const internalId = schedule.internal_class_id ? String(schedule.internal_class_id) : ''
-          const userDefinedId = schedule.class_id || ''
+          // Use internal_class_id - matches cls.id from /academics/classes
+          const internalId = schedule.internal_class_id != null ? String(schedule.internal_class_id) : ''
           
           // Capture first schedule that passes room+day for debug
           if (!sampleSchedule) {
@@ -396,20 +392,17 @@ export async function GET(request: Request) {
               class_id: schedule.class_id,
               internal_class_id: schedule.internal_class_id,
               internalIdUsed: internalId,
-              userDefinedIdUsed: userDefinedId,
               room: schedule.room?.description,
               day: schedule.day?.description
             }
           }
           
-          // Check if this class is active/future using internal_class_id (primary) or class_id (fallback)
-          const isActive = activeClassIds.has(internalId) || activeClassIds.has(userDefinedId)
-          
-          if (!isActive) continue
+          // Check if this class is active using internal_class_id
+          if (!internalId || !activeClassIds.has(internalId)) continue
           activeMatches++
           
-          // Get class name using the ID that matched
-          const className = classNamesMap[internalId] || classNamesMap[userDefinedId] || schedule.block?.description || 'Class'
+          // Get class name using the internal ID
+          const className = classNamesMap[internalId] || schedule.block?.description || 'Class'
           
           if (timesOverlap(requestStart, requestEnd, classStart, classEnd)) {
             timeOverlaps++
