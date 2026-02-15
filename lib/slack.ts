@@ -79,6 +79,8 @@ async function openDMConversation(userId: string): Promise<string | null> {
   const token = process.env.SLACK_BOT_TOKEN
   if (!token) return null
 
+  console.log(`[Slack] Opening DM conversation with user: ${userId}`)
+
   try {
     const response = await fetch(`${SLACK_API_BASE}/conversations.open`, {
       method: 'POST',
@@ -90,12 +92,14 @@ async function openDMConversation(userId: string): Promise<string | null> {
     })
 
     const data: SlackResponse = await response.json()
+    console.log(`[Slack] conversations.open response:`, JSON.stringify(data, null, 2))
     
     if (!data.ok) {
       console.error(`[Slack] conversations.open error: ${data.error}`)
       return null
     }
 
+    console.log(`[Slack] DM channel opened: ${data.channel?.id}`)
     return data.channel?.id || null
   } catch (error) {
     console.error('[Slack] conversations.open failed:', error)
@@ -117,6 +121,8 @@ export async function sendSlackDM(
     return false
   }
 
+  console.log(`[Slack] sendSlackDM to user: ${userId}`)
+
   try {
     // Open DM conversation first
     const channelId = await openDMConversation(userId)
@@ -134,6 +140,8 @@ export async function sendSlackDM(
       body.blocks = blocks
     }
 
+    console.log(`[Slack] Sending message to channel: ${channelId}`)
+
     const response = await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
       method: 'POST',
       headers: {
@@ -144,12 +152,14 @@ export async function sendSlackDM(
     })
 
     const data: SlackResponse = await response.json()
+    console.log(`[Slack] chat.postMessage response:`, JSON.stringify(data, null, 2))
     
     if (!data.ok) {
       console.error(`[Slack] chat.postMessage error: ${data.error}`)
       return false
     }
 
+    console.log(`[Slack] Message sent successfully!`)
     return true
   } catch (error) {
     console.error('[Slack] sendDM failed:', error)
