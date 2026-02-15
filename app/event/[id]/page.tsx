@@ -312,11 +312,19 @@ export default function EventDetailPage() {
       
       setEvent(result.data)
       
-      // Track initial mentions for each notes field
+      // Track initial mentions for each notes field (including extra fields)
       const mentions: Record<string, string[]> = {}
       mentions['general_notes'] = parseMentionEmails(result.data.general_notes || '')
       teamSections.forEach(section => {
         mentions[section.notesKey] = parseMentionEmails(result.data[section.notesKey] || '')
+        // Also track extra textarea fields
+        if (section.extraFields) {
+          section.extraFields.forEach(field => {
+            if (field.type === 'textarea') {
+              mentions[field.key] = parseMentionEmails(result.data[field.key] || '')
+            }
+          })
+        }
       })
       setInitialMentions(mentions)
       
@@ -430,11 +438,19 @@ export default function EventDetailPage() {
           await sendNewMentionNotifications()
         }
         
-        // Update initial mentions to current state
+        // Update initial mentions to current state (including extra fields)
         const mentions: Record<string, string[]> = {}
         mentions['general_notes'] = parseMentionEmails(event.general_notes || '')
         teamSections.forEach(section => {
           mentions[section.notesKey] = parseMentionEmails((event as any)[section.notesKey] || '')
+          // Also track extra textarea fields
+          if (section.extraFields) {
+            section.extraFields.forEach(field => {
+              if (field.type === 'textarea') {
+                mentions[field.key] = parseMentionEmails((event as any)[field.key] || '')
+              }
+            })
+          }
         })
         setInitialMentions(mentions)
         
@@ -455,10 +471,16 @@ export default function EventDetailPage() {
       return
     }
     
-    // Check each notes field for new mentions
-    const noteFields = [
+    // Check each notes field for new mentions (including extra textarea fields)
+    const noteFields: { key: string; type: string }[] = [
       { key: 'general_notes', type: 'general' },
-      ...teamSections.map(s => ({ key: s.notesKey, type: s.id }))
+      ...teamSections.map(s => ({ key: s.notesKey, type: s.id })),
+      // Add extra textarea fields from team sections
+      ...teamSections.flatMap(s => 
+        (s.extraFields || [])
+          .filter(f => f.type === 'textarea')
+          .map(f => ({ key: f.key as string, type: `${s.id}_${f.key}` }))
+      )
     ]
     
     for (const field of noteFields) {
@@ -1075,16 +1097,13 @@ export default function EventDetailPage() {
                                 <span className="text-sm text-slate-700">{field.label}</span>
                               </label>
                             ) : field.type === 'textarea' ? (
-                              <>
-                                <label className="text-sm text-slate-700 font-medium">{field.label}</label>
-                                <textarea
-                                  value={(event[field.key] as string) || ''}
-                                  onChange={(e) => updateField(field.key, e.target.value)}
-                                  placeholder={`Enter ${field.label.toLowerCase()}...`}
-                                  rows={3}
-                                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm bg-white"
-                                />
-                              </>
+                              <MentionInput
+                                label={field.label}
+                                value={(event[field.key] as string) || ''}
+                                onChange={(value) => updateField(field.key, value)}
+                                placeholder={`Enter ${field.label.toLowerCase()}... Type @ to mention someone`}
+                                rows={3}
+                              />
                             ) : (
                               <>
                                 <label className="text-sm text-slate-700 font-medium">{field.label}</label>

@@ -249,12 +249,16 @@ export async function sendMentionNotification({
     })
   }
 
-  // Add the note content
+  // Add the note content (clean up mention format for display)
+  const cleanedNote = noteContent
+    .replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')  // @[Name](email) -> @Name
+    .replace(/\n/g, '\n>')
+  
   blocks.push({
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `*Note:*\n>${noteContent.replace(/\n/g, '\n>')}`,
+      text: `*Note:*\n>${cleanedNote}`,
     },
   })
 
