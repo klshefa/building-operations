@@ -169,8 +169,9 @@ export async function GET(
       const dateObj = new Date(date + 'T12:00:00')
       const dayOfWeek = dateObj.getDay()
       
-      // Fetch class names
+      // Fetch class names and status - only include active/future classes
       const classNamesMap: Record<string, string> = {}
+      const activeClassIds = new Set<string>()
       const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes?X-Page-Size=1000`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -182,9 +183,19 @@ export async function GET(
         const classesData = await classesRes.json()
         const classes = classesData.data || classesData || []
         for (const cls of classes) {
+          const status = (cls.status || '').toLowerCase()
+          // Only include active or future classes
+          if (status !== 'active' && status !== 'future') continue
+          
           const name = cls.name || cls.description || cls.course_name || ''
-          if (cls.class_id) classNamesMap[cls.class_id] = name
-          if (cls.id) classNamesMap[String(cls.id)] = name
+          if (cls.class_id) {
+            classNamesMap[cls.class_id] = name
+            activeClassIds.add(cls.class_id)
+          }
+          if (cls.id) {
+            classNamesMap[String(cls.id)] = name
+            activeClassIds.add(String(cls.id))
+          }
         }
       }
       
@@ -232,10 +243,11 @@ export async function GET(
           seenKeys.add(key)
           
           const classId = schedule.class_id || String(schedule.internal_class_id) || ''
-          const className = classNamesMap[classId] || schedule.block?.description || 'Class'
           
-          // Skip archived/old classes
-          if (className.toLowerCase().includes(' old') || className.toLowerCase().endsWith(' old')) continue
+          // Skip classes that aren't active/future
+          if (!activeClassIds.has(classId)) continue
+          
+          const className = classNamesMap[classId] || schedule.block?.description || 'Class'
           
           events.push({
             id: `class-${schedule.id}`,

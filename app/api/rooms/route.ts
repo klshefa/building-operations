@@ -206,8 +206,9 @@ export async function GET(request: Request) {
       try {
         const accessToken = await getClassSchedulesToken()
         
-        // First, fetch all classes to get their names
+        // First, fetch all classes to get their names and status
         const classNamesMap: Record<string, string> = {}
+        const activeClassIds = new Set<string>()
         let classPage = 1
         while (classPage <= 10) {
           const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
@@ -225,10 +226,20 @@ export async function GET(request: Request) {
           const classes = classesData.data || classesData || []
           
           for (const cls of classes) {
+            const status = (cls.status || '').toLowerCase()
+            // Only include active or future classes
+            if (status !== 'active' && status !== 'future') continue
+            
             // Map both class_id (string) and id to the name
             const name = cls.name || cls.description || cls.course_name || ''
-            if (cls.class_id) classNamesMap[cls.class_id] = name
-            if (cls.id) classNamesMap[String(cls.id)] = name
+            if (cls.class_id) {
+              classNamesMap[cls.class_id] = name
+              activeClassIds.add(cls.class_id)
+            }
+            if (cls.id) {
+              classNamesMap[String(cls.id)] = name
+              activeClassIds.add(String(cls.id))
+            }
           }
           
           if (classes.length < 1000) break
@@ -337,12 +348,13 @@ export async function GET(request: Request) {
           
           // Look up the actual class name from our map
           const classId = schedule.class_id || String(schedule.internal_class_id) || ''
+          
+          // Skip classes that aren't active/future
+          if (!activeClassIds.has(classId)) continue
+          
           const className = classNamesMap[classId] || 
                            schedule.block?.description || 
                            'Class'
-          
-          // Skip archived/old classes
-          if (className.toLowerCase().includes(' old') || className.toLowerCase().endsWith(' old')) continue
           
           // Extract teacher info
           const teacher = schedule.primary_teacher_name && schedule.primary_teacher_name !== 'None'

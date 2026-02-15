@@ -243,8 +243,9 @@ export async function GET(request: Request) {
       const dateObj = new Date(date + 'T12:00:00')
       const dayOfWeek = dateObj.getDay()
       
-      // Fetch class names
+      // Fetch class names and status - only include active/future classes
       const classNamesMap: Record<string, string> = {}
+      const activeClassIds = new Set<string>()
       let classPage = 1
       while (classPage <= 5) {
         const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
@@ -259,9 +260,19 @@ export async function GET(request: Request) {
         const classesData = await classesRes.json()
         const classes = classesData.data || classesData || []
         for (const cls of classes) {
+          const status = (cls.status || '').toLowerCase()
+          // Only include active or future classes
+          if (status !== 'active' && status !== 'future') continue
+          
           const name = cls.name || cls.description || cls.course_name || ''
-          if (cls.class_id) classNamesMap[cls.class_id] = name
-          if (cls.id) classNamesMap[String(cls.id)] = name
+          if (cls.class_id) {
+            classNamesMap[cls.class_id] = name
+            activeClassIds.add(cls.class_id)
+          }
+          if (cls.id) {
+            classNamesMap[String(cls.id)] = name
+            activeClassIds.add(String(cls.id))
+          }
         }
         if (classes.length < 1000) break
         classPage++
@@ -319,10 +330,11 @@ export async function GET(request: Request) {
           if (classStart === null || classEnd === null) continue
           
           const classId = schedule.class_id || String(schedule.internal_class_id) || ''
-          const className = classNamesMap[classId] || schedule.block?.description || 'Class'
           
-          // Skip archived/old classes
-          if (className.toLowerCase().includes(' old') || className.toLowerCase().endsWith(' old')) continue
+          // Skip classes that aren't active/future
+          if (!activeClassIds.has(classId)) continue
+          
+          const className = classNamesMap[classId] || schedule.block?.description || 'Class'
           
           if (timesOverlap(requestStart, requestEnd, classStart, classEnd)) {
             conflicts.push({
