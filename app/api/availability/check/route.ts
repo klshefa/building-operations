@@ -280,46 +280,36 @@ export async function GET(request: Request) {
     
     // 1.5 Check Veracross reservations directly from API
     const checkedReservationIds = new Set<string>()
-    const resourceDesc = resource?.description?.toLowerCase() || ''
-    const resourceAbbr = resource?.abbreviation?.toLowerCase() || ''
     
     try {
       const reservationsToken = await getReservationsToken()
-      // Fetch ALL reservations for this date, then filter by resource
-      const reservationsRes = await fetch(
-        `${VERACROSS_API_BASE}/resource_reservations/reservations?start_date=${date}&end_date=${date}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${reservationsToken}`,
-            'Accept': 'application/json',
-            'X-Page-Size': '500',
-          },
-        }
-      )
+      // Simple: fetch reservations for THIS resource on THIS date
+      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&start_date=${date}&end_date=${date}`
+      console.log(`[Availability] Fetching Veracross reservations: ${url}`)
+      
+      const reservationsRes = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${reservationsToken}`,
+          'Accept': 'application/json',
+          'X-Page-Size': '100',
+        },
+      })
+      
+      console.log(`[Availability] Veracross reservations response status: ${reservationsRes.status}`)
       
       if (reservationsRes.ok) {
         const reservationsData = await reservationsRes.json()
-        const allReservations = reservationsData.data || reservationsData || []
-        console.log(`[Availability] Fetched ${allReservations.length} total Veracross reservations for ${date}`)
+        console.log(`[Availability] Veracross raw response:`, JSON.stringify(reservationsData).substring(0, 500))
         
-        // Filter reservations that match this resource
-        let matchCount = 0
-        for (const res of allReservations) {
-          // Match by resource name
-          const resResourceName = (res.resource || res.resource_description || res.resource_name || '').toLowerCase()
-          const resResourceId = res.resource_id
-          
-          // Check if this reservation matches our resource
-          const matchesById = resResourceId === parseInt(resourceId)
-          const matchesByName = resourceDesc && resResourceName.includes(resourceDesc)
-          const matchesByAbbr = resourceAbbr && resResourceName.includes(resourceAbbr)
-          const matchesByNameReverse = resourceDesc && resourceDesc.includes(resResourceName) && resResourceName.length > 3
-          
-          if (!matchesById && !matchesByName && !matchesByAbbr && !matchesByNameReverse) {
-            continue
-          }
-          
-          matchCount++
+        const reservations = reservationsData.data || reservationsData || []
+        console.log(`[Availability] Found ${reservations.length} Veracross reservations for resource ${resourceId} on ${date}`)
+        
+        // Log first reservation to see structure
+        if (reservations.length > 0) {
+          console.log(`[Availability] First reservation:`, JSON.stringify(reservations[0]))
+        }
+        
+        for (const res of reservations) {
           const resId = res.resource_reservation_id || res.id
           if (checkedReservationIds.has(String(resId))) continue
           checkedReservationIds.add(String(resId))
@@ -327,17 +317,16 @@ export async function GET(request: Request) {
           const resStart = parseTimeToMinutes(res.start_time)
           const resEnd = parseTimeToMinutes(res.end_time)
           
-          if (resStart === null || resEnd === null) continue
+          console.log(`[Availability] Checking reservation ${resId}: ${res.start_time}-${res.end_time} vs requested ${startTime}-${endTime}`)
+          
+          if (resStart === null || resEnd === null) {
+            console.log(`[Availability] Skipping - could not parse times`)
+            continue
+          }
           
           if (timesOverlap(requestStart, requestEnd, resStart, resEnd)) {
             const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
-            console.log('[Availability] CONFLICT from Veracross reservation:', {
-              id: resId,
-              title: resTitle,
-              resource: resResourceName,
-              start_time: res.start_time,
-              end_time: res.end_time
-            })
+            console.log(`[Availability] CONFLICT FOUND: ${resTitle}`)
             conflicts.push({
               type: 'conflict',
               title: resTitle,
@@ -347,10 +336,9 @@ export async function GET(request: Request) {
             })
           }
         }
-        console.log(`[Availability] Matched ${matchCount} reservations for resource "${resource?.description}"`)
       } else {
         const errorText = await reservationsRes.text()
-        console.log(`[Availability] Failed to fetch Veracross reservations: ${reservationsRes.status} - ${errorText}`)
+        console.log(`[Availability] Veracross API error: ${reservationsRes.status} - ${errorText}`)
       }
     } catch (err) {
       console.error('[Availability] Error fetching Veracross reservations:', err)
