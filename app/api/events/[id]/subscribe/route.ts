@@ -27,6 +27,14 @@ export async function GET(
       )
     }
     
+    // Veracross-only events (vc-res-*) don't support subscriptions
+    if (id.startsWith('vc-res-')) {
+      return NextResponse.json({
+        subscribed: false,
+        notSupported: true
+      })
+    }
+    
     const supabase = createAdminClient()
     
     const { data, error } = await supabase
@@ -69,6 +77,14 @@ export async function POST(
     if (!email) {
       return NextResponse.json(
         { error: 'email is required' },
+        { status: 400 }
+      )
+    }
+    
+    // Veracross-only events (vc-res-*) don't support subscriptions
+    if (id.startsWith('vc-res-')) {
+      return NextResponse.json(
+        { error: 'Subscriptions are not available for Veracross-only events' },
         { status: 400 }
       )
     }
@@ -154,6 +170,14 @@ export async function DELETE(
     if (!email) {
       return NextResponse.json(
         { error: 'email parameter is required' },
+        { status: 400 }
+      )
+    }
+    
+    // Veracross-only events (vc-res-*) don't support subscriptions
+    if (id.startsWith('vc-res-')) {
+      return NextResponse.json(
+        { error: 'Subscriptions are not available for Veracross-only events' },
         { status: 400 }
       )
     }
