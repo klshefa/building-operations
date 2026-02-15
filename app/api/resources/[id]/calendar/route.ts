@@ -192,35 +192,52 @@ export async function GET(
     
     // 2. Get Veracross reservations directly from API
     const existingEventIds = new Set(events.map(e => e.id))
+    const resourceDesc = resource?.description?.toLowerCase() || ''
+    const resourceAbbr = resource?.abbreviation?.toLowerCase() || ''
+    
     try {
       const reservationsToken = await getReservationsToken()
-      // Fetch reservations for this resource on this date
+      // Fetch ALL reservations for this date range, then filter by resource
       const reservationsRes = await fetch(
-        `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&start_date=${date}&end_date=${date}`,
+        `${VERACROSS_API_BASE}/resource_reservations/reservations?start_date=${date}&end_date=${date}`,
         {
           headers: {
             'Authorization': `Bearer ${reservationsToken}`,
             'Accept': 'application/json',
-            'X-Page-Size': '100',
+            'X-Page-Size': '500',
           },
         }
       )
       
       if (reservationsRes.ok) {
         const reservationsData = await reservationsRes.json()
-        const reservations = reservationsData.data || reservationsData || []
-        console.log(`[Calendar] Found ${reservations.length} Veracross reservations for resource ${resourceId} on ${date}`)
+        const allReservations = reservationsData.data || reservationsData || []
+        console.log(`[Calendar] Fetched ${allReservations.length} total Veracross reservations for ${date}`)
         
-        for (const res of reservations) {
+        // Filter reservations that match this resource
+        let matchCount = 0
+        for (const res of allReservations) {
+          // Match by resource name - check resource field or resource_description
+          const resResourceName = (res.resource || res.resource_description || res.resource_name || '').toLowerCase()
+          const resResourceId = res.resource_id
+          
+          // Check if this reservation matches our resource
+          const matchesById = resResourceId === resourceId
+          const matchesByName = resourceDesc && resResourceName.includes(resourceDesc)
+          const matchesByAbbr = resourceAbbr && resResourceName.includes(resourceAbbr)
+          const matchesByNameReverse = resourceDesc && resourceDesc.includes(resResourceName) && resResourceName.length > 3
+          
+          if (!matchesById && !matchesByName && !matchesByAbbr && !matchesByNameReverse) {
+            continue
+          }
+          
+          matchCount++
           const resId = `vc-res-${res.resource_reservation_id || res.id}`
-          // Skip if we already have this reservation from ops_events (via veracross_reservation_id)
+          
+          // Skip if we already have this reservation
           if (existingEventIds.has(resId)) continue
           
-          // Check if any ops_event already has this veracross_reservation_id
-          const alreadyInOpsEvents = (opsEvents || []).some(
-            e => e.id === resId || events.some(ev => ev.id === resId)
-          )
-          if (alreadyInOpsEvents) continue
+          console.log(`[Calendar] Adding Veracross reservation: ${res.notes || res.description || 'Reservation'} (${res.start_time}-${res.end_time})`)
           
           events.push({
             id: resId,
@@ -233,8 +250,10 @@ export async function GET(
           })
           existingEventIds.add(resId)
         }
+        console.log(`[Calendar] Matched ${matchCount} reservations for resource "${resource?.description}"`)
       } else {
-        console.log(`[Calendar] Failed to fetch Veracross reservations: ${reservationsRes.status}`)
+        const errorText = await reservationsRes.text()
+        console.log(`[Calendar] Failed to fetch Veracross reservations: ${reservationsRes.status} - ${errorText}`)
       }
     } catch (err) {
       console.error('[Calendar] Error fetching Veracross reservations:', err)
