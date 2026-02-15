@@ -39,6 +39,37 @@ async function getReservationsToken(): Promise<string> {
   return data.access_token
 }
 
+// Convert time to minutes for comparison
+function timeToMinutes(timeStr: string | null | undefined): number | null {
+  if (!timeStr) return null
+  const str = timeStr.toLowerCase().trim()
+  
+  // ISO format: "1900-01-01T08:10:00Z"
+  const isoMatch = str.match(/t(\d{2}):(\d{2})/)
+  if (isoMatch) {
+    return parseInt(isoMatch[1]) * 60 + parseInt(isoMatch[2])
+  }
+  
+  // 12-hour format: "9:00 am", "10:30 pm"
+  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(am|pm)/)
+  if (ampmMatch) {
+    let hours = parseInt(ampmMatch[1])
+    const mins = parseInt(ampmMatch[2])
+    const period = ampmMatch[3]
+    if (period === 'pm' && hours !== 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    return hours * 60 + mins
+  }
+  
+  // 24-hour format: "14:30" or "14:30:00"
+  const h24Match = str.match(/^(\d{1,2}):(\d{2})/)
+  if (h24Match) {
+    return parseInt(h24Match[1]) * 60 + parseInt(h24Match[2])
+  }
+  
+  return null
+}
+
 // Format time for display
 function formatTimeDisplay(timeStr: string | null | undefined): string {
   if (!timeStr) return ''
@@ -301,27 +332,67 @@ export async function GET(
           }
         }
         
-        // Try to find matching ops_event by title + date + resource (for events created before ID tracking)
+        // Try to find matching ops_event by title + date (for events created before ID tracking)
         const vcTitle = vcRes.notes || vcRes.description || vcRes.name || ''
         const vcDate = vcRes.start_date
         
         if (vcTitle && vcDate) {
-          console.log(`[Event API] Trying to match by title="${vcTitle}" date="${vcDate}" resource=${resourceId}`)
+          console.log(`[Event API] Trying to match by title="${vcTitle}" date="${vcDate}" resource=${resourceId} location="${locationName}"`)
           
-          let matchQuery = supabase
+          // Debug: List all ops_events on this date
+          const { data: allEventsOnDate } = await supabase
+            .from('ops_events')
+            .select('id, title, location, start_time, end_time, veracross_reservation_id')
+            .eq('start_date', vcDate)
+          console.log(`[Event API] All ops_events on ${vcDate}:`, JSON.stringify(allEventsOnDate, null, 2))
+          
+          // First try: exact title match on date
+          let { data: matchedEvents } = await supabase
             .from('ops_events')
             .select('*')
             .eq('start_date', vcDate)
-            .ilike('title', vcTitle)
+            .ilike('title', vcTitle.trim())
           
-          if (resourceId) {
-            matchQuery = matchQuery.eq('resource_id', resourceId)
+          console.log(`[Event API] Exact title match found: ${matchedEvents?.length || 0}`)
+          
+          // Second try: partial title match (title contains the VC title)
+          if (!matchedEvents || matchedEvents.length === 0) {
+            const { data: partialMatches } = await supabase
+              .from('ops_events')
+              .select('*')
+              .eq('start_date', vcDate)
+              .ilike('title', `%${vcTitle.trim()}%`)
+            
+            matchedEvents = partialMatches
+            console.log(`[Event API] Partial title match found: ${matchedEvents?.length || 0}`)
           }
           
-          const { data: matchedEvents } = await matchQuery
+          // Third try: match by location + date + approximate time
+          if ((!matchedEvents || matchedEvents.length === 0) && locationName) {
+            const { data: locationMatches } = await supabase
+              .from('ops_events')
+              .select('*')
+              .eq('start_date', vcDate)
+              .ilike('location', `%${locationName}%`)
+            
+            // Filter by time overlap
+            if (locationMatches && locationMatches.length > 0) {
+              const vcStartMins = timeToMinutes(vcRes.start_time)
+              const vcEndMins = timeToMinutes(vcRes.end_time)
+              
+              matchedEvents = locationMatches.filter(evt => {
+                const evtStartMins = timeToMinutes(evt.start_time)
+                const evtEndMins = timeToMinutes(evt.end_time)
+                if (evtStartMins === null || evtEndMins === null || vcStartMins === null || vcEndMins === null) return false
+                // Check if times match within 5 minutes
+                return Math.abs(evtStartMins - vcStartMins) <= 5 && Math.abs(evtEndMins - vcEndMins) <= 5
+              })
+              console.log(`[Event API] Location+time match found: ${matchedEvents?.length || 0}`)
+            }
+          }
           
           if (matchedEvents && matchedEvents.length > 0) {
-            console.log(`[Event API] Found matching ops_event by title/date: ${matchedEvents[0].id}`)
+            console.log(`[Event API] Found matching ops_event: ${matchedEvents[0].id} title="${matchedEvents[0].title}"`)
             
             // Update the ops_event with the veracross_reservation_id for future lookups
             const { error: updateError } = await supabase
@@ -335,6 +406,8 @@ export async function GET(
             
             return NextResponse.json({ data: matchedEvents[0] })
           }
+          
+          console.log(`[Event API] No matching ops_event found for title="${vcTitle}" date="${vcDate}"`)
         }
         
         // Build ops_event-like object (read-only since no match found)
