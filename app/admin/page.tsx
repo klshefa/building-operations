@@ -22,6 +22,7 @@ import {
   CloudArrowDownIcon,
   MagnifyingGlassIcon,
   ClipboardDocumentListIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import type { AuditLogEntry } from '@/lib/types'
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
@@ -1078,6 +1079,29 @@ export default function AdminPage() {
                         <MagnifyingGlassIcon className="w-4 h-4" />
                         Open Availability Test
                       </Link>
+                    </div>
+
+                    {/* Weekly Digest Test */}
+                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                      <h3 className="text-sm font-medium text-amber-800 mb-2">Weekly Digest</h3>
+                      <p className="text-xs text-amber-600 mb-3">
+                        Manually trigger the weekly digest email. Normally runs every Monday at 7am.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => triggerSync('cron/weekly-digest')}
+                          disabled={syncing === 'cron/weekly-digest'}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <EnvelopeIcon className="w-4 h-4" />
+                          {syncing === 'cron/weekly-digest' ? 'Sending...' : 'Send Now'}
+                        </button>
+                        {syncStatus['cron/weekly-digest'] && (
+                          <span className={`text-sm ${syncStatus['cron/weekly-digest'].success ? 'text-green-600' : 'text-red-600'}`}>
+                            {syncStatus['cron/weekly-digest'].message}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>

@@ -132,6 +132,9 @@ export interface OpsUser {
   role: UserRole
   teams: TeamType[] // Which teams they belong to
   is_active: boolean
+  digest_enabled?: boolean // Whether user receives weekly digest email (default true)
+  notify_on_team_assignment?: boolean
+  notify_on_subscribed_changes?: boolean
   created_at: string
 }
 
