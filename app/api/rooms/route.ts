@@ -41,14 +41,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: resourceError.message }, { status: 500 })
     }
     
-    // Get events in date range that have a resource_id
+    // Get events in date range (with resource_id OR location)
     const { data: events, error: eventError } = await supabase
       .from('ops_events')
       .select('id, title, start_date, end_date, start_time, end_time, all_day, location, resource_id, is_hidden, has_conflict')
       .gte('start_date', startDate)
       .lte('start_date', endDate)
       .eq('is_hidden', false)
-      .not('resource_id', 'is', null)
       .order('start_date')
       .order('start_time')
     
@@ -56,14 +55,60 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: eventError.message }, { status: 500 })
     }
     
-    // Group events by resource
+    // Build lookup maps for matching location text to resources
+    const resourceByDescription: Record<string, number> = {}
+    const resourceByAbbreviation: Record<string, number> = {}
+    for (const r of resources || []) {
+      if (r.description) {
+        resourceByDescription[r.description.toLowerCase()] = r.id
+      }
+      if (r.abbreviation) {
+        resourceByAbbreviation[r.abbreviation.toLowerCase()] = r.id
+      }
+    }
+    
+    // Group events by resource (match by resource_id OR location text)
     const eventsByResource: Record<number, typeof events> = {}
     for (const event of events || []) {
-      if (event.resource_id) {
-        if (!eventsByResource[event.resource_id]) {
-          eventsByResource[event.resource_id] = []
+      let resourceId = event.resource_id
+      
+      // If no resource_id, try to match by location text
+      if (!resourceId && event.location) {
+        const locLower = event.location.toLowerCase().trim()
+        
+        // Try exact match on description
+        if (resourceByDescription[locLower]) {
+          resourceId = resourceByDescription[locLower]
         }
-        eventsByResource[event.resource_id].push(event)
+        // Try exact match on abbreviation
+        else if (resourceByAbbreviation[locLower]) {
+          resourceId = resourceByAbbreviation[locLower]
+        }
+        // Try partial match - location contains abbreviation
+        else {
+          for (const [abbr, id] of Object.entries(resourceByAbbreviation)) {
+            if (locLower.includes(abbr) || abbr.includes(locLower)) {
+              resourceId = id
+              break
+            }
+          }
+        }
+        // Try partial match - location contains description
+        if (!resourceId) {
+          for (const [desc, id] of Object.entries(resourceByDescription)) {
+            if (locLower.includes(desc) || desc.includes(locLower)) {
+              resourceId = id
+              break
+            }
+          }
+        }
+      }
+      
+      if (resourceId) {
+        if (!eventsByResource[resourceId]) {
+          eventsByResource[resourceId] = []
+        }
+        eventsByResource[resourceId].push(event)
       }
     }
     
