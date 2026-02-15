@@ -28,6 +28,7 @@ import {
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
 import { RelatedEvents } from '@/components/RelatedEvents'
 import { ResourceScheduleSidebar } from '@/components/ResourceScheduleSidebar'
+import { MentionInput, parseMentionEmails } from '@/components/MentionInput'
 
 const sourceLabels: Record<EventSource, string> = {
   bigquery_group: 'VC Event',
@@ -198,6 +199,10 @@ export default function EventDetailPage() {
   const [resources, setResources] = useState<{ id: number; description: string }[]>([])
   const [showLocationDropdown, setShowLocationDropdown] = useState(false)
   const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null)
+  
+  // Track initial mentions to detect new ones on save
+  const [initialMentions, setInitialMentions] = useState<Record<string, string[]>>({})
+  const [currentUser, setCurrentUser] = useState<{ email: string } | null>(null)
 
   useEffect(() => {
     fetchEvent()
@@ -307,6 +312,14 @@ export default function EventDetailPage() {
       
       setEvent(result.data)
       
+      // Track initial mentions for each notes field
+      const mentions: Record<string, string[]> = {}
+      mentions['general_notes'] = parseMentionEmails(result.data.general_notes || '')
+      teamSections.forEach(section => {
+        mentions[section.notesKey] = parseMentionEmails(result.data[section.notesKey] || '')
+      })
+      setInitialMentions(mentions)
+      
       // Set active tab to first assigned team
       const firstAssigned = teamSections.find(s => result.data[s.needsKey])
       if (firstAssigned) {
@@ -315,6 +328,13 @@ export default function EventDetailPage() {
       
       // Always check for conflicts based on location/time overlap
       fetchConflictingEvents(result.data)
+      
+      // Get current user email
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user?.email) {
+        setCurrentUser({ email: session.user.email })
+      }
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -404,6 +424,20 @@ export default function EventDetailPage() {
       } else {
         setSaveStatus('success')
         setHasChanges(false)
+        
+        // Check for new mentions and send Slack notifications
+        if (currentUser?.email) {
+          await sendNewMentionNotifications()
+        }
+        
+        // Update initial mentions to current state
+        const mentions: Record<string, string[]> = {}
+        mentions['general_notes'] = parseMentionEmails(event.general_notes || '')
+        teamSections.forEach(section => {
+          mentions[section.notesKey] = parseMentionEmails((event as any)[section.notesKey] || '')
+        })
+        setInitialMentions(mentions)
+        
         setTimeout(() => setSaveStatus('idle'), 3000)
       }
     } catch (error) {
@@ -411,6 +445,43 @@ export default function EventDetailPage() {
       console.error('Error:', error)
     } finally {
       setSaving(false)
+    }
+  }
+  
+  // Send Slack notifications for new mentions
+  async function sendNewMentionNotifications() {
+    if (!event || !currentUser?.email) return
+    
+    // Check each notes field for new mentions
+    const noteFields = [
+      { key: 'general_notes', type: 'general' },
+      ...teamSections.map(s => ({ key: s.notesKey, type: s.id }))
+    ]
+    
+    for (const field of noteFields) {
+      const currentMentions = parseMentionEmails((event as any)[field.key] || '')
+      const prevMentions = initialMentions[field.key] || []
+      
+      // Find new mentions (in current but not in previous)
+      const newMentions = currentMentions.filter(email => !prevMentions.includes(email))
+      
+      if (newMentions.length > 0) {
+        try {
+          await fetch('/api/slack/send-mention', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventId: event.id,
+              noteType: field.type,
+              noteContent: (event as any)[field.key] || '',
+              mentionedEmails: newMentions,
+              mentionedByEmail: currentUser.email,
+            }),
+          })
+        } catch (err) {
+          console.error('Failed to send mention notifications:', err)
+        }
+      }
     }
   }
 
@@ -819,13 +890,12 @@ export default function EventDetailPage() {
           {/* General Notes - moved up */}
           <div>
             <label className="text-sm text-slate-600 font-medium">General Notes</label>
-            <p className="text-xs text-slate-400 mb-2">Notes that apply to the entire event</p>
-            <textarea
+            <p className="text-xs text-slate-400 mb-2">Notes that apply to the entire event. Type @ to mention someone.</p>
+            <MentionInput
               value={event.general_notes || ''}
-              onChange={(e) => updateField('general_notes', e.target.value)}
-              placeholder="Add general notes about this event..."
+              onChange={(value) => updateField('general_notes', value)}
+              placeholder="Add general notes about this event... Type @ to mention someone"
               rows={4}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none resize-none"
             />
           </div>
 
@@ -998,12 +1068,12 @@ export default function EventDetailPage() {
                       <label className="text-sm text-slate-700 font-medium">
                         {activeSection.title} Notes
                       </label>
-                      <textarea
+                      <MentionInput
                         value={(event[activeSection.notesKey] as string) || ''}
-                        onChange={(e) => updateField(activeSection.notesKey, e.target.value)}
-                        placeholder={`Add notes for ${activeSection.title.toLowerCase()}...`}
+                        onChange={(value) => updateField(activeSection.notesKey, value)}
+                        placeholder={`Add notes for ${activeSection.title.toLowerCase()}... Type @ to mention someone`}
                         rows={4}
-                        className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-shefa-blue-500 focus:outline-none text-sm bg-white"
+                        className="mt-1"
                       />
                     </div>
                   </div>
