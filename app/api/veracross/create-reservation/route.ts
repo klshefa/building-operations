@@ -191,15 +191,53 @@ export async function POST(request: Request) {
     }
 
     // Extract reservation ID from response
-    const reservationId = responseData.data?.id || 
+    const reservationId = responseData.data?.resource_reservation_id || 
+                         responseData.data?.id || 
                          responseData.id || 
                          responseData.reservation_id ||
                          null
 
     console.log('Reservation created successfully:', reservationId)
 
-    // Log to audit
     const supabase = getSupabaseClient()
+    
+    // IMMEDIATELY create ops_events record so the slot shows as booked
+    // This prevents double-booking before BigQuery sync runs
+    let opsEventId: string | null = null
+    try {
+      const { data: newEvent, error: insertError } = await supabase
+        .from('ops_events')
+        .insert({
+          title: description,
+          start_date: start_date,
+          end_date: end_date || start_date,
+          start_time: start_time,
+          end_time: end_time,
+          resource_id: resource_id,
+          location: resource_name,
+          status: 'active',
+          requested_by: requestor_email,
+          requested_at: new Date().toISOString(),
+          veracross_reservation_id: reservationId?.toString(),
+          is_hidden: false,
+          has_conflict: false,
+          conflict_ok: false,
+          all_day: false,
+        })
+        .select('id')
+        .single()
+      
+      if (insertError) {
+        console.error('Failed to create ops_events record:', insertError)
+      } else {
+        opsEventId = newEvent?.id
+        console.log('Created ops_events record:', opsEventId)
+      }
+    } catch (err) {
+      console.error('ops_events insert failed:', err)
+    }
+
+    // Log to audit
     try {
       await supabase.from('ops_audit_log').insert({
         entity_type: 'veracross_reservation',
@@ -215,7 +253,8 @@ export async function POST(request: Request) {
           start_time,
           end_time,
           requestor_id,
-          veracross_reservation_id: reservationId
+          veracross_reservation_id: reservationId,
+          ops_event_id: opsEventId
         },
         api_route: '/api/veracross/create-reservation',
         http_method: 'POST'
@@ -227,6 +266,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       reservation_id: reservationId?.toString(),
+      ops_event_id: opsEventId,
       veracross_response: responseData
     } as CreateReservationResponse)
 
