@@ -216,8 +216,8 @@ export async function POST(request: Request) {
       resource_id: resource_id,
       location: resource_name,
       event_type: 'other',
-      primary_source: 'manual',
-      sources: ['manual'],
+      primary_source: 'bigquery_resource',  // It's a real Veracross reservation
+      sources: ['bigquery_resource'],
       source_events: [],
       is_hidden: false,
       has_conflict: false,
