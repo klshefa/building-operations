@@ -178,14 +178,24 @@ export async function GET(request: Request) {
     const conflicts: Conflict[] = []
     const warnings: Conflict[] = []
     
+    // Track veracross IDs to avoid duplicates between ops_events and Veracross API
+    const veracrossIdsInOpsEvents = new Set<string>()
+    
     // 1. Check ops_events for conflicts on same resource/date
     const { data: events, error: eventError } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, status, location')
+      .select('id, title, start_time, end_time, all_day, status, location, veracross_reservation_id')
       .eq('resource_id', parseInt(resourceId))
       .eq('start_date', date)
       .eq('is_hidden', false)
       .neq('status', 'cancelled')
+    
+    // Collect veracross IDs from ops_events for deduplication
+    for (const evt of events || []) {
+      if (evt.veracross_reservation_id) {
+        veracrossIdsInOpsEvents.add(String(evt.veracross_reservation_id))
+      }
+    }
     
     if (eventError) {
       console.error('Event query error:', eventError)
@@ -204,7 +214,7 @@ export async function GET(request: Request) {
     
     const { data: locationEvents } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, location, status')
+      .select('id, title, start_time, end_time, all_day, location, status, veracross_reservation_id')
       .eq('start_date', date)
       .eq('is_hidden', false)
       .neq('status', 'cancelled')
@@ -226,6 +236,10 @@ export async function GET(request: Request) {
           location: event.location,
           locationMatches
         })
+        // Track veracross ID from location-matched events too
+        if (event.veracross_reservation_id) {
+          veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
+        }
         allEvents.push(event)
       }
     }
@@ -319,8 +333,17 @@ export async function GET(request: Request) {
         
         for (const res of reservations) {
           const resId = res.resource_reservation_id || res.id
-          if (checkedReservationIds.has(String(resId))) continue
-          checkedReservationIds.add(String(resId))
+          const resIdStr = String(resId)
+          
+          // Skip if already processed
+          if (checkedReservationIds.has(resIdStr)) continue
+          checkedReservationIds.add(resIdStr)
+          
+          // Skip if we already have this reservation in ops_events (avoid duplicates)
+          if (veracrossIdsInOpsEvents.has(resIdStr)) {
+            console.log(`[Availability] Skipping VC reservation ${resIdStr} - already in ops_events`)
+            continue
+          }
           
           const resStart = parseTimeToMinutes(res.start_time)
           const resEnd = parseTimeToMinutes(res.end_time)
