@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 // Veracross API config
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
 const VERACROSS_TOKEN_URL = 'https://accounts.veracross.com/shefa/oauth/token'
-const CLASS_SCHEDULES_SCOPE = 'academics.class_schedules:list'
+const CLASS_SCHEDULES_SCOPE = 'academics.class_schedules:list academics.classes:list'
 
 function createAdminClient() {
   return createClient(
@@ -180,6 +180,37 @@ export async function GET(request: Request) {
     if (includeClasses) {
       try {
         const accessToken = await getClassSchedulesToken()
+        
+        // First, fetch all classes to get their names
+        const classNamesMap: Record<string, string> = {}
+        let classPage = 1
+        while (classPage <= 10) {
+          const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Accept': 'application/json',
+              'X-Page-Size': '1000',
+              'X-Page-Number': String(classPage),
+            },
+          })
+          
+          if (!classesRes.ok) break
+          
+          const classesData = await classesRes.json()
+          const classes = classesData.data || classesData || []
+          
+          for (const cls of classes) {
+            // Map both class_id (string) and id to the name
+            const name = cls.name || cls.description || cls.course_name || ''
+            if (cls.class_id) classNamesMap[cls.class_id] = name
+            if (cls.id) classNamesMap[String(cls.id)] = name
+          }
+          
+          if (classes.length < 1000) break
+          classPage++
+        }
+        
+        // Now fetch class schedules
         const apiUrl = `${VERACROSS_API_BASE}/academics/class_schedules`
         const allSchedules: any[] = []
         let currentPage = 1
@@ -233,29 +264,19 @@ export async function GET(request: Request) {
           if (!resourceId) continue
           
           // Get day pattern
-          const dayPattern = schedule.day?.name || schedule.day?.abbreviation || 
+          const dayPattern = schedule.day?.description || schedule.day?.abbreviation || 
                             schedule.day_name || schedule.day_of_week || ''
           
-          // Extract class name - try many possible field names
-          const className = schedule.class?.name || 
-                           schedule.class?.description ||
-                           schedule.class_name || 
-                           schedule.course?.name ||
-                           schedule.course?.description ||
-                           schedule.course_name ||
-                           schedule.section?.name ||
-                           schedule.section_name ||
-                           schedule.description ||
-                           schedule.name ||
+          // Look up the actual class name from our map
+          const classId = schedule.class_id || String(schedule.internal_class_id) || ''
+          const className = classNamesMap[classId] || 
+                           schedule.block?.description || 
                            'Class'
           
           // Extract teacher info
-          const teacher = schedule.teacher?.name_full ||
-                         schedule.teacher?.display_name ||
-                         schedule.teacher?.last_name ||
-                         schedule.teacher_name ||
-                         schedule.primary_teacher?.name_full ||
-                         ''
+          const teacher = schedule.primary_teacher_name && schedule.primary_teacher_name !== 'None'
+                         ? schedule.primary_teacher_name
+                         : ''
           
           // Expand to actual dates
           for (const date of datesInRange) {
