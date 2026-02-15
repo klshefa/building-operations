@@ -95,6 +95,12 @@ export interface OpsEvent {
   has_conflict: boolean
   conflict_ok: boolean
   conflict_notes?: string
+  status: 'active' | 'cancelled'
+  
+  // Self-service request tracking
+  requested_by?: string  // Email of requester
+  requested_at?: string  // When requested
+  veracross_reservation_id?: string  // Reservation ID from Veracross API
   
   // Source tracking
   source_events: string[] // Array of raw_event IDs that matched to this event

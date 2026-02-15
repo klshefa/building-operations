@@ -12,6 +12,7 @@ import {
   CalendarDaysIcon,
   ClockIcon,
   ArrowRightIcon,
+  UserPlusIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
@@ -22,6 +23,8 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
+  const [recentRequests, setRecentRequests] = useState<OpsEvent[]>([])
+  const [loadingRequests, setLoadingRequests] = useState(false)
 
   useEffect(() => {
     checkUser()
@@ -46,6 +49,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user) {
       fetchEvents()
+      fetchRecentRequests()
     }
   }, [user])
 
@@ -94,6 +98,20 @@ export default function DashboardPage() {
       console.error('Error fetching events:', err)
     }
     setLoadingEvents(false)
+  }
+
+  async function fetchRecentRequests() {
+    setLoadingRequests(true)
+    try {
+      const res = await fetch('/api/events/recent-requests')
+      if (res.ok) {
+        const { data } = await res.json()
+        setRecentRequests(data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching recent requests:', err)
+    }
+    setLoadingRequests(false)
   }
 
   // Show loading spinner while checking auth
@@ -183,6 +201,52 @@ export default function DashboardPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* Recently Requested Section */}
+        {recentRequests.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <UserPlusIcon className="w-5 h-5 text-purple-600" />
+                Recently Requested
+              </h2>
+              <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full">
+                Last 3 days
+              </span>
+            </div>
+            <div className="bg-white rounded-xl border border-purple-200 overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {recentRequests.map((event) => (
+                  <Link
+                    key={event.id}
+                    href={`/event/${event.id}`}
+                    className="flex items-center justify-between px-4 py-3 hover:bg-purple-50 transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-800">{event.title}</p>
+                      <p className="text-sm text-slate-500">
+                        {format(parseISO(event.start_date), 'EEE, MMM d')} • {event.start_time} - {event.end_time}
+                        {event.location && ` • ${event.location}`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-purple-600">
+                        Requested by
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        {(event as any).requested_by?.split('@')[0] || 'Unknown'}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {loadingEvents ? (
           <div className="flex items-center justify-center py-12">

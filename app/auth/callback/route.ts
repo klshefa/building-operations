@@ -6,6 +6,7 @@ import { getCookieDomain } from '@/lib/utils/cookieDomain'
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
+  const redirect = searchParams.get('redirect')
   const next = searchParams.get('next') ?? '/'
 
   if (code) {
@@ -54,6 +55,11 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/?error=unauthorized_domain`)
       }
 
+      // If redirecting to /request page, allow any @shefaschool.org user
+      if (redirect === '/request' || next.startsWith('/request')) {
+        return NextResponse.redirect(`${origin}${redirect || next}`)
+      }
+      
       // Check if user has access to Building Operations via ops_users
       const { data: accessData } = await supabase
         .from('ops_users')
