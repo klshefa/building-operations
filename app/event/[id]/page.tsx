@@ -488,23 +488,44 @@ export default function EventDetailPage() {
                 )}
               </button>
               
-              <button
-                onClick={saveEvent}
-                disabled={saving || !hasChanges}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  hasChanges
-                    ? 'bg-shefa-blue-600 text-white hover:bg-shefa-blue-700'
-                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                }`}
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
+              {!(event as any)?._vcReadOnly && (
+                <button
+                  onClick={saveEvent}
+                  disabled={saving || !hasChanges}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    hasChanges
+                      ? 'bg-shefa-blue-600 text-white hover:bg-shefa-blue-700'
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Veracross-only reservation banner */}
+        {(event as any)._vcReadOnly && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-amber-800">Veracross Reservation (Read-Only)</h3>
+                <p className="text-sm text-amber-700 mt-1">
+                  This reservation exists in Veracross but hasn't been synced to Building Operations yet. 
+                  You can view the details but cannot edit team assignments or add notes.
+                </p>
+                <p className="text-sm text-amber-600 mt-2">
+                  To manage this event, run a data sync from Admin → Data Sync → Resources to import it.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content - Left Column */}
           <div className="lg:col-span-2 space-y-6">
@@ -534,22 +555,35 @@ export default function EventDetailPage() {
                     Conflict
                   </span>
                 )}
+                {(event as any)._vcReadOnly && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                    Read-only (Veracross)
+                  </span>
+                )}
               </div>
               
-              <input
-                type="text"
-                value={event.title}
-                onChange={(e) => updateField('title', e.target.value)}
-                className="text-2xl font-bold text-slate-800 w-full border-0 border-b-2 border-transparent hover:border-slate-200 focus:border-shefa-blue-500 focus:outline-none transition-colors bg-transparent"
-              />
+              {(event as any)._vcReadOnly ? (
+                <h1 className="text-2xl font-bold text-slate-800">{event.title}</h1>
+              ) : (
+                <input
+                  type="text"
+                  value={event.title}
+                  onChange={(e) => updateField('title', e.target.value)}
+                  className="text-2xl font-bold text-slate-800 w-full border-0 border-b-2 border-transparent hover:border-slate-200 focus:border-shefa-blue-500 focus:outline-none transition-colors bg-transparent"
+                />
+              )}
               
-              <textarea
-                value={event.description || ''}
-                onChange={(e) => updateField('description', e.target.value)}
-                placeholder="Add a description..."
-                rows={2}
-                className="mt-2 text-slate-600 w-full border-0 border-b-2 border-transparent hover:border-slate-200 focus:border-shefa-blue-500 focus:outline-none transition-colors bg-transparent resize-none"
-              />
+              {(event as any)._vcReadOnly ? (
+                event.description && <p className="mt-2 text-slate-600">{event.description}</p>
+              ) : (
+                <textarea
+                  value={event.description || ''}
+                  onChange={(e) => updateField('description', e.target.value)}
+                  placeholder="Add a description..."
+                  rows={2}
+                  className="mt-2 text-slate-600 w-full border-0 border-b-2 border-transparent hover:border-slate-200 focus:border-shefa-blue-500 focus:outline-none transition-colors bg-transparent resize-none"
+                />
+              )}
               
               {/* Team indicators at top */}
               {assignedTeams.length > 0 && (

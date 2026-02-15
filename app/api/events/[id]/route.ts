@@ -6,12 +6,62 @@ import { logAudit, getChangedFields, extractEventAuditFields } from '@/lib/audit
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 
+// Veracross API config
+const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
+const VERACROSS_TOKEN_URL = 'https://accounts.veracross.com/shefa/oauth/token'
+const RESERVATIONS_SCOPE = 'resource_reservations.reservations:list'
+
 function createAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
+}
+
+async function getReservationsToken(): Promise<string> {
+  const response = await fetch(VERACROSS_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: process.env.VERACROSS_CLIENT_ID!,
+      client_secret: process.env.VERACROSS_CLIENT_SECRET!,
+      scope: RESERVATIONS_SCOPE,
+    }),
+  })
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get reservations token: ${response.status}`)
+  }
+  
+  const data = await response.json()
+  return data.access_token
+}
+
+// Format time for display
+function formatTimeDisplay(timeStr: string | null | undefined): string {
+  if (!timeStr) return ''
+  if (/am|pm/i.test(timeStr)) return timeStr
+  
+  // Parse ISO or 24h time
+  const isoMatch = timeStr.match(/T(\d{2}):(\d{2})/)
+  const h24Match = timeStr.match(/^(\d{1,2}):(\d{2})/)
+  
+  let hours: number, mins: number
+  if (isoMatch) {
+    hours = parseInt(isoMatch[1])
+    mins = parseInt(isoMatch[2])
+  } else if (h24Match) {
+    hours = parseInt(h24Match[1])
+    mins = parseInt(h24Match[2])
+  } else {
+    return timeStr
+  }
+  
+  const ampm = hours >= 12 ? 'pm' : 'am'
+  const hour = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)
+  return mins === 0 ? `${hour}:00 ${ampm}` : `${hour}:${String(mins).padStart(2, '0')} ${ampm}`
 }
 
 async function sendEmail(to: string[], subject: string, html: string) {
@@ -98,6 +148,80 @@ export async function GET(
   try {
     const supabase = createAdminClient()
     
+    // Check if this is a Veracross reservation ID (not in database)
+    if (id.startsWith('vc-res-')) {
+      const vcId = id.replace('vc-res-', '')
+      
+      try {
+        const token = await getReservationsToken()
+        const res = await fetch(`${VERACROSS_API_BASE}/resource_reservations/reservations/${vcId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        })
+        
+        if (!res.ok) {
+          return NextResponse.json({ error: 'Veracross reservation not found' }, { status: 404 })
+        }
+        
+        const vcData = await res.json()
+        const vcRes = vcData.data || vcData
+        
+        // Get resource name
+        const resourceId = vcRes.resource_id || vcRes.resource?.id
+        let locationName = vcRes.resource?.description || 'Unknown Location'
+        
+        if (resourceId) {
+          const { data: resource } = await supabase
+            .from('ops_resources')
+            .select('description')
+            .eq('id', resourceId)
+            .single()
+          if (resource?.description) {
+            locationName = resource.description
+          }
+        }
+        
+        // Build ops_event-like object
+        const data = {
+          id: id,
+          veracross_reservation_id: vcId,
+          title: vcRes.notes || vcRes.description || vcRes.name || 'Veracross Reservation',
+          description: vcRes.notes || null,
+          start_date: vcRes.start_date,
+          end_date: vcRes.end_date || vcRes.start_date,
+          start_time: formatTimeDisplay(vcRes.start_time),
+          end_time: formatTimeDisplay(vcRes.end_time),
+          all_day: false,
+          location: locationName,
+          resource_id: resourceId || null,
+          primary_source: 'bigquery_resource',
+          sources: ['bigquery_resource'],
+          is_hidden: false,
+          status: 'confirmed',
+          event_type: 'other',
+          created_at: vcRes.update_date || new Date().toISOString(),
+          updated_at: vcRes.update_date || new Date().toISOString(),
+          // Team assignments (none for VC reservations)
+          needs_program_director: false,
+          needs_office: false,
+          needs_it: false,
+          needs_security: false,
+          needs_facilities: false,
+          // Flag to indicate this is read-only
+          _isVcReservation: true,
+          _vcReadOnly: true,
+        }
+        
+        return NextResponse.json({ data })
+      } catch (vcError: any) {
+        console.error('Error fetching Veracross reservation:', vcError)
+        return NextResponse.json({ error: 'Failed to fetch Veracross reservation' }, { status: 500 })
+      }
+    }
+    
+    // Normal database lookup
     const { data, error } = await supabase
       .from('ops_events')
       .select('*')
