@@ -227,8 +227,8 @@ export async function GET(
           events.push({
             id: resId,
             title: res.notes || res.description || res.name || 'Reservation',
-            startTime: res.start_time,
-            endTime: res.end_time,
+            startTime: normalizeTime(res.start_time),
+            endTime: normalizeTime(res.end_time),
             allDay: false,
             type: 'reservation',
             source: 'veracross'
