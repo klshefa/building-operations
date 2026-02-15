@@ -320,10 +320,10 @@ export async function GET(request: Request) {
           if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') continue
           
           // DEBUG: Log C-06 Hebrew class specifically
-          const className = schedule.block?.description || schedule.class?.description || ''
-          if (className.toLowerCase().includes('hebrew') || className.toLowerCase().includes('c-06')) {
+          const debugClassName = schedule.block?.description || schedule.class?.description || ''
+          if (debugClassName.toLowerCase().includes('hebrew') || debugClassName.toLowerCase().includes('c-06')) {
             console.log('[Availability] FOUND HEBREW CLASS:', {
-              className,
+              className: debugClassName,
               scheduleRoomDesc,
               scheduleRoomAbbrev,
               scheduleRoomNumber,
