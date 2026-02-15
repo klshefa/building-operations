@@ -138,18 +138,18 @@ export async function GET(
     // 1. Get ops_events for this resource/date
     const { data: opsEvents, error: opsEventsError } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, location, status, resource_id')
+      .select('id, title, start_time, end_time, all_day, location, status, resource_id, veracross_reservation_id')
       .eq('resource_id', resourceId)
       .eq('start_date', date)
       .eq('is_hidden', false)
     
-    console.log(`[Calendar] Query: resource_id=${resourceId}, date=${date}`)
-    console.log(`[Calendar] Found ${opsEvents?.length || 0} ops_events, error:`, opsEventsError)
-    if (opsEvents?.length) {
-      console.log('[Calendar] ops_events:', opsEvents.map(e => ({ id: e.id, title: e.title, resource_id: e.resource_id })))
-    }
+    // Track veracross IDs we already have from ops_events to avoid duplicates
+    const veracrossIdsInOpsEvents = new Set<string>()
     
     for (const event of opsEvents || []) {
+      if (event.veracross_reservation_id) {
+        veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
+      }
       // Show cancelled events greyed out
       const title = event.status === 'cancelled' ? `[CANCELLED] ${event.title}` : event.title
       events.push({
@@ -169,7 +169,7 @@ export async function GET(
     
     const { data: locationEvents } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, location, status')
+      .select('id, title, start_time, end_time, all_day, location, status, veracross_reservation_id')
       .eq('start_date', date)
       .eq('is_hidden', false)
       .is('resource_id', null)
@@ -178,6 +178,9 @@ export async function GET(
       if (!event.location) continue
       const loc = event.location.toLowerCase()
       if (locationMatches.some(m => loc.includes(m.toLowerCase()) || m.toLowerCase().includes(loc))) {
+        if (event.veracross_reservation_id) {
+          veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
+        }
         const title = event.status === 'cancelled' ? `[CANCELLED] ${event.title}` : event.title
         events.push({
           id: event.id,
@@ -217,9 +220,15 @@ export async function GET(
         console.log(`[Calendar] Found ${reservations.length} Veracross reservations for resource ${resourceId} on ${date}`)
         
         for (const res of reservations) {
-          const resId = `vc-res-${res.resource_reservation_id || res.id}`
+          const vcResId = String(res.resource_reservation_id || res.id)
           
-          // Skip if we already have this event
+          // Skip if we already have this from ops_events (avoid duplicates)
+          if (veracrossIdsInOpsEvents.has(vcResId)) {
+            console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - already in ops_events`)
+            continue
+          }
+          
+          const resId = `vc-res-${vcResId}`
           if (existingEventIds.has(resId)) continue
           
           console.log(`[Calendar] Adding reservation: ${res.notes || res.description || 'Reservation'} at ${res.start_time}-${res.end_time}`)
