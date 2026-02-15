@@ -359,7 +359,13 @@ export default function RoomsPage() {
                       style={{ minWidth: colWidth, width: colWidth }}
                       title={room.description}
                     >
-                      <div className="truncate">{room.abbreviation || room.description?.slice(0, 15)}</div>
+                      <div className="truncate">{
+                        // Show description for named rooms (Beit Midrash, Ulam, etc.)
+                        // Show abbreviation for numbered rooms (301B, 302B, etc.)
+                        room.description && !/^\d/.test(room.description) 
+                          ? room.description 
+                          : (room.abbreviation || room.description?.slice(0, 15))
+                      }</div>
                       {zoom !== 'compact' && room.capacity && (
                         <div className="text-slate-400 font-normal text-[10px]">Cap: {room.capacity}</div>
                       )}
