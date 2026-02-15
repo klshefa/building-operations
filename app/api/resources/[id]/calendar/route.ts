@@ -149,6 +149,7 @@ export async function GET(
     for (const event of opsEvents || []) {
       if (event.veracross_reservation_id) {
         veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
+        console.log(`[Calendar] ops_events has veracross_reservation_id: ${event.veracross_reservation_id} for "${event.title}"`)
       }
       // Show cancelled events greyed out
       const title = event.status === 'cancelled' ? `[CANCELLED] ${event.title}` : event.title
@@ -219,8 +220,11 @@ export async function GET(
         const reservations = reservationsData.data || reservationsData || []
         console.log(`[Calendar] Found ${reservations.length} Veracross reservations for resource ${resourceId} on ${date}`)
         
+        console.log(`[Calendar] veracrossIdsInOpsEvents:`, Array.from(veracrossIdsInOpsEvents))
+        
         for (const res of reservations) {
           const vcResId = String(res.resource_reservation_id || res.id)
+          console.log(`[Calendar] Veracross reservation: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}"`)
           
           // Skip if we already have this from ops_events (avoid duplicates)
           if (veracrossIdsInOpsEvents.has(vcResId)) {
