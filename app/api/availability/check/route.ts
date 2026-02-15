@@ -181,13 +181,25 @@ export async function GET(request: Request) {
     
     // Combine and check for overlaps
     const allEvents = [...(events || [])]
+    
+    console.log('[Availability] ops_events by resource_id:', events?.length || 0)
+    console.log('[Availability] locationMatches for fuzzy:', locationMatches)
+    
     for (const event of locationEvents || []) {
       if (!event.location) continue
       const loc = event.location.toLowerCase()
-      if (locationMatches.some(m => loc.includes(m.toLowerCase()) || m.toLowerCase().includes(loc))) {
+      const matchFound = locationMatches.some(m => loc.includes(m.toLowerCase()) || m.toLowerCase().includes(loc))
+      if (matchFound) {
+        console.log('[Availability] FUZZY MATCH ops_event:', {
+          title: event.title,
+          location: event.location,
+          locationMatches
+        })
         allEvents.push(event)
       }
     }
+    
+    console.log('[Availability] Total ops_events to check:', allEvents.length)
     
     for (const event of allEvents) {
       if (event.all_day) {
@@ -207,6 +219,13 @@ export async function GET(request: Request) {
       if (eventStart === null || eventEnd === null) continue
       
       if (timesOverlap(requestStart, requestEnd, eventStart, eventEnd)) {
+        console.log('[Availability] ADDING CONFLICT from ops_event:', {
+          id: event.id,
+          title: event.title,
+          location: event.location,
+          start_time: event.start_time,
+          end_time: event.end_time
+        })
         conflicts.push({
           type: 'conflict',
           title: event.title,
@@ -389,6 +408,13 @@ export async function GET(request: Request) {
           const className = classNamesMap[classId] || schedule.block?.description || 'Class'
           
           if (timesOverlap(requestStart, requestEnd, classStart, classEnd)) {
+            console.log('[Availability] ADDING CONFLICT from CLASS:', {
+              className,
+              scheduleRoomDesc,
+              scheduleRoomAbbrev,
+              classStart,
+              classEnd
+            })
             conflicts.push({
               type: 'conflict',
               title: className,
@@ -418,10 +444,13 @@ export async function GET(request: Request) {
           }
         }
       }
-    } catch (err) {
-      console.warn('Class schedule check failed:', err)
+    } catch (err: any) {
+      console.error('Class schedule check failed:', err?.message || err)
       // Don't fail the whole request, just skip class checking
     }
+    
+    console.log('[Availability] FINAL CONFLICTS:', JSON.stringify(conflicts))
+    console.log('[Availability] FINAL WARNINGS:', JSON.stringify(warnings))
     
     // Note: All-day calendar events are shown in the resource calendar sidebar,
     // so we don't duplicate them in the warnings section here
