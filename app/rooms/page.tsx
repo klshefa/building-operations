@@ -177,40 +177,38 @@ export default function RoomsPage() {
   }
 
   // Calculate horizontal position for overlapping events
-  function getEventPosition(event: RoomEvent, allRoomEvents: RoomEvent[]): { left: string; width: string } {
-    const startHour = parseTimeToHour(event.start_time)
-    const endHour = parseTimeToHour(event.end_time) || (startHour || 0) + 1
-    
-    // Find all events that overlap with this one
-    const overlapping = allRoomEvents.filter(e => {
+  // Only consider events starting in the same hour slot, max 2 columns
+  function getEventPosition(event: RoomEvent, allRoomEvents: RoomEvent[], slotHour: number): { left: string; width: string } {
+    // Only look at events starting in this same hour slot
+    const sameSlotEvents = allRoomEvents.filter(e => {
       if (e.all_day || !e.start_time) return false
       const eStart = parseTimeToHour(e.start_time)
-      const eEnd = parseTimeToHour(e.end_time) || (eStart || 0) + 1
-      if (eStart === null || startHour === null) return false
-      // Check if they overlap
-      return eStart < endHour && eEnd > startHour!
+      if (eStart === null) return false
+      return Math.floor(eStart) === slotHour
     })
 
-    if (overlapping.length <= 1) {
+    if (sameSlotEvents.length <= 1) {
       return { left: '2px', width: 'calc(100% - 4px)' }
     }
 
-    // Sort by start time, then by id for consistent ordering
-    overlapping.sort((a, b) => {
+    // Sort by start time for consistent ordering
+    sameSlotEvents.sort((a, b) => {
       const aStart = parseTimeToHour(a.start_time) || 0
       const bStart = parseTimeToHour(b.start_time) || 0
       if (aStart !== bStart) return aStart - bStart
       return a.id.localeCompare(b.id)
     })
 
-    const index = overlapping.findIndex(e => e.id === event.id)
-    const count = overlapping.length
-    const widthPercent = 100 / count
-    const leftPercent = index * widthPercent
+    const index = sameSlotEvents.findIndex(e => e.id === event.id)
+    
+    // Cap at 2 columns - if more events, they stack on column 0 or 1
+    const maxCols = 2
+    const col = index % maxCols
+    const widthPercent = 100 / maxCols
 
     return {
-      left: `${leftPercent}%`,
-      width: `${widthPercent}%`,
+      left: `calc(${col * widthPercent}% + 1px)`,
+      width: `calc(${widthPercent}% - 2px)`,
     }
   }
 
@@ -422,7 +420,7 @@ export default function RoomsPage() {
                             const endHour = parseTimeToHour(event.end_time) || startHour + 1
                             const duration = endHour - startHour
                             const heightPx = Math.max(duration * rowHeight, 20)
-                            const position = getEventPosition(event, room.events)
+                            const position = getEventPosition(event, room.events, hour)
                             
                             return (
                               <div
