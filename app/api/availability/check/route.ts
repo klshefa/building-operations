@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
 const VERACROSS_TOKEN_URL = 'https://accounts.veracross.com/shefa/oauth/token'
 const CLASS_SCHEDULES_SCOPE = 'academics.class_schedules:list academics.classes:list'
+const RESERVATIONS_SCOPE = 'resource_reservations.reservations:list'
 
 function createAdminClient() {
   return createClient(
@@ -28,6 +29,27 @@ async function getClassSchedulesToken(): Promise<string> {
   
   if (!response.ok) {
     throw new Error(`Failed to get token: ${response.status}`)
+  }
+  
+  const data = await response.json()
+  return data.access_token
+}
+
+// Get a token for reservations
+async function getReservationsToken(): Promise<string> {
+  const response = await fetch(VERACROSS_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: process.env.VERACROSS_CLIENT_ID!,
+      client_secret: process.env.VERACROSS_CLIENT_SECRET!,
+      scope: RESERVATIONS_SCOPE,
+    }),
+  })
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get reservations token: ${response.status}`)
   }
   
   const data = await response.json()
@@ -254,6 +276,60 @@ export async function GET(request: Request) {
           })
         }
       }
+    }
+    
+    // 1.5 Check Veracross reservations directly from API
+    const checkedReservationIds = new Set<string>()
+    try {
+      const reservationsToken = await getReservationsToken()
+      const reservationsRes = await fetch(
+        `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&start_date=${date}&end_date=${date}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${reservationsToken}`,
+            'Accept': 'application/json',
+            'X-Page-Size': '100',
+          },
+        }
+      )
+      
+      if (reservationsRes.ok) {
+        const reservationsData = await reservationsRes.json()
+        const reservations = reservationsData.data || reservationsData || []
+        console.log(`[Availability] Found ${reservations.length} Veracross reservations for resource ${resourceId} on ${date}`)
+        
+        for (const res of reservations) {
+          const resId = res.resource_reservation_id || res.id
+          if (checkedReservationIds.has(String(resId))) continue
+          checkedReservationIds.add(String(resId))
+          
+          const resStart = parseTimeToMinutes(res.start_time)
+          const resEnd = parseTimeToMinutes(res.end_time)
+          
+          if (resStart === null || resEnd === null) continue
+          
+          if (timesOverlap(requestStart, requestEnd, resStart, resEnd)) {
+            const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
+            console.log('[Availability] ADDING CONFLICT from Veracross reservation:', {
+              id: resId,
+              title: resTitle,
+              start_time: res.start_time,
+              end_time: res.end_time
+            })
+            conflicts.push({
+              type: 'conflict',
+              title: resTitle,
+              startTime: res.start_time || '',
+              endTime: res.end_time || '',
+              message: `❌ Conflict: ${resTitle} (${formatTimeDisplay(resStart)}-${formatTimeDisplay(resEnd)})`
+            })
+          }
+        }
+      } else {
+        console.log(`[Availability] Failed to fetch Veracross reservations: ${reservationsRes.status}`)
+      }
+    } catch (err) {
+      console.error('[Availability] Error fetching Veracross reservations:', err)
     }
     
     // 2. Check Veracross class schedules
