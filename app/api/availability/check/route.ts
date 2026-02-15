@@ -150,7 +150,7 @@ export async function GET(request: Request) {
     // 1. Check ops_events for conflicts on same resource/date
     const { data: events, error: eventError } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, status')
+      .select('id, title, start_time, end_time, all_day, status, location')
       .eq('resource_id', parseInt(resourceId))
       .eq('start_date', date)
       .eq('is_hidden', false)
