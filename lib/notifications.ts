@@ -14,13 +14,16 @@ export interface SendEmailOptions {
   html: string
 }
 
-export async function sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
+export async function sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string; id?: string }> {
   if (!RESEND_API_KEY) {
-    console.error('RESEND_API_KEY not configured')
+    console.error('[Email] RESEND_API_KEY not configured')
     return { success: false, error: 'Email service not configured' }
   }
 
   try {
+    console.log(`[Email] Sending to: ${options.to.map(r => r.email).join(', ')}`)
+    console.log(`[Email] Subject: ${options.subject}`)
+    
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -35,13 +38,18 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
       })
     })
 
+    const data = await response.json()
+    console.log(`[Email] Resend response:`, JSON.stringify(data))
+
     if (!response.ok) {
-      const error = await response.text()
-      return { success: false, error }
+      console.error(`[Email] Resend error: ${response.status}`, data)
+      return { success: false, error: data.message || JSON.stringify(data) }
     }
 
-    return { success: true }
+    console.log(`[Email] Successfully sent, id: ${data.id}`)
+    return { success: true, id: data.id }
   } catch (err: any) {
+    console.error('[Email] Exception:', err)
     return { success: false, error: err.message }
   }
 }
