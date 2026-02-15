@@ -225,3 +225,45 @@ export async function GET(request: Request) {
     )
   }
 }
+
+// DELETE - Clear mention records when mentions are removed (so they can be re-notified)
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json()
+    const { eventId, noteType, emails } = body
+
+    if (!eventId || !emails || emails.length === 0) {
+      return NextResponse.json(
+        { error: 'eventId and emails are required' },
+        { status: 400 }
+      )
+    }
+
+    console.log(`[Slack Mention API] DELETE - Clearing mentions for event ${eventId}, type ${noteType}:`, emails)
+
+    const supabase = createAdminClient()
+
+    // Delete the mention records so they can be re-notified later
+    const { error } = await supabase
+      .from('event_mentions')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('note_type', noteType)
+      .in('mentioned_email', emails.map((e: string) => e.toLowerCase()))
+
+    if (error) {
+      console.log('[Slack Mention API] Could not delete mentions (table may not exist):', error.message)
+    } else {
+      console.log('[Slack Mention API] Cleared mention records')
+    }
+
+    return NextResponse.json({ success: true })
+
+  } catch (error: any) {
+    console.error('[Slack Mention] DELETE Error:', error)
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    )
+  }
+}

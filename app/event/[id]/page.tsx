@@ -448,7 +448,7 @@ export default function EventDetailPage() {
     }
   }
   
-  // Send Slack notifications for new mentions
+  // Send Slack notifications for new mentions and clear removed mentions
   async function sendNewMentionNotifications() {
     if (!event || !currentUser?.email) {
       console.log('[Mentions] No event or user, skipping notifications')
@@ -465,11 +465,33 @@ export default function EventDetailPage() {
       const currentMentions = parseMentionEmails((event as any)[field.key] || '')
       const prevMentions = initialMentions[field.key] || []
       
+      // Find removed mentions (were in previous, not in current) - clear from DB so they can be re-notified
+      const removedMentions = prevMentions.filter(email => !currentMentions.includes(email))
+      
       // Find new mentions (in current but not in previous)
       const newMentions = currentMentions.filter(email => !prevMentions.includes(email))
       
-      console.log(`[Mentions] Field ${field.key}: current=${currentMentions.join(',')}, prev=${prevMentions.join(',')}, new=${newMentions.join(',')}`)
+      console.log(`[Mentions] Field ${field.key}: current=${currentMentions.join(',')}, prev=${prevMentions.join(',')}, new=${newMentions.join(',')}, removed=${removedMentions.join(',')}`)
       
+      // Clear removed mentions from tracking so they can be re-notified later
+      if (removedMentions.length > 0) {
+        try {
+          console.log(`[Mentions] Clearing ${removedMentions.length} removed mentions`)
+          await fetch('/api/slack/send-mention', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventId: event.id,
+              noteType: field.type,
+              emails: removedMentions,
+            }),
+          })
+        } catch (err) {
+          console.error('Failed to clear removed mentions:', err)
+        }
+      }
+      
+      // Send notifications for new mentions
       if (newMentions.length > 0) {
         try {
           console.log(`[Mentions] Sending notification for ${newMentions.length} new mentions`)
