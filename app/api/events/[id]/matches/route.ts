@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
+import { createClient } from '@supabase/supabase-js'
+
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 // Calculate string similarity (Jaccard-ish approach on words)
 function stringSimilarity(str1: string, str2: string): number {
@@ -84,12 +92,6 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const { id } = await params
   
   try {
@@ -164,36 +166,12 @@ export async function GET(
     // Score candidates
     const suggestions: SuggestedMatch[] = []
     
-    // Helper to check if a raw event is essentially the same as our ops_event
-    const isSameEvent = (raw: any): boolean => {
-      // Check if title, date, and times all match exactly (or very closely)
-      const titleMatch = raw.title?.toLowerCase().trim() === event.title?.toLowerCase().trim()
-      const dateMatch = raw.start_date === event.start_date
-      const startTimeMatch = parseTimeToMinutes(raw.start_time) === parseTimeToMinutes(event.start_time)
-      const endTimeMatch = parseTimeToMinutes(raw.end_time) === parseTimeToMinutes(event.end_time)
-      
-      // If title, date, and both times match, it's likely the same event
-      if (titleMatch && dateMatch && startTimeMatch && endTimeMatch) {
-        return true
-      }
-      
-      // Also check by source_id if the ops_event has one
-      if (event.source_id && raw.source_id === event.source_id) {
-        return true
-      }
-      
-      return false
-    }
-    
     for (const raw of candidates || []) {
       // Skip if already linked to this event
       if (linkedRawIds.has(raw.id)) continue
       
       // Skip if already linked to another event
       if (allMatchedRawIds.has(raw.id)) continue
-      
-      // Skip if this is essentially the same event (same title, date, time)
-      if (isSameEvent(raw)) continue
       
       let score = 0
       const reasons: string[] = []
@@ -253,12 +231,6 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const { id } = await params
   
   try {

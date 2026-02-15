@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { parseISO, isSameDay, format } from 'date-fns'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 function getSupabaseClient() {
-  return createAdminClient()
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 }
 
 // Calculate similarity between two strings (0-1)
@@ -91,12 +94,6 @@ function determineEventType(rawEvent: any): string {
 }
 
 export async function POST(request: Request) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const startTime = Date.now()
   const supabase = getSupabaseClient()
   const today = format(new Date(), 'yyyy-MM-dd')

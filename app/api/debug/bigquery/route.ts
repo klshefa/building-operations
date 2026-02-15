@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { BigQuery } from '@google-cloud/bigquery'
-import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 function getBigQueryClient() {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
@@ -14,15 +13,6 @@ function getBigQueryClient() {
 }
 
 export async function GET(request: Request) {
-  // Verify authentication - admin only for debug routes
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-  if (!auth.isAdmin) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
-
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || 'Keith'
   

@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
+import { createClient } from '@supabase/supabase-js'
+
+function getSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function POST() {
-  // Verify authentication - admin only
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-  if (!auth.isAdmin) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
-  }
-
   try {
-    const supabase = createAdminClient()
+    const supabase = getSupabaseClient()
     
     // Delete the cached token
     const { error } = await supabase

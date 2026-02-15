@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { BigQuery } from '@google-cloud/bigquery'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
+import { createClient } from '@supabase/supabase-js'
 
 function getBigQueryClient() {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
@@ -14,16 +14,13 @@ function getBigQueryClient() {
 }
 
 function getSupabaseClient() {
-  return createAdminClient()
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 }
 
 export async function POST(request: Request) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const startTime = Date.now()
 
   try {

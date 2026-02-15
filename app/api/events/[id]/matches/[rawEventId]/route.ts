@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
+import { createClient } from '@supabase/supabase-js'
+
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 // DELETE: Remove a match (unlink events)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string; rawEventId: string }> }
 ) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const { id, rawEventId } = await params
   
   try {

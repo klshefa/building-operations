@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 const SYNC_ENDPOINTS = [
   'resources',
@@ -11,12 +10,6 @@ const SYNC_ENDPOINTS = [
 ]
 
 export async function POST(request: Request) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const startTime = Date.now()
   const results: Record<string, { success: boolean; message: string; records?: number }> = {}
   

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
+import { createClient } from '@supabase/supabase-js'
+
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function GET() {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   try {
     const supabase = createAdminClient()
     

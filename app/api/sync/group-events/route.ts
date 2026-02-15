@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { BigQuery } from '@google-cloud/bigquery'
+import { createClient } from '@supabase/supabase-js'
 import { format, parse } from 'date-fns'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 function getBigQueryClient() {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
@@ -15,7 +15,10 @@ function getBigQueryClient() {
 }
 
 function getSupabaseClient() {
-  return createAdminClient()
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 }
 
 // Get current school year
@@ -38,12 +41,6 @@ function getCurrentSchoolYear(): { start: string; end: string } {
 }
 
 export async function POST(request: Request) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const startTime = Date.now()
   const schoolYear = getCurrentSchoolYear()
   const today = format(new Date(), 'yyyy-MM-dd')

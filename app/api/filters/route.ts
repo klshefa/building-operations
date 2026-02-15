@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server'
-import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
+import { createClient } from '@supabase/supabase-js'
+
+// Use service role to bypass RLS
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 // Ensure the table exists by trying to create it via RPC
 async function ensureTableExists(supabase: ReturnType<typeof createAdminClient>) {
@@ -17,12 +25,6 @@ async function ensureTableExists(supabase: ReturnType<typeof createAdminClient>)
 
 // GET - List all filters
 export async function GET() {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const supabase = createAdminClient()
   
   const tableExists = await ensureTableExists(supabase)
@@ -50,12 +52,6 @@ export async function GET() {
 
 // POST - Create a new filter
 export async function POST(request: Request) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const supabase = createAdminClient()
   
   try {
@@ -91,12 +87,6 @@ export async function POST(request: Request) {
 
 // PUT - Update a filter
 export async function PUT(request: Request) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const supabase = createAdminClient()
   
   try {
@@ -127,12 +117,6 @@ export async function PUT(request: Request) {
 
 // DELETE - Remove a filter
 export async function DELETE(request: Request) {
-  // Verify authentication
-  const auth = await verifyApiAuth()
-  if (isAuthError(auth)) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status })
-  }
-
   const supabase = createAdminClient()
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
