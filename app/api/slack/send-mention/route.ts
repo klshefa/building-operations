@@ -81,8 +81,8 @@ export async function POST(request: Request) {
     }
 
     // Build event URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ops.shefaschool.org'
-    const eventUrl = `${baseUrl}/event/${eventId}`
+    const eventUrl = `https://ops.shefaschool.org/event/${eventId}`
+    console.log(`[Slack Mention API] Event URL: ${eventUrl}`)
 
     // Track sent mentions to avoid duplicates (check existing mentions in DB)
     // Note: If table doesn't exist yet, we'll just proceed without duplicate checking
