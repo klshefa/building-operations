@@ -320,33 +320,47 @@ export default function RequestPage() {
     setError(null)
     
     try {
+      // Format times with seconds for Veracross (HH:MM -> HH:MM:00)
+      const formatTime = (t: string) => t.includes(':') && t.split(':').length === 2 ? `${t}:00` : t
+      
+      const payload = {
+        description: title || `Resource Reservation - ${selectedResource.description}`,
+        resource_id: selectedResource.id,
+        resource_name: selectedResource.description,
+        start_date: date,
+        end_date: date,
+        start_time: formatTime(startTime),
+        end_time: formatTime(endTime),
+        requestor_id: staffInfo.person_id,
+        requestor_email: user.email,
+      }
+      
+      console.log('Creating reservation with payload:', payload)
+      
       // Call Veracross API to create reservation
       const res = await fetch('/api/veracross/create-reservation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: title || `Resource Reservation - ${selectedResource.description}`,
-          resource_id: selectedResource.id,
-          resource_name: selectedResource.description,
-          start_date: date,
-          end_date: date,
-          start_time: startTime,
-          end_time: endTime,
-          requestor_id: staffInfo.person_id,
-          requestor_email: user.email,
-        })
+        body: JSON.stringify(payload)
       })
       
       const data = await res.json()
+      console.log('Reservation response:', data)
       
       if (!data.success) {
+        console.error('Reservation failed:', data)
         if (res.status === 409) {
           setError('Sorry, this slot was just booked. Please try another time.')
           // Refresh availability
           checkAvailability()
           fetchResourceCalendar()
         } else {
-          setError(data.error || 'Failed to create reservation')
+          // Show detailed error including Veracross response
+          let errorMsg = data.error || 'Failed to create reservation'
+          if (data.veracross_response) {
+            console.error('Veracross response:', data.veracross_response)
+          }
+          setError(errorMsg)
         }
         setReserving(false)
         setShowConfirmModal(false)

@@ -153,6 +153,22 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       console.error('Veracross API error:', response.status, responseText)
+      console.error('Request payload was:', JSON.stringify(reservationPayload, null, 2))
+      
+      // Extract error message from Veracross response
+      let errorMessage = `Veracross API error: ${response.status}`
+      if (responseData.error) {
+        errorMessage = responseData.error
+      } else if (responseData.errors) {
+        // Handle array of errors
+        errorMessage = Array.isArray(responseData.errors) 
+          ? responseData.errors.map((e: any) => e.message || e.detail || JSON.stringify(e)).join(', ')
+          : JSON.stringify(responseData.errors)
+      } else if (responseData.message) {
+        errorMessage = responseData.message
+      } else if (responseData.raw) {
+        errorMessage = responseData.raw.substring(0, 200)
+      }
       
       // Check for specific error types
       if (response.status === 409 || responseText.includes('conflict')) {
@@ -165,8 +181,9 @@ export async function POST(request: Request) {
       
       return NextResponse.json({
         success: false,
-        error: `Veracross API error: ${response.status}`,
-        veracross_response: responseData
+        error: errorMessage,
+        veracross_response: responseData,
+        request_payload: reservationPayload
       }, { status: response.status })
     }
 
