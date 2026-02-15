@@ -450,7 +450,10 @@ export default function EventDetailPage() {
   
   // Send Slack notifications for new mentions
   async function sendNewMentionNotifications() {
-    if (!event || !currentUser?.email) return
+    if (!event || !currentUser?.email) {
+      console.log('[Mentions] No event or user, skipping notifications')
+      return
+    }
     
     // Check each notes field for new mentions
     const noteFields = [
@@ -465,9 +468,12 @@ export default function EventDetailPage() {
       // Find new mentions (in current but not in previous)
       const newMentions = currentMentions.filter(email => !prevMentions.includes(email))
       
+      console.log(`[Mentions] Field ${field.key}: current=${currentMentions.join(',')}, prev=${prevMentions.join(',')}, new=${newMentions.join(',')}`)
+      
       if (newMentions.length > 0) {
         try {
-          await fetch('/api/slack/send-mention', {
+          console.log(`[Mentions] Sending notification for ${newMentions.length} new mentions`)
+          const response = await fetch('/api/slack/send-mention', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -478,6 +484,12 @@ export default function EventDetailPage() {
               mentionedByEmail: currentUser.email,
             }),
           })
+          const result = await response.json()
+          console.log('[Mentions] Slack API response:', result)
+          
+          if (!result.success) {
+            console.error('[Mentions] Failed:', result.error)
+          }
         } catch (err) {
           console.error('Failed to send mention notifications:', err)
         }

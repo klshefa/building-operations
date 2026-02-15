@@ -21,10 +21,13 @@ interface MentionRequest {
 
 export async function POST(request: Request) {
   try {
+    console.log('[Slack Mention API] POST request received')
+    
     // Check if Slack is configured
     if (!isSlackConfigured()) {
+      console.log('[Slack Mention API] SLACK_BOT_TOKEN not configured')
       return NextResponse.json(
-        { error: 'Slack integration not configured', success: false },
+        { error: 'Slack integration not configured - add SLACK_BOT_TOKEN to environment', success: false },
         { status: 503 }
       )
     }
@@ -82,15 +85,27 @@ export async function POST(request: Request) {
     const eventUrl = `${baseUrl}/event/${eventId}`
 
     // Track sent mentions to avoid duplicates (check existing mentions in DB)
-    const { data: existingMentions } = await supabase
-      .from('event_mentions')
-      .select('mentioned_email')
-      .eq('event_id', eventId)
-      .eq('note_type', noteType)
-      .in('mentioned_email', mentionedEmails)
+    // Note: If table doesn't exist yet, we'll just proceed without duplicate checking
+    let alreadyMentioned = new Set<string>()
+    let newMentions = mentionedEmails
+    
+    try {
+      const { data: existingMentions, error: mentionsError } = await supabase
+        .from('event_mentions')
+        .select('mentioned_email')
+        .eq('event_id', eventId)
+        .eq('note_type', noteType)
+        .in('mentioned_email', mentionedEmails)
 
-    const alreadyMentioned = new Set(existingMentions?.map(m => m.mentioned_email) || [])
-    const newMentions = mentionedEmails.filter(email => !alreadyMentioned.has(email.toLowerCase()))
+      if (!mentionsError && existingMentions) {
+        alreadyMentioned = new Set(existingMentions.map(m => m.mentioned_email))
+        newMentions = mentionedEmails.filter(email => !alreadyMentioned.has(email.toLowerCase()))
+      } else if (mentionsError) {
+        console.log('[Slack Mention API] event_mentions table may not exist yet:', mentionsError.message)
+      }
+    } catch (err) {
+      console.log('[Slack Mention API] Could not check existing mentions, proceeding anyway')
+    }
 
     if (newMentions.length === 0) {
       return NextResponse.json({
@@ -102,8 +117,11 @@ export async function POST(request: Request) {
     }
 
     // Send notifications to new mentions
+    console.log(`[Slack Mention API] Sending to ${newMentions.length} users:`, newMentions)
+    
     const results = await Promise.all(
       newMentions.map(async (email) => {
+        console.log(`[Slack Mention API] Sending notification to: ${email}`)
         const result = await sendMentionNotification({
           mentionedEmail: email,
           mentionedBy: mentionedByName,
@@ -113,20 +131,24 @@ export async function POST(request: Request) {
           noteContent,
           eventUrl,
         })
+        console.log(`[Slack Mention API] Result for ${email}:`, result)
 
         // Record the mention in the database (even if Slack failed, to track attempts)
-        await supabase
-          .from('event_mentions')
-          .insert({
-            event_id: eventId,
-            note_type: noteType,
-            mentioned_email: email.toLowerCase(),
-            mentioned_by: mentionedByEmail.toLowerCase(),
-            slack_sent: result.success,
-            created_at: new Date().toISOString(),
-          })
-          .select()
-          .single()
+        // Skip if table doesn't exist
+        try {
+          await supabase
+            .from('event_mentions')
+            .insert({
+              event_id: eventId,
+              note_type: noteType,
+              mentioned_email: email.toLowerCase(),
+              mentioned_by: mentionedByEmail.toLowerCase(),
+              slack_sent: result.success,
+              created_at: new Date().toISOString(),
+            })
+        } catch (dbErr) {
+          console.log('[Slack Mention API] Could not record mention in DB:', dbErr)
+        }
 
         return {
           email,
