@@ -12,17 +12,21 @@ interface AuthContextType {
   signOut: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
+const defaultContext: AuthContextType = {
+  user: null,
+  loading: true,
+  teams: [],
+  hasAccess: false,
+  signOut: async () => {},
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+const AuthContext = createContext<AuthContextType>(defaultContext)
+
+export function useAuth() {
+  return useContext(AuthContext)
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [teams, setTeams] = useState<string[]>([])

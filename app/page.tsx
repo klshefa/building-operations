@@ -14,18 +14,16 @@ import {
   ArrowRightIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { useAuth } from '@/lib/hooks/useAuth'
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, loading } = useAuth()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
 
   useEffect(() => {
-    checkUser()
-    
     // Check URL for auth errors
     const params = new URLSearchParams(window.location.search)
     const urlError = params.get('error')
@@ -48,13 +46,6 @@ export default function DashboardPage() {
       fetchEvents()
     }
   }, [user])
-
-  async function checkUser() {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    setUser(session?.user || null)
-    setLoading(false)
-  }
 
   async function handleSignIn() {
     setSigningIn(true)
