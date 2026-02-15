@@ -63,6 +63,13 @@ const filterTypeOptions = [
   { value: 'location_equals', label: 'Location equals' },
 ]
 
+const QUICK_DURATIONS = [
+  { label: '30 min', minutes: 30 },
+  { label: '1 hr', minutes: 60 },
+  { label: '1.5 hr', minutes: 90 },
+  { label: '2 hr', minutes: 120 },
+]
+
 interface EventFilter {
   id: string
   name: string
@@ -112,10 +119,13 @@ export default function AdminPage() {
   const [eventStatus, setEventStatus] = useState<{ success: boolean; message: string } | null>(null)
   
   // Resource dropdown for location
-  const [resources, setResources] = useState<{ id: number; description: string }[]>([])
+  const [resources, setResources] = useState<{ id: number; description: string; resource_type?: string }[]>([])
+  const [resourceTypes, setResourceTypes] = useState<string[]>([])
+  const [selectedResourceType, setSelectedResourceType] = useState<string>('')
   const [resourcesLoading, setResourcesLoading] = useState(true)
   const [showLocationDropdown, setShowLocationDropdown] = useState(false)
   const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null)
+  const [quickDuration, setQuickDuration] = useState<number | null>(null)
   
   // Audit log
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([])
@@ -143,6 +153,19 @@ export default function AdminPage() {
     }
   }, [userRole, activeTab, auditPage, auditEntityFilter, auditActionFilter])
 
+  // Update end time when quick duration is selected
+  useEffect(() => {
+    if (quickDuration && eventStartTime) {
+      const [hours, minutes] = eventStartTime.split(':').map(Number)
+      const startDate = new Date()
+      startDate.setHours(hours, minutes, 0, 0)
+      const endDate = new Date(startDate.getTime() + quickDuration * 60000)
+      const endHours = String(endDate.getHours()).padStart(2, '0')
+      const endMins = String(endDate.getMinutes()).padStart(2, '0')
+      setEventEndTime(`${endHours}:${endMins}`)
+    }
+  }, [quickDuration, eventStartTime])
+
   // Resolve resource ID when location changes (for typed entries)
   useEffect(() => {
     if (!eventLocation || resources.length === 0) {
@@ -167,6 +190,9 @@ export default function AdminPage() {
       const { data } = await response.json()
       if (data) {
         setResources(data)
+        // Extract unique resource types
+        const types = [...new Set(data.map((r: any) => r.resource_type).filter(Boolean))] as string[]
+        setResourceTypes(types)
       }
     } catch (err) {
       console.error('Error fetching resources:', err)
@@ -567,178 +593,244 @@ export default function AdminPage() {
                     </div>
                   )}
 
-                  <form onSubmit={addManualEvent} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          Event Title <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={eventTitle}
-                          onChange={(e) => setEventTitle(e.target.value)}
-                          placeholder="e.g., Board Meeting"
-                          required
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div className="relative">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          Location
-                        </label>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Column - Form */}
+                    <div className="lg:col-span-2">
+                      <form onSubmit={addManualEvent} className="space-y-4">
+                        {/* Resource Type Filter */}
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Resource Type
+                          </label>
+                          <select
+                            value={selectedResourceType}
+                            onChange={(e) => {
+                              setSelectedResourceType(e.target.value)
+                              setEventLocation('')
+                              setSelectedResourceId(null)
+                            }}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                          >
+                            <option value="">All Types</option>
+                            {resourceTypes.map(type => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Resource Selection */}
                         <div className="relative">
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Resource <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={eventLocation}
+                              onChange={(e) => {
+                                setEventLocation(e.target.value)
+                                setShowLocationDropdown(true)
+                              }}
+                              onFocus={() => setShowLocationDropdown(true)}
+                              placeholder={resourcesLoading ? "Loading resources..." : "Type to search resources..."}
+                              className="w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                              disabled={resourcesLoading || resources.length === 0}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                          </div>
+                          {showLocationDropdown && resources.length > 0 && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                              {resources
+                                .filter(r => !selectedResourceType || r.resource_type === selectedResourceType)
+                                .filter(r => r.description.toLowerCase().includes(eventLocation.toLowerCase()))
+                                .slice(0, 50)
+                                .map((r) => (
+                                  <button
+                                    key={r.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setEventLocation(r.description)
+                                      setSelectedResourceId(r.id)
+                                      setShowLocationDropdown(false)
+                                    }}
+                                    className="w-full text-left px-3 py-2 hover:bg-shefa-blue-50 text-sm text-slate-700"
+                                  >
+                                    {r.description}
+                                  </button>
+                                ))}
+                              {resources
+                                .filter(r => !selectedResourceType || r.resource_type === selectedResourceType)
+                                .filter(r => r.description.toLowerCase().includes(eventLocation.toLowerCase())).length === 0 && (
+                                <div className="px-3 py-2 text-sm text-slate-500">
+                                  No matches found
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {resources.length > 0 && (
+                            <p className="text-xs text-slate-400 mt-1">
+                              {resources.filter(r => !selectedResourceType || r.resource_type === selectedResourceType).length} resources
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Date & Time Row */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              Date <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={eventDate}
+                              onChange={(e) => setEventDate(e.target.value)}
+                              required
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              Start Time <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="time"
+                              value={eventStartTime}
+                              onChange={(e) => {
+                                setEventStartTime(e.target.value)
+                                setQuickDuration(null)
+                              }}
+                              disabled={eventAllDay}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              End Time <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="time"
+                              value={eventEndTime}
+                              onChange={(e) => {
+                                setEventEndTime(e.target.value)
+                                setQuickDuration(null)
+                              }}
+                              disabled={eventAllDay}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Quick Duration + All Day */}
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-700">Quick Duration:</span>
+                            {QUICK_DURATIONS.map(({ label, minutes }) => (
+                              <button
+                                key={minutes}
+                                type="button"
+                                onClick={() => setQuickDuration(minutes)}
+                                disabled={eventAllDay}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                  quickDuration === minutes
+                                    ? 'bg-shefa-blue-600 text-white'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer ml-auto">
+                            <input
+                              type="checkbox"
+                              checked={eventAllDay}
+                              onChange={(e) => setEventAllDay(e.target.checked)}
+                              className="w-4 h-4 text-shefa-blue-600 border-slate-300 rounded focus:ring-shefa-blue-500"
+                            />
+                            <span className="text-sm text-slate-700">All Day</span>
+                          </label>
+                        </div>
+
+                        {/* Event Title */}
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Event Title <span className="text-red-500">*</span>
+                          </label>
                           <input
                             type="text"
-                            value={eventLocation}
-                            onChange={(e) => {
-                              setEventLocation(e.target.value)
-                              setShowLocationDropdown(true)
-                            }}
-                            onFocus={() => setShowLocationDropdown(true)}
-                            placeholder={resourcesLoading ? "Loading resources..." : "Type to search..."}
-                            className="w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                            value={eventTitle}
+                            onChange={(e) => setEventTitle(e.target.value)}
+                            placeholder="e.g., Team Meeting, Parent Event..."
+                            required
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
                           />
-                          <button
-                            type="button"
-                            onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-                            disabled={resourcesLoading || resources.length === 0}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:opacity-50"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
                         </div>
-                        {showLocationDropdown && resources.length > 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                            {resources
-                              .filter(r => r.description.toLowerCase().includes(eventLocation.toLowerCase()))
-                              .slice(0, 50)
-                              .map((r) => (
-                                <button
-                                  key={r.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setEventLocation(r.description)
-                                    setSelectedResourceId(r.id)
-                                    setShowLocationDropdown(false)
-                                  }}
-                                  className="w-full text-left px-3 py-2 hover:bg-shefa-blue-50 text-sm text-slate-700"
-                                >
-                                  {r.description}
-                                </button>
-                              ))}
-                            {resources.filter(r => r.description.toLowerCase().includes(eventLocation.toLowerCase())).length === 0 && (
-                              <div className="px-3 py-2 text-sm text-slate-500">
-                                No matches found
-                              </div>
-                            )}
+
+                        {/* Description */}
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Description
+                          </label>
+                          <textarea
+                            value={eventDescription}
+                            onChange={(e) => setEventDescription(e.target.value)}
+                            placeholder="Optional event description..."
+                            rows={2}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                          />
+                        </div>
+
+                        {/* Veracross Availability Check */}
+                        {eventLocation && eventDate && !eventAllDay && eventStartTime && eventEndTime && (
+                          <div className="p-3 bg-slate-50 rounded-lg">
+                            <AvailabilityCheck
+                              resourceId={selectedResourceId || undefined}
+                              resourceName={eventLocation}
+                              date={eventDate}
+                              startTime={eventStartTime}
+                              endTime={eventEndTime}
+                            />
                           </div>
                         )}
-                        {resources.length > 0 && (
-                          <p className="text-xs text-slate-400 mt-1">{resources.length} resources</p>
-                        )}
-                      </div>
+
+                        <div className="flex justify-end pt-2">
+                          <button
+                            type="submit"
+                            disabled={addingEvent}
+                            className="bg-shefa-blue-600 hover:bg-shefa-blue-700 text-white font-medium py-2.5 px-6 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                          >
+                            <PlusIcon className="w-5 h-5" />
+                            {addingEvent ? 'Creating...' : 'Create Event'}
+                          </button>
+                        </div>
+                      </form>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Description
-                      </label>
-                      <textarea
-                        value={eventDescription}
-                        onChange={(e) => setEventDescription(e.target.value)}
-                        placeholder="Optional event description..."
-                        rows={2}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          Date <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="date"
-                          value={eventDate}
-                          onChange={(e) => setEventDate(e.target.value)}
-                          required
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          Start Time
-                        </label>
-                        <input
-                          type="time"
-                          value={eventStartTime}
-                          onChange={(e) => setEventStartTime(e.target.value)}
-                          disabled={eventAllDay}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          End Time
-                        </label>
-                        <input
-                          type="time"
-                          value={eventEndTime}
-                          onChange={(e) => setEventEndTime(e.target.value)}
-                          disabled={eventAllDay}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent disabled:bg-slate-100 disabled:text-slate-400"
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <label className="flex items-center gap-2 cursor-pointer p-2">
-                          <input
-                            type="checkbox"
-                            checked={eventAllDay}
-                            onChange={(e) => setEventAllDay(e.target.checked)}
-                            className="w-4 h-4 text-shefa-blue-600 border-slate-300 rounded focus:ring-shefa-blue-500"
-                          />
-                          <span className="text-sm text-slate-700">All Day</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Veracross Availability Check */}
-                    {eventLocation && eventDate && !eventAllDay && eventStartTime && eventEndTime && (
-                      <div className="p-3 bg-slate-50 rounded-lg">
-                        <AvailabilityCheck
-                          resourceId={selectedResourceId || undefined}
+                    {/* Right Column - Calendar Sidebar */}
+                    <div className="lg:col-span-1">
+                      {selectedResourceId && eventDate ? (
+                        <ResourceScheduleSidebar
+                          resourceId={selectedResourceId}
                           resourceName={eventLocation}
                           date={eventDate}
-                          startTime={eventStartTime}
-                          endTime={eventEndTime}
                         />
-                      </div>
-                    )}
-
-                    <div className="flex justify-end pt-2">
-                      <button
-                        type="submit"
-                        disabled={addingEvent}
-                        className="bg-shefa-blue-600 hover:bg-shefa-blue-700 text-white font-medium py-2.5 px-6 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-                      >
-                        <PlusIcon className="w-5 h-5" />
-                        {addingEvent ? 'Creating...' : 'Create Event'}
-                      </button>
+                      ) : (
+                        <div className="bg-slate-50 rounded-xl border border-slate-200 p-6">
+                          <p className="text-slate-500 text-sm text-center">
+                            Select a resource and date to see the schedule.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  </form>
-
-                  {/* Calendar Sidebar - shown when location and date are selected */}
-                  {selectedResourceId && eventDate && (
-                    <div className="mt-6 pt-6 border-t border-slate-200">
-                      <ResourceScheduleSidebar
-                        resourceId={selectedResourceId}
-                        resourceName={eventLocation}
-                        date={eventDate}
-                      />
-                    </div>
-                  )}
+                  </div>
                 </motion.div>
               )}
 
