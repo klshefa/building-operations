@@ -260,7 +260,7 @@ export async function GET(request: Request) {
         const classesData = await classesRes.json()
         const classes = classesData.data || classesData || []
         for (const cls of classes) {
-          const status = (cls.status || '').toLowerCase()
+          const status = String(cls.status || '').toLowerCase()
           // Only include active or future classes
           if (status !== 'active' && status !== 'future') continue
           
