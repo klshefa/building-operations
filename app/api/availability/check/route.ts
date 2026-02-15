@@ -307,11 +307,24 @@ export async function GET(request: Request) {
           // Skip classes with no room assigned
           if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') continue
           
-          // Match room - require non-empty strings on both sides
+          // Match room - STRICT matching only
           let matches = false
-          if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) matches = true
-          else if (roomDesc && scheduleRoomDesc && scheduleRoomDesc.length > 2 && (scheduleRoomDesc.includes(roomDesc) || roomDesc.includes(scheduleRoomDesc))) matches = true
-          else if (roomAbbrev && scheduleRoomAbbrev && scheduleRoomAbbrev.length > 1 && (scheduleRoomAbbrev.includes(roomAbbrev) || roomAbbrev.includes(scheduleRoomAbbrev))) matches = true
+          // 1. Exact room number match (e.g., "404" === "404")
+          if (roomNumber && scheduleRoomNumber && roomNumber === scheduleRoomNumber) {
+            matches = true
+          }
+          // 2. Exact description match (e.g., "ulam" === "ulam")
+          else if (roomDesc && scheduleRoomDesc && roomDesc === scheduleRoomDesc) {
+            matches = true
+          }
+          // 3. Exact abbreviation match
+          else if (roomAbbrev && scheduleRoomAbbrev && roomAbbrev === scheduleRoomAbbrev) {
+            matches = true
+          }
+          // 4. Resource description matches schedule room description exactly
+          else if (roomDesc && scheduleRoomDesc && scheduleRoomDesc === roomDesc) {
+            matches = true
+          }
           
           if (!matches) continue
           
