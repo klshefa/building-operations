@@ -29,13 +29,17 @@ export async function GET(request: Request) {
     let resourceQuery = supabase
       .from('ops_resources')
       .select('*')
-      .order('description')
     
     if (resourceType) {
       resourceQuery = resourceQuery.eq('resource_type', resourceType)
     }
     
-    const { data: resources, error: resourceError } = await resourceQuery
+    const { data: resourcesRaw, error: resourceError } = await resourceQuery
+    
+    // Sort resources naturally (so 311 comes before 1011)
+    const resources = (resourcesRaw || []).sort((a, b) => {
+      return naturalSort(a.description || a.abbreviation || '', b.description || b.abbreviation || '')
+    })
     
     if (resourceError) {
       return NextResponse.json({ error: resourceError.message }, { status: 500 })
@@ -160,4 +164,26 @@ function parseTime(timeStr: string): number | null {
     return parseInt(match[1]) * 60 + parseInt(match[2])
   }
   return null
+}
+
+// Natural sort for room numbers (311 before 1011)
+function naturalSort(a: string, b: string): number {
+  const aParts = a.split(/(\d+)/)
+  const bParts = b.split(/(\d+)/)
+  
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aPart = aParts[i] || ''
+    const bPart = bParts[i] || ''
+    
+    const aNum = parseInt(aPart)
+    const bNum = parseInt(bPart)
+    
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      if (aNum !== bNum) return aNum - bNum
+    } else {
+      const cmp = aPart.localeCompare(bPart)
+      if (cmp !== 0) return cmp
+    }
+  }
+  return 0
 }
