@@ -255,8 +255,8 @@ export async function GET(request: Request) {
               title: className,
               start_date: dateStr,
               end_date: null,
-              start_time: schedule.start_time,
-              end_time: schedule.end_time,
+              start_time: normalizeTime(schedule.start_time),
+              end_time: normalizeTime(schedule.end_time),
               all_day: false,
               location: roomDesc || roomAbbrev,
               resource_id: resourceId,
@@ -320,6 +320,25 @@ function parseTime(timeStr: string): number | null {
   if (match) {
     return parseInt(match[1]) * 60 + parseInt(match[2])
   }
+  return null
+}
+
+// Extract HH:MM from ISO time like "1900-01-01T09:00:00Z" or return as-is if already HH:MM
+function normalizeTime(timeStr: string | null | undefined): string | null {
+  if (!timeStr) return null
+  
+  // Handle ISO datetime format
+  const iso = timeStr.match(/T(\d{2}):(\d{2})/)
+  if (iso) {
+    return `${iso[1]}:${iso[2]}`
+  }
+  
+  // Already HH:MM format
+  const hhmm = timeStr.match(/^(\d{1,2}):(\d{2})/)
+  if (hhmm) {
+    return timeStr
+  }
+  
   return null
 }
 
