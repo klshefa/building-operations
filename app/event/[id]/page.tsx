@@ -487,6 +487,11 @@ export default function EventDetailPage() {
           const result = await response.json()
           console.log('[Mentions] Slack API response:', result)
           
+          if (result.failed && result.failed.length > 0) {
+            console.error('[Mentions] Failed notifications:', result.failed)
+            alert(`Slack notification failed: ${result.failed.map((f: any) => f.error || f.email).join(', ')}`)
+          }
+          
           if (!result.success) {
             console.error('[Mentions] Failed:', result.error)
           }
