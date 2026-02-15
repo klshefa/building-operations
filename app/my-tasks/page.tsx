@@ -102,37 +102,18 @@ export default function MyTasksPage() {
   async function fetchMentionedEvents() {
     if (!user?.email) return
     
-    const today = format(new Date(), 'yyyy-MM-dd')
-    
     try {
-      // Fetch events where user was mentioned
-      const supabase = createClient()
-      const { data: mentions } = await supabase
-        .from('event_mentions')
-        .select('event_id')
-        .eq('mentioned_email', user.email.toLowerCase())
-      
-      if (!mentions || mentions.length === 0) {
+      const res = await fetch(`/api/user/mentions?email=${encodeURIComponent(user.email)}`)
+      if (res.ok) {
+        const data = await res.json()
+        console.log('[My Tasks] Mentioned events:', data)
+        setMentionedEvents(data.events || [])
+      } else {
+        console.error('[My Tasks] Error fetching mentions:', await res.text())
         setMentionedEvents([])
-        return
       }
-      
-      // Get unique event IDs
-      const eventIds = [...new Set(mentions.map(m => m.event_id))]
-      
-      // Fetch those events (only future ones)
-      const { data: eventData } = await supabase
-        .from('ops_events')
-        .select('*')
-        .in('id', eventIds)
-        .gte('start_date', today)
-        .eq('is_hidden', false)
-        .neq('status', 'cancelled')
-        .order('start_date', { ascending: true })
-      
-      setMentionedEvents(eventData || [])
     } catch (err) {
-      console.error('Error fetching mentioned events:', err)
+      console.error('[My Tasks] Error fetching mentioned events:', err)
       setMentionedEvents([])
     }
   }
