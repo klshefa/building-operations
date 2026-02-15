@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, parseISO, isSameDay } from 'date-fns'
+import { format, addDays, subDays, parseISO } from 'date-fns'
 import { motion } from 'framer-motion'
 import Navbar from '@/components/Navbar'
 import { createClient } from '@/lib/supabase/client'
@@ -27,6 +27,7 @@ interface RoomEvent {
   resource_id: number
   is_hidden: boolean
   has_conflict: boolean
+  is_class?: boolean
 }
 
 interface Room {
@@ -40,7 +41,8 @@ interface Room {
   totalHours: number
 }
 
-type ViewMode = 'grid' | 'list'
+// Time slots from 7am to 9pm
+const TIME_SLOTS = Array.from({ length: 15 }, (_, i) => i + 7) // 7, 8, 9, ... 21
 
 export default function RoomsPage() {
   const router = useRouter()
@@ -48,14 +50,11 @@ export default function RoomsPage() {
   const [authLoading, setAuthLoading] = useState(true)
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }))
+  const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [resourceTypes, setResourceTypes] = useState<string[]>([])
   const [selectedType, setSelectedType] = useState<string>('')
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
-  const [expandedRoom, setExpandedRoom] = useState<number | null>(null)
 
-  const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 0 })
-  const daysOfWeek = eachDayOfInterval({ start: currentWeekStart, end: weekEnd })
+  const dateStr = format(selectedDate, 'yyyy-MM-dd')
 
   useEffect(() => {
     checkUser()
@@ -65,7 +64,7 @@ export default function RoomsPage() {
     if (user) {
       fetchRooms()
     }
-  }, [user, currentWeekStart, selectedType])
+  }, [user, selectedDate, selectedType])
 
   async function checkUser() {
     const supabase = createClient()
@@ -82,8 +81,8 @@ export default function RoomsPage() {
     setLoading(true)
     try {
       const params = new URLSearchParams({
-        startDate: format(currentWeekStart, 'yyyy-MM-dd'),
-        endDate: format(weekEnd, 'yyyy-MM-dd'),
+        startDate: dateStr,
+        endDate: dateStr,
       })
       if (selectedType) {
         params.set('resourceType', selectedType)
@@ -92,7 +91,9 @@ export default function RoomsPage() {
       const res = await fetch(`/api/rooms?${params}`)
       if (res.ok) {
         const data = await res.json()
-        setRooms(data.rooms || [])
+        // Filter to rooms that have events on this day
+        const roomsWithEvents = (data.rooms || []).filter((r: Room) => r.events.length > 0)
+        setRooms(roomsWithEvents)
         setResourceTypes(data.resourceTypes || [])
       }
     } catch (err) {
@@ -101,11 +102,19 @@ export default function RoomsPage() {
     setLoading(false)
   }
 
-  function getEventsForDay(room: Room, date: Date): RoomEvent[] {
-    return room.events.filter(event => {
-      const eventDate = parseISO(event.start_date)
-      return isSameDay(eventDate, date)
-    })
+  function parseTimeToHour(time: string | null): number | null {
+    if (!time) return null
+    const match = time.match(/^(\d{1,2}):(\d{2})/)
+    if (match) {
+      return parseInt(match[1]) + parseInt(match[2]) / 60
+    }
+    return null
+  }
+
+  function formatHour(hour: number): string {
+    const h = hour % 12 || 12
+    const ampm = hour < 12 ? 'am' : 'pm'
+    return `${h}${ampm}`
   }
 
   function formatTime(time: string | null): string {
@@ -121,11 +130,39 @@ export default function RoomsPage() {
     return time
   }
 
-  // Calculate overall stats
-  const totalRooms = rooms.length
-  const totalEventsThisWeek = rooms.reduce((sum, r) => sum + r.totalEvents, 0)
-  const totalHoursThisWeek = rooms.reduce((sum, r) => sum + r.totalHours, 0)
-  const mostUsedRoom = rooms.reduce((max, r) => r.totalEvents > (max?.totalEvents || 0) ? r : max, null as Room | null)
+  // Get events for a specific room that overlap with a time slot
+  function getEventsForSlot(room: Room, slotHour: number): RoomEvent[] {
+    return room.events.filter(event => {
+      if (event.all_day) return false
+      const startHour = parseTimeToHour(event.start_time)
+      const endHour = parseTimeToHour(event.end_time)
+      if (startHour === null) return false
+      // Event overlaps this slot if it starts before slot+1 and ends after slot
+      const effectiveEnd = endHour ?? startHour + 1
+      return startHour < slotHour + 1 && effectiveEnd > slotHour
+    })
+  }
+
+  // Check if event starts in this slot
+  function eventStartsInSlot(event: RoomEvent, slotHour: number): boolean {
+    const startHour = parseTimeToHour(event.start_time)
+    if (startHour === null) return false
+    return Math.floor(startHour) === slotHour
+  }
+
+  // Get all-day events for a room
+  function getAllDayEvents(room: Room): RoomEvent[] {
+    return room.events.filter(event => event.all_day || !event.start_time)
+  }
+
+  // Check if any room has all-day events
+  const hasAnyAllDayEvents = rooms.some(r => getAllDayEvents(r).length > 0)
+
+  // Calculate stats
+  const totalRoomsInUse = rooms.length
+  const totalEvents = rooms.reduce((sum, r) => sum + r.events.length, 0)
+  const totalClasses = rooms.reduce((sum, r) => sum + r.events.filter(e => e.is_class).length, 0)
+  const totalReservations = totalEvents - totalClasses
 
   if (authLoading) {
     return (
@@ -139,94 +176,60 @@ export default function RoomsPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Navbar />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-6">
+      <main className="max-w-[95vw] mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">Room Utilization</h1>
-            <p className="text-slate-600 mt-1">View room bookings and availability</p>
-          </div>
-        </div>
-
-        {/* Stats Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <BuildingOfficeIcon className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800">{totalRooms}</p>
-                <p className="text-xs text-slate-500">Total Rooms</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CalendarDaysIcon className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800">{totalEventsThisWeek}</p>
-                <p className="text-xs text-slate-500">Events This Week</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <ClockIcon className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-800">{Math.round(totalHoursThisWeek)}</p>
-                <p className="text-xs text-slate-500">Hours Booked</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <BuildingOfficeIcon className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 truncate" title={mostUsedRoom?.description}>
-                  {mostUsedRoom?.abbreviation || mostUsedRoom?.description?.slice(0, 15) || '-'}
-                </p>
-                <p className="text-xs text-slate-500">Most Used</p>
-              </div>
-            </div>
+            <h1 className="text-2xl font-bold text-slate-800">Room Utilization</h1>
+            <p className="text-slate-600 text-sm">Daily view of room bookings</p>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
-          <div className="p-4 flex flex-wrap items-center justify-between gap-4">
-            {/* Week Navigation */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-4">
+          <div className="p-3 flex flex-wrap items-center justify-between gap-3">
+            {/* Date Navigation */}
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}
+                onClick={() => setSelectedDate(subDays(selectedDate, 1))}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <ChevronLeftIcon className="w-5 h-5 text-slate-600" />
               </button>
               <button
-                onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }))}
+                onClick={() => setSelectedDate(new Date())}
                 className="px-3 py-1.5 text-sm font-medium text-shefa-blue-600 hover:bg-shefa-blue-50 rounded-lg transition-colors"
               >
                 Today
               </button>
               <button
-                onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}
+                onClick={() => setSelectedDate(addDays(selectedDate, 1))}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 <ChevronRightIcon className="w-5 h-5 text-slate-600" />
               </button>
-              <span className="ml-2 text-sm font-medium text-slate-700">
-                {format(currentWeekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
+              <input
+                type="date"
+                value={dateStr}
+                onChange={(e) => setSelectedDate(new Date(e.target.value + 'T12:00:00'))}
+                className="ml-2 px-3 py-1.5 text-sm border border-slate-300 rounded-lg"
+              />
+              <span className="ml-2 text-lg font-semibold text-slate-800">
+                {format(selectedDate, 'EEEE, MMMM d, yyyy')}
               </span>
             </div>
 
-            {/* Filters */}
-            <div className="flex items-center gap-3">
+            {/* Stats & Filters */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 text-sm">
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded bg-shefa-blue-200"></span>
+                  <span className="text-slate-600">{totalReservations} Reservations</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded bg-purple-200"></span>
+                  <span className="text-slate-600">{totalClasses} Classes</span>
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <FunnelIcon className="w-4 h-4 text-slate-400" />
                 <select
@@ -234,31 +237,11 @@ export default function RoomsPage() {
                   onChange={(e) => setSelectedType(e.target.value)}
                   className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-shefa-blue-500"
                 >
-                  <option value="">All Types</option>
+                  <option value="">All Room Types</option>
                   {resourceTypes.map(type => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
-              </div>
-              
-              {/* View Toggle */}
-              <div className="flex bg-slate-100 rounded-lg p-0.5">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    viewMode === 'grid' ? 'bg-white shadow text-slate-800' : 'text-slate-600'
-                  }`}
-                >
-                  Grid
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    viewMode === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-600'
-                  }`}
-                >
-                  List
-                </button>
               </div>
             </div>
           </div>
@@ -272,162 +255,143 @@ export default function RoomsPage() {
         ) : rooms.length === 0 ? (
           <div className="bg-white rounded-xl p-8 text-center">
             <BuildingOfficeIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500">No rooms found</p>
+            <p className="text-slate-500">No rooms booked on this day</p>
+            <p className="text-slate-400 text-sm mt-1">Try selecting a different date or room type</p>
           </div>
-        ) : viewMode === 'grid' ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
-          >
-            {/* Header Row */}
-            <div className="grid grid-cols-8 border-b border-slate-200 bg-slate-50">
-              <div className="p-3 font-medium text-slate-600 text-sm">Room</div>
-              {daysOfWeek.map(day => (
-                <div
-                  key={day.toISOString()}
-                  className={`p-3 text-center border-l border-slate-200 ${
-                    isSameDay(day, new Date()) ? 'bg-shefa-blue-50' : ''
-                  }`}
-                >
-                  <p className="text-xs text-slate-500">{format(day, 'EEE')}</p>
-                  <p className={`text-sm font-medium ${
-                    isSameDay(day, new Date()) ? 'text-shefa-blue-600' : 'text-slate-700'
-                  }`}>
-                    {format(day, 'd')}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Room Rows */}
-            <div className="divide-y divide-slate-100">
-              {rooms.filter(r => r.totalEvents > 0 || selectedType).map(room => (
-                <div key={room.id} className="grid grid-cols-8 hover:bg-slate-50">
-                  <div className="p-3 flex items-start">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate" title={room.description}>
-                        {room.abbreviation || room.description}
-                      </p>
-                      {room.capacity && (
-                        <p className="text-xs text-slate-500">Cap: {room.capacity}</p>
-                      )}
-                    </div>
-                  </div>
-                  {daysOfWeek.map(day => {
-                    const dayEvents = getEventsForDay(room, day)
-                    return (
-                      <div
-                        key={day.toISOString()}
-                        className={`p-2 border-l border-slate-200 min-h-[60px] ${
-                          isSameDay(day, new Date()) ? 'bg-shefa-blue-50/50' : ''
-                        }`}
-                      >
-                        {dayEvents.slice(0, 3).map(event => (
-                          <div
-                            key={event.id}
-                            onClick={() => router.push(`/event/${event.id}`)}
-                            className={`text-xs p-1 mb-1 rounded cursor-pointer truncate ${
-                              event.has_conflict
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-shefa-blue-100 text-shefa-blue-700 hover:bg-shefa-blue-200'
-                            }`}
-                            title={`${event.title}${event.start_time ? ` - ${formatTime(event.start_time)}` : ''}`}
-                          >
-                            {event.start_time && (
-                              <span className="font-medium">{formatTime(event.start_time)} </span>
-                            )}
-                            {event.title.slice(0, 20)}
-                          </div>
-                        ))}
-                        {dayEvents.length > 3 && (
-                          <p className="text-xs text-slate-500 text-center">
-                            +{dayEvents.length - 3} more
-                          </p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
-          </motion.div>
         ) : (
-          /* List View */
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="space-y-3"
+            className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto"
           >
-            {rooms.filter(r => r.totalEvents > 0 || selectedType).map(room => (
-              <div
-                key={room.id}
-                className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
-              >
-                <button
-                  onClick={() => setExpandedRoom(expandedRoom === room.id ? null : room.id)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-slate-100 rounded-lg">
-                      <BuildingOfficeIcon className="w-5 h-5 text-slate-600" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-medium text-slate-800">{room.description}</p>
-                      <p className="text-sm text-slate-500">
-                        {room.resource_type && `${room.resource_type} • `}
-                        {room.capacity && `Capacity: ${room.capacity}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-slate-800">{room.totalEvents}</p>
-                      <p className="text-xs text-slate-500">events</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-slate-800">{room.totalHours}</p>
-                      <p className="text-xs text-slate-500">hours</p>
-                    </div>
-                    <ChevronRightIcon
-                      className={`w-5 h-5 text-slate-400 transition-transform ${
-                        expandedRoom === room.id ? 'rotate-90' : ''
-                      }`}
-                    />
-                  </div>
-                </button>
-                
-                {expandedRoom === room.id && room.events.length > 0 && (
-                  <div className="border-t border-slate-200 p-4 bg-slate-50">
-                    <div className="space-y-2">
-                      {room.events.map(event => (
-                        <div
-                          key={event.id}
-                          onClick={() => router.push(`/event/${event.id}`)}
-                          className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-shefa-blue-300 transition-colors"
-                        >
-                          <div>
-                            <p className="font-medium text-slate-800">{event.title}</p>
-                            <p className="text-sm text-slate-500">
-                              {format(parseISO(event.start_date), 'EEE, MMM d')}
-                              {event.start_time && ` • ${formatTime(event.start_time)}`}
-                              {event.end_time && ` - ${formatTime(event.end_time)}`}
-                            </p>
-                          </div>
-                          {event.has_conflict && (
-                            <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded">
-                              Conflict
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+            <table className="w-full border-collapse min-w-[800px]">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="p-2 text-left text-xs font-medium text-slate-500 border-b border-r border-slate-200 w-16 sticky left-0 bg-slate-50 z-10">
+                    Time
+                  </th>
+                  {rooms.map(room => (
+                    <th 
+                      key={room.id} 
+                      className="p-2 text-center text-xs font-medium text-slate-700 border-b border-r border-slate-200 min-w-[120px]"
+                      title={room.description}
+                    >
+                      <div>{room.abbreviation || room.description?.slice(0, 15)}</div>
+                      {room.capacity && (
+                        <div className="text-slate-400 font-normal">Cap: {room.capacity}</div>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {/* All-day events row */}
+                {hasAnyAllDayEvents && (
+                  <tr className="bg-amber-50">
+                    <td className="p-2 text-xs text-slate-500 border-b border-r border-slate-200 sticky left-0 bg-amber-50 z-10">
+                      All Day
+                    </td>
+                    {rooms.map(room => {
+                      const allDayEvents = getAllDayEvents(room)
+                      return (
+                        <td key={room.id} className="p-1 border-b border-r border-slate-200 align-top">
+                          {allDayEvents.map(event => (
+                            <div
+                              key={event.id}
+                              onClick={() => !event.is_class && router.push(`/event/${event.id}`)}
+                              className={`text-xs p-1 mb-1 rounded truncate ${
+                                event.is_class
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : 'bg-amber-100 text-amber-700 cursor-pointer hover:bg-amber-200'
+                              }`}
+                              title={event.title}
+                            >
+                              {event.title}
+                            </div>
+                          ))}
+                        </td>
+                      )
+                    })}
+                  </tr>
                 )}
-              </div>
-            ))}
+                
+                {/* Time slot rows */}
+                {TIME_SLOTS.map(hour => (
+                  <tr key={hour} className={hour % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                    <td className={`p-2 text-xs text-slate-500 border-b border-r border-slate-200 sticky left-0 z-10 ${hour % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                      {formatHour(hour)}
+                    </td>
+                    {rooms.map(room => {
+                      const slotEvents = getEventsForSlot(room, hour)
+                      return (
+                        <td 
+                          key={room.id} 
+                          className="p-0 border-b border-r border-slate-200 align-top h-12 relative"
+                        >
+                          {slotEvents.map(event => {
+                            const startsHere = eventStartsInSlot(event, hour)
+                            if (!startsHere) return null // Only render where event starts
+                            
+                            const startHour = parseTimeToHour(event.start_time) || hour
+                            const endHour = parseTimeToHour(event.end_time) || startHour + 1
+                            const duration = endHour - startHour
+                            const heightPx = Math.max(duration * 48, 20) // 48px per hour, min 20px
+                            
+                            return (
+                              <div
+                                key={event.id}
+                                onClick={() => !event.is_class && router.push(`/event/${event.id}`)}
+                                className={`absolute left-0 right-0 mx-0.5 px-1 py-0.5 text-xs rounded overflow-hidden ${
+                                  event.has_conflict
+                                    ? 'bg-red-100 text-red-700 border-l-2 border-red-500'
+                                    : event.is_class
+                                    ? 'bg-purple-100 text-purple-700 border-l-2 border-purple-400'
+                                    : 'bg-shefa-blue-100 text-shefa-blue-700 border-l-2 border-shefa-blue-400 cursor-pointer hover:bg-shefa-blue-200'
+                                }`}
+                                style={{ 
+                                  height: `${heightPx}px`,
+                                  top: `${(startHour - hour) * 48}px`,
+                                  zIndex: 5,
+                                }}
+                                title={`${event.title} (${formatTime(event.start_time)} - ${formatTime(event.end_time)})`}
+                              >
+                                <div className="font-medium truncate">{event.title}</div>
+                                <div className="text-[10px] opacity-75">
+                                  {formatTime(event.start_time)}
+                                  {event.end_time && ` - ${formatTime(event.end_time)}`}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </motion.div>
         )}
+
+        {/* Legend */}
+        <div className="mt-4 flex items-center gap-6 text-xs text-slate-500">
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded bg-shefa-blue-100 border-l-2 border-shefa-blue-400"></span>
+            Reservation
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded bg-purple-100 border-l-2 border-purple-400"></span>
+            Class
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded bg-amber-100"></span>
+            All Day
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded bg-red-100 border-l-2 border-red-500"></span>
+            Conflict
+          </span>
+        </div>
       </main>
     </div>
   )
