@@ -175,7 +175,7 @@ export default function CalendarPage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <h1 className="text-3xl font-bold text-slate-800">Calendar</h1>
             
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               {/* View Mode Toggle */}
               <div className="flex items-center bg-white rounded-lg border border-slate-200 p-1">
                 <button
@@ -208,14 +208,14 @@ export default function CalendarPage() {
               </div>
 
               {/* Navigation */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <button
                   onClick={() => navigate('prev')}
                   className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
                 >
                   <ChevronLeftIcon className="w-5 h-5 text-slate-600" />
                 </button>
-                <span className="text-lg font-semibold text-slate-800 min-w-[200px] text-center">
+                <span className="text-base sm:text-lg font-semibold text-slate-800 min-w-[120px] sm:min-w-[180px] text-center">
                   {getHeaderText()}
                 </span>
                 <button
@@ -226,7 +226,7 @@ export default function CalendarPage() {
                 </button>
                 <button
                   onClick={() => setCurrentDate(new Date())}
-                  className="ml-2 px-3 py-1.5 text-sm bg-shefa-blue-600 text-white rounded-lg hover:bg-shefa-blue-700 transition-colors"
+                  className="ml-1 sm:ml-2 px-2 sm:px-3 py-1.5 text-sm bg-shefa-blue-600 text-white rounded-lg hover:bg-shefa-blue-700 transition-colors"
                 >
                   Today
                 </button>
@@ -331,8 +331,9 @@ export default function CalendarPage() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+              className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto"
             >
+              <div className="min-w-[640px]">
               {/* Day headers */}
               <div className="grid grid-cols-7 border-b border-slate-200">
                 {weekDays.map(day => (
@@ -400,6 +401,7 @@ export default function CalendarPage() {
                     </div>
                   )
                 })}
+              </div>
               </div>
             </motion.div>
           ) : (

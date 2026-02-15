@@ -770,7 +770,7 @@ export default function EventDetailPage() {
           {/* Quick Info - 2 rows */}
           <div className="space-y-4 pt-4 border-t border-slate-100">
             {/* Row 1: Date and Time */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
                   <CalendarIcon className="w-3 h-3" />
@@ -807,7 +807,7 @@ export default function EventDetailPage() {
             </div>
             
             {/* Row 2: Location and Type */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="relative">
                 <label className="text-xs text-slate-500 uppercase font-medium flex items-center gap-1 mb-1">
                   <MapPinIcon className="w-3 h-3" />

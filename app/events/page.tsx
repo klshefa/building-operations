@@ -130,16 +130,16 @@ export default function EventsPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <h1 className="text-3xl font-bold text-slate-800">All Events</h1>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Search */}
-              <div className="relative">
+              <div className="relative flex-1 min-w-[150px] sm:flex-none">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search events..."
-                  className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent w-48 md:w-64"
+                  className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent w-full sm:w-48 md:w-64"
                 />
               </div>
 
@@ -147,7 +147,7 @@ export default function EventsPage() {
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value as EventSource | 'all')}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent flex-1 sm:flex-none"
               >
                 {sourceFilters.map(f => (
                   <option key={f.value} value={f.value}>{f.label}</option>
@@ -158,7 +158,7 @@ export default function EventsPage() {
               <select
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value as 'week' | 'month' | 'all')}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent flex-1 sm:flex-none"
               >
                 <option value="week">This Week</option>
                 <option value="month">This Month</option>
@@ -168,7 +168,7 @@ export default function EventsPage() {
               {/* Show Hidden */}
               <button
                 onClick={() => setShowHidden(!showHidden)}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
                   showHidden
                     ? 'bg-shefa-blue-100 text-shefa-blue-700'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
