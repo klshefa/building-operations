@@ -151,22 +151,39 @@ export async function GET(
     // Check if this is a Veracross reservation ID (not in database)
     if (id.startsWith('vc-res-')) {
       const vcId = id.replace('vc-res-', '')
+      console.log(`[Event API] Fetching Veracross reservation: ${vcId}`)
       
       try {
         const token = await getReservationsToken()
-        const res = await fetch(`${VERACROSS_API_BASE}/resource_reservations/reservations/${vcId}`, {
+        // Veracross API doesn't have single-item endpoint, use list with filter
+        const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_reservation_id=${vcId}`
+        console.log(`[Event API] Veracross URL: ${url}`)
+        
+        const res = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
+            'X-Page-Size': '10',
           },
         })
         
+        console.log(`[Event API] Veracross response status: ${res.status}`)
+        
         if (!res.ok) {
+          const errorText = await res.text()
+          console.error(`[Event API] Veracross error: ${errorText}`)
           return NextResponse.json({ error: 'Veracross reservation not found' }, { status: 404 })
         }
         
         const vcData = await res.json()
-        const vcRes = vcData.data || vcData
+        const reservations = vcData.data || vcData || []
+        console.log(`[Event API] Found ${reservations.length} reservations`)
+        
+        if (reservations.length === 0) {
+          return NextResponse.json({ error: 'Veracross reservation not found' }, { status: 404 })
+        }
+        
+        const vcRes = reservations[0]
         
         // Get resource name
         const resourceId = vcRes.resource_id || vcRes.resource?.id
