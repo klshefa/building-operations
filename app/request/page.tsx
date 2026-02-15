@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -181,20 +181,7 @@ export default function RequestPage() {
   async function checkUser() {
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
-    
-    if (session?.user) {
-      // Check if user is in ops_users list - if so, redirect to dashboard
-      const res = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email || '')}`)
-      if (res.ok) {
-        const { hasAccess } = await res.json()
-        if (hasAccess) {
-          // Ops user - redirect to dashboard
-          router.push('/')
-          return
-        }
-      }
-    }
-    
+    // Allow any @shefaschool.org user to use the request form
     setUser(session?.user || null)
     setLoading(false)
   }
