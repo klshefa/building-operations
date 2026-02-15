@@ -1052,7 +1052,9 @@ export default function RequestPage() {
                       className={`p-3 rounded-lg text-sm ${
                         event.type === 'class'
                           ? 'bg-amber-50 border border-amber-200'
-                          : 'bg-slate-50 border border-slate-200'
+                          : event.type === 'reservation'
+                          ? 'bg-blue-50 border border-blue-200'
+                          : 'bg-purple-50 border border-purple-200'
                       }`}
                     >
                       <div className="flex items-start justify-between">
@@ -1060,6 +1062,16 @@ export default function RequestPage() {
                         {event.type === 'class' && (
                           <span className="text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">
                             Class
+                          </span>
+                        )}
+                        {event.type === 'reservation' && (
+                          <span className="text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">
+                            Reservation
+                          </span>
+                        )}
+                        {event.type === 'calendar' && (
+                          <span className="text-xs bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded">
+                            Event
                           </span>
                         )}
                       </div>
