@@ -1,4 +1,4 @@
--- Event mentions table for tracking @mentions in notes
+image.png-- Event mentions table for tracking @mentions in notes
 -- This allows us to:
 -- 1. Avoid sending duplicate Slack notifications
 -- 2. Track who mentioned who and when

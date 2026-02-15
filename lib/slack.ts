@@ -38,8 +38,14 @@ export async function lookupSlackUserByEmail(email: string): Promise<SlackUser |
     return null
   }
 
+  console.log(`[Slack] Looking up user by email: ${email}`)
+  console.log(`[Slack] Token starts with: ${token.substring(0, 10)}...`)
+
   try {
-    const response = await fetch(`${SLACK_API_BASE}/users.lookupByEmail?email=${encodeURIComponent(email)}`, {
+    const url = `${SLACK_API_BASE}/users.lookupByEmail?email=${encodeURIComponent(email)}`
+    console.log(`[Slack] Fetching: ${url}`)
+    
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -47,6 +53,7 @@ export async function lookupSlackUserByEmail(email: string): Promise<SlackUser |
     })
 
     const data: SlackResponse = await response.json()
+    console.log(`[Slack] API Response:`, JSON.stringify(data, null, 2))
     
     if (!data.ok) {
       if (data.error === 'users_not_found') {
@@ -57,6 +64,7 @@ export async function lookupSlackUserByEmail(email: string): Promise<SlackUser |
       return null
     }
 
+    console.log(`[Slack] Found user: ${data.user?.real_name} (${data.user?.id})`)
     return data.user || null
   } catch (error) {
     console.error('[Slack] lookupByEmail failed:', error)
