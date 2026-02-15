@@ -14,6 +14,7 @@ import {
   ComputerDesktopIcon,
   ShieldCheckIcon,
   WrenchScrewdriverIcon,
+  AtSymbolIcon,
 } from '@heroicons/react/24/outline'
 
 const teamIcons: Record<TeamType, React.ComponentType<{ className?: string }>> = {
@@ -38,6 +39,7 @@ export default function MyTasksPage() {
   const [authLoading, setAuthLoading] = useState(true)
   const [userTeams, setUserTeams] = useState<TeamType[]>([])
   const [events, setEvents] = useState<OpsEvent[]>([])
+  const [mentionedEvents, setMentionedEvents] = useState<OpsEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTeam, setSelectedTeam] = useState<TeamType | 'all'>('all')
 
@@ -49,6 +51,7 @@ export default function MyTasksPage() {
     if (user) {
       fetchUserTeams()
       fetchEvents()
+      fetchMentionedEvents()
     }
   }, [user])
 
@@ -94,6 +97,44 @@ export default function MyTasksPage() {
       console.error('Error fetching events:', err)
     }
     setLoading(false)
+  }
+
+  async function fetchMentionedEvents() {
+    if (!user?.email) return
+    
+    const today = format(new Date(), 'yyyy-MM-dd')
+    
+    try {
+      // Fetch events where user was mentioned
+      const supabase = createClient()
+      const { data: mentions } = await supabase
+        .from('event_mentions')
+        .select('event_id')
+        .eq('mentioned_email', user.email.toLowerCase())
+      
+      if (!mentions || mentions.length === 0) {
+        setMentionedEvents([])
+        return
+      }
+      
+      // Get unique event IDs
+      const eventIds = [...new Set(mentions.map(m => m.event_id))]
+      
+      // Fetch those events (only future ones)
+      const { data: eventData } = await supabase
+        .from('ops_events')
+        .select('*')
+        .in('id', eventIds)
+        .gte('start_date', today)
+        .eq('is_hidden', false)
+        .neq('status', 'cancelled')
+        .order('start_date', { ascending: true })
+      
+      setMentionedEvents(eventData || [])
+    } catch (err) {
+      console.error('Error fetching mentioned events:', err)
+      setMentionedEvents([])
+    }
   }
 
   // Filter events that need the user's team(s)
@@ -171,25 +212,46 @@ export default function MyTasksPage() {
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-4 border-shefa-blue-200 border-t-shefa-blue-600 rounded-full animate-spin" />
             </div>
-          ) : userTeams.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white rounded-xl p-12 text-center border border-slate-200"
-            >
-              <p className="text-slate-500">You are not assigned to any teams.</p>
-              <p className="text-sm text-slate-400 mt-2">Contact an admin to be added to a team.</p>
-            </motion.div>
-          ) : myEvents.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white rounded-xl p-12 text-center border border-slate-200"
-            >
-              <p className="text-slate-500">No events need your team&apos;s attention.</p>
-            </motion.div>
           ) : (
             <div className="space-y-8">
+              {/* Mentioned Events Section */}
+              {mentionedEvents.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-6 border border-purple-200"
+                >
+                  <h2 className="text-lg font-semibold text-purple-800 mb-4 flex items-center gap-2">
+                    <AtSymbolIcon className="w-5 h-5" />
+                    You Were Mentioned ({mentionedEvents.length})
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {mentionedEvents.map(event => (
+                      <EventCard key={event.id} event={event} />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {userTeams.length === 0 && mentionedEvents.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="bg-white rounded-xl p-12 text-center border border-slate-200"
+                >
+                  <p className="text-slate-500">You are not assigned to any teams.</p>
+                  <p className="text-sm text-slate-400 mt-2">Contact an admin to be added to a team.</p>
+                </motion.div>
+              ) : myEvents.length === 0 && mentionedEvents.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="bg-white rounded-xl p-12 text-center border border-slate-200"
+                >
+                  <p className="text-slate-500">No events need your attention.</p>
+                </motion.div>
+              ) : myEvents.length > 0 && (
+                <div className="space-y-8">
               {/* Today */}
               {todayEvents.length > 0 && (
                 <motion.div
@@ -242,6 +304,8 @@ export default function MyTasksPage() {
                     ))}
                   </div>
                 </motion.div>
+              )}
+                </div>
               )}
             </div>
           )}
