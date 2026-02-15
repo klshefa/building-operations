@@ -175,10 +175,11 @@ export async function GET(
       // Fetch class names and status - only include active/future classes
       const classNamesMap: Record<string, string> = {}
       const activeClassIds = new Set<string>()
-      const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes?X-Page-Size=1000`, {
+      const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/json',
+          'X-Page-Size': '1000',
         },
       })
       
@@ -202,10 +203,11 @@ export async function GET(
       classDebug.activeClassIdsCount = activeClassIds.size
       
       // Fetch schedules
-      const scheduleRes = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules?X-Page-Size=1000`, {
+      const scheduleRes = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/json',
+          'X-Page-Size': '1000',
         },
       })
       
