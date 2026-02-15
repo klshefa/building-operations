@@ -91,6 +91,37 @@ function normalizeTime(timeStr: string | null | undefined): string | null {
   return null
 }
 
+// Convert any time format to minutes for comparison
+function timeToMinutes(timeStr: string | null | undefined): number | null {
+  if (!timeStr) return null
+  const str = timeStr.toLowerCase().trim()
+  
+  // ISO format: "1900-01-01T08:10:00Z" or "T08:10"
+  const isoMatch = str.match(/t(\d{2}):(\d{2})/)
+  if (isoMatch) {
+    return parseInt(isoMatch[1]) * 60 + parseInt(isoMatch[2])
+  }
+  
+  // 12-hour format: "9:00 am", "10:30 pm"
+  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?/)
+  if (ampmMatch) {
+    let hours = parseInt(ampmMatch[1])
+    const mins = parseInt(ampmMatch[2])
+    const ampm = ampmMatch[3]
+    if (ampm === 'pm' && hours < 12) hours += 12
+    if (ampm === 'am' && hours === 12) hours = 0
+    return hours * 60 + mins
+  }
+  
+  // 24-hour format: "09:00", "14:30"
+  const h24Match = str.match(/^(\d{1,2}):(\d{2})/)
+  if (h24Match) {
+    return parseInt(h24Match[1]) * 60 + parseInt(h24Match[2])
+  }
+  
+  return null
+}
+
 interface CalendarEvent {
   id: string
   title: string
@@ -145,11 +176,18 @@ export async function GET(
     
     // Track veracross IDs we already have from ops_events to avoid duplicates
     const veracrossIdsInOpsEvents = new Set<string>()
+    // Also track time slots from ops_events for fallback deduplication (as minutes)
+    const opsEventTimeSlots: Array<{start: number, end: number}> = []
     
     for (const event of opsEvents || []) {
       if (event.veracross_reservation_id) {
         veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
-        console.log(`[Calendar] ops_events has veracross_reservation_id: ${event.veracross_reservation_id} for "${event.title}"`)
+      }
+      // Track time slots for fallback dedup (convert to minutes)
+      const startMins = timeToMinutes(event.start_time)
+      const endMins = timeToMinutes(event.end_time)
+      if (startMins !== null && endMins !== null) {
+        opsEventTimeSlots.push({ start: startMins, end: endMins })
       }
       // Show cancelled events greyed out
       const title = event.status === 'cancelled' ? `[CANCELLED] ${event.title}` : event.title
@@ -228,8 +266,19 @@ export async function GET(
           
           // Skip if we already have this from ops_events (avoid duplicates)
           if (veracrossIdsInOpsEvents.has(vcResId)) {
-            console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - already in ops_events`)
+            console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - already in ops_events by ID`)
             continue
+          }
+          
+          // Fallback: skip if we have an ops_event at the same time (for events created before ID tracking)
+          const vcStartMins = timeToMinutes(res.start_time)
+          const vcEndMins = timeToMinutes(res.end_time)
+          if (vcStartMins !== null && vcEndMins !== null) {
+            const hasDupe = opsEventTimeSlots.some(slot => slot.start === vcStartMins && slot.end === vcEndMins)
+            if (hasDupe) {
+              console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - already in ops_events by time slot (${vcStartMins}-${vcEndMins})`)
+              continue
+            }
           }
           
           const resId = `vc-res-${vcResId}`
