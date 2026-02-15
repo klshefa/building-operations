@@ -66,8 +66,18 @@ export function formatEventDate(event: OpsEvent): string {
   return result
 }
 
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
+function formatTime(time: string | null | undefined): string {
+  if (!time) return ''
+  
+  // Handle various time formats: "14:00", "14:00:00", "2:00 PM", etc.
+  const parts = time.split(':')
+  if (parts.length < 2) return time // Return as-is if can't parse
+  
+  const h = parseInt(parts[0], 10)
+  const m = parseInt(parts[1], 10)
+  
+  if (isNaN(h) || isNaN(m)) return time // Return as-is if can't parse
+  
   const period = h >= 12 ? 'PM' : 'AM'
   const hour = h > 12 ? h - 12 : h === 0 ? 12 : h
   return `${hour}:${m.toString().padStart(2, '0')} ${period}`
