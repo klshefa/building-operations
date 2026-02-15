@@ -151,7 +151,21 @@ export async function GET(
     // Check if this is a Veracross reservation ID (not in database)
     if (id.startsWith('vc-res-')) {
       const vcId = id.replace('vc-res-', '')
-      console.log(`[Event API] Fetching Veracross reservation: ${vcId}`)
+      console.log(`[Event API] Looking for Veracross reservation: ${vcId}`)
+      
+      // First, check if this reservation has been synced to ops_events
+      const { data: syncedEvent } = await supabase
+        .from('ops_events')
+        .select('*')
+        .eq('veracross_reservation_id', vcId)
+        .single()
+      
+      if (syncedEvent) {
+        console.log(`[Event API] Found synced ops_event for VC reservation ${vcId}`)
+        return NextResponse.json({ data: syncedEvent })
+      }
+      
+      console.log(`[Event API] No synced event found, fetching from Veracross API`)
       
       // Get optional date hint from query params
       const { searchParams } = new URL(request.url)
