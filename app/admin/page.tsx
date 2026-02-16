@@ -129,6 +129,23 @@ export default function AdminPage() {
   const [eventNeedsIT, setEventNeedsIT] = useState(false)
   const [eventNeedsSecurity, setEventNeedsSecurity] = useState(false)
   const [eventNeedsFacilities, setEventNeedsFacilities] = useState(false)
+  const [activeTeamTab, setActiveTeamTab] = useState<string | null>(null)
+  // Team-specific notes
+  const [programNotes, setProgramNotes] = useState('')
+  const [officeNotes, setOfficeNotes] = useState('')
+  const [itNotes, setItNotes] = useState('')
+  const [securityNotes, setSecurityNotes] = useState('')
+  const [facilitiesNotes, setFacilitiesNotes] = useState('')
+  // IT extra fields
+  const [techsNeeded, setTechsNeeded] = useState('')
+  const [avEquipment, setAvEquipment] = useState('')
+  const [techNotes, setTechNotes] = useState('')
+  // Security extra fields
+  const [securityPersonnelNeeded, setSecurityPersonnelNeeded] = useState('')
+  const [buildingOpen, setBuildingOpen] = useState(false)
+  const [elevatorNotes, setElevatorNotes] = useState('')
+  // Facilities extra fields
+  const [setupInstructions, setSetupInstructions] = useState('')
   // Additional fields
   const [eventExpectedAttendees, setEventExpectedAttendees] = useState('')
   const [eventFoodServed, setEventFoodServed] = useState(false)
@@ -397,6 +414,22 @@ export default function AdminPage() {
           needs_it: eventNeedsIT,
           needs_security: eventNeedsSecurity,
           needs_facilities: eventNeedsFacilities,
+          // Team notes
+          program_director_notes: programNotes || null,
+          office_notes: officeNotes || null,
+          it_notes: itNotes || null,
+          security_notes: securityNotes || null,
+          facilities_notes: facilitiesNotes || null,
+          // IT extra fields
+          techs_needed: techsNeeded ? parseInt(techsNeeded) : null,
+          av_equipment: avEquipment || null,
+          tech_notes: techNotes || null,
+          // Security extra fields
+          security_personnel_needed: securityPersonnelNeeded ? parseInt(securityPersonnelNeeded) : null,
+          building_open: buildingOpen,
+          elevator_notes: elevatorNotes || null,
+          // Facilities extra fields
+          setup_instructions: setupInstructions || null,
           // Additional fields
           expected_attendees: eventExpectedAttendees ? parseInt(eventExpectedAttendees) : null,
           food_served: eventFoodServed,
@@ -421,6 +454,19 @@ export default function AdminPage() {
         setEventNeedsIT(false)
         setEventNeedsSecurity(false)
         setEventNeedsFacilities(false)
+        setActiveTeamTab(null)
+        setProgramNotes('')
+        setOfficeNotes('')
+        setItNotes('')
+        setSecurityNotes('')
+        setFacilitiesNotes('')
+        setTechsNeeded('')
+        setAvEquipment('')
+        setTechNotes('')
+        setSecurityPersonnelNeeded('')
+        setBuildingOpen(false)
+        setElevatorNotes('')
+        setSetupInstructions('')
         setEventExpectedAttendees('')
         setEventFoodServed(false)
         setEventGeneralNotes('')
@@ -824,76 +870,6 @@ export default function AdminPage() {
                           />
                         </div>
 
-                        {/* Team Assignments */}
-                        <div className="border-t border-slate-200 pt-4 mt-4">
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Team Assignments
-                          </label>
-                          <p className="text-xs text-slate-500 mb-3">Select which teams need to be involved</p>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setEventNeedsProgram(!eventNeedsProgram)}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                                eventNeedsProgram
-                                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                              }`}
-                            >
-                              <UserGroupIcon className="w-4 h-4" />
-                              Program
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEventNeedsOffice(!eventNeedsOffice)}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                                eventNeedsOffice
-                                  ? 'bg-pink-50 border-pink-300 text-pink-700'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                              }`}
-                            >
-                              <BuildingOfficeIcon className="w-4 h-4" />
-                              Office
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEventNeedsIT(!eventNeedsIT)}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                                eventNeedsIT
-                                  ? 'bg-cyan-50 border-cyan-300 text-cyan-700'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                              }`}
-                            >
-                              <ComputerDesktopIcon className="w-4 h-4" />
-                              IT
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEventNeedsSecurity(!eventNeedsSecurity)}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                                eventNeedsSecurity
-                                  ? 'bg-amber-50 border-amber-300 text-amber-700'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                              }`}
-                            >
-                              <ShieldCheckIcon className="w-4 h-4" />
-                              Security
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEventNeedsFacilities(!eventNeedsFacilities)}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
-                                eventNeedsFacilities
-                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                              }`}
-                            >
-                              <WrenchScrewdriverIcon className="w-4 h-4" />
-                              Facilities
-                            </button>
-                          </div>
-                        </div>
-
                         {/* Expected Attendees & Food */}
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -934,6 +910,319 @@ export default function AdminPage() {
                             rows={2}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
                           />
+                        </div>
+
+                        {/* Team Assignments with Tabs */}
+                        <div className="border border-slate-200 rounded-lg overflow-hidden mt-4">
+                          <div className="p-4 bg-slate-50 border-b border-slate-200">
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              Team Assignments
+                            </label>
+                            <p className="text-xs text-slate-500 mb-3">Select teams and add their specific details</p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEventNeedsProgram(!eventNeedsProgram)
+                                  if (!eventNeedsProgram) setActiveTeamTab('program')
+                                  else if (activeTeamTab === 'program') setActiveTeamTab(null)
+                                }}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                  eventNeedsProgram
+                                    ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                              >
+                                <UserGroupIcon className="w-4 h-4" />
+                                Program
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEventNeedsOffice(!eventNeedsOffice)
+                                  if (!eventNeedsOffice) setActiveTeamTab('office')
+                                  else if (activeTeamTab === 'office') setActiveTeamTab(null)
+                                }}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                  eventNeedsOffice
+                                    ? 'bg-pink-50 border-pink-300 text-pink-700'
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                              >
+                                <BuildingOfficeIcon className="w-4 h-4" />
+                                Office
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEventNeedsIT(!eventNeedsIT)
+                                  if (!eventNeedsIT) setActiveTeamTab('it')
+                                  else if (activeTeamTab === 'it') setActiveTeamTab(null)
+                                }}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                  eventNeedsIT
+                                    ? 'bg-cyan-50 border-cyan-300 text-cyan-700'
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                              >
+                                <ComputerDesktopIcon className="w-4 h-4" />
+                                IT
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEventNeedsSecurity(!eventNeedsSecurity)
+                                  if (!eventNeedsSecurity) setActiveTeamTab('security')
+                                  else if (activeTeamTab === 'security') setActiveTeamTab(null)
+                                }}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                  eventNeedsSecurity
+                                    ? 'bg-amber-50 border-amber-300 text-amber-700'
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                              >
+                                <ShieldCheckIcon className="w-4 h-4" />
+                                Security
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEventNeedsFacilities(!eventNeedsFacilities)
+                                  if (!eventNeedsFacilities) setActiveTeamTab('facilities')
+                                  else if (activeTeamTab === 'facilities') setActiveTeamTab(null)
+                                }}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                  eventNeedsFacilities
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                                }`}
+                              >
+                                <WrenchScrewdriverIcon className="w-4 h-4" />
+                                Facilities
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Team Tabs */}
+                          {(eventNeedsProgram || eventNeedsOffice || eventNeedsIT || eventNeedsSecurity || eventNeedsFacilities) && (
+                            <>
+                              <div className="flex border-b border-slate-200 overflow-x-auto">
+                                {eventNeedsProgram && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTeamTab('program')}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
+                                      activeTeamTab === 'program' ? 'text-indigo-600 border-indigo-500' : 'text-slate-500 border-transparent hover:text-slate-700'
+                                    }`}
+                                  >
+                                    <UserGroupIcon className="w-4 h-4" />
+                                    Program
+                                  </button>
+                                )}
+                                {eventNeedsOffice && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTeamTab('office')}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
+                                      activeTeamTab === 'office' ? 'text-pink-600 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-700'
+                                    }`}
+                                  >
+                                    <BuildingOfficeIcon className="w-4 h-4" />
+                                    Office
+                                  </button>
+                                )}
+                                {eventNeedsIT && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTeamTab('it')}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
+                                      activeTeamTab === 'it' ? 'text-cyan-600 border-cyan-500' : 'text-slate-500 border-transparent hover:text-slate-700'
+                                    }`}
+                                  >
+                                    <ComputerDesktopIcon className="w-4 h-4" />
+                                    IT / A/V
+                                  </button>
+                                )}
+                                {eventNeedsSecurity && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTeamTab('security')}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
+                                      activeTeamTab === 'security' ? 'text-amber-600 border-amber-500' : 'text-slate-500 border-transparent hover:text-slate-700'
+                                    }`}
+                                  >
+                                    <ShieldCheckIcon className="w-4 h-4" />
+                                    Security
+                                  </button>
+                                )}
+                                {eventNeedsFacilities && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTeamTab('facilities')}
+                                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px ${
+                                      activeTeamTab === 'facilities' ? 'text-emerald-600 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-700'
+                                    }`}
+                                  >
+                                    <WrenchScrewdriverIcon className="w-4 h-4" />
+                                    Facilities
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Tab Content */}
+                              {activeTeamTab === 'program' && eventNeedsProgram && (
+                                <div className="p-4 bg-indigo-50 space-y-3">
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Program Notes</label>
+                                    <textarea
+                                      value={programNotes}
+                                      onChange={(e) => setProgramNotes(e.target.value)}
+                                      placeholder="Notes for Program Director..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              {activeTeamTab === 'office' && eventNeedsOffice && (
+                                <div className="p-4 bg-pink-50 space-y-3">
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Office Notes</label>
+                                    <textarea
+                                      value={officeNotes}
+                                      onChange={(e) => setOfficeNotes(e.target.value)}
+                                      placeholder="Notes for Office..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-pink-500"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              {activeTeamTab === 'it' && eventNeedsIT && (
+                                <div className="p-4 bg-cyan-50 space-y-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-700 mb-1">Techs Needed</label>
+                                      <input
+                                        type="number"
+                                        value={techsNeeded}
+                                        onChange={(e) => setTechsNeeded(e.target.value)}
+                                        placeholder="Number"
+                                        min="0"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-700 mb-1">A/V Equipment</label>
+                                      <input
+                                        type="text"
+                                        value={avEquipment}
+                                        onChange={(e) => setAvEquipment(e.target.value)}
+                                        placeholder="Projector, mic, etc."
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tech Notes</label>
+                                    <textarea
+                                      value={techNotes}
+                                      onChange={(e) => setTechNotes(e.target.value)}
+                                      placeholder="Technical requirements..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">IT Notes</label>
+                                    <textarea
+                                      value={itNotes}
+                                      onChange={(e) => setItNotes(e.target.value)}
+                                      placeholder="Additional IT notes..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              {activeTeamTab === 'security' && eventNeedsSecurity && (
+                                <div className="p-4 bg-amber-50 space-y-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-700 mb-1">Personnel Needed</label>
+                                      <input
+                                        type="number"
+                                        value={securityPersonnelNeeded}
+                                        onChange={(e) => setSecurityPersonnelNeeded(e.target.value)}
+                                        placeholder="Number"
+                                        min="0"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
+                                      />
+                                    </div>
+                                    <div className="flex items-end pb-2">
+                                      <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={buildingOpen}
+                                          onChange={(e) => setBuildingOpen(e.target.checked)}
+                                          className="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-amber-500"
+                                        />
+                                        <span className="text-sm text-slate-700">Building Open After Hours</span>
+                                      </label>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Elevator Notes</label>
+                                    <textarea
+                                      value={elevatorNotes}
+                                      onChange={(e) => setElevatorNotes(e.target.value)}
+                                      placeholder="Elevator requirements..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Security Notes</label>
+                                    <textarea
+                                      value={securityNotes}
+                                      onChange={(e) => setSecurityNotes(e.target.value)}
+                                      placeholder="Security requirements..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              {activeTeamTab === 'facilities' && eventNeedsFacilities && (
+                                <div className="p-4 bg-emerald-50 space-y-3">
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Setup Instructions</label>
+                                    <textarea
+                                      value={setupInstructions}
+                                      onChange={(e) => setSetupInstructions(e.target.value)}
+                                      placeholder="Room setup, furniture arrangement..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Facilities Notes</label>
+                                    <textarea
+                                      value={facilitiesNotes}
+                                      onChange={(e) => setFacilitiesNotes(e.target.value)}
+                                      placeholder="Additional facilities notes..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
 
                         {/* Veracross Availability Check */}

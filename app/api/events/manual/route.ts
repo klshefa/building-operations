@@ -36,6 +36,22 @@ export async function POST(request: Request) {
       needs_facilities,
       expected_attendees,
       food_served,
+      // Team notes
+      program_director_notes,
+      office_notes,
+      it_notes,
+      security_notes,
+      facilities_notes,
+      // IT extra fields
+      techs_needed,
+      av_equipment,
+      tech_notes,
+      // Security extra fields
+      security_personnel_needed,
+      building_open,
+      elevator_notes,
+      // Facilities extra fields
+      setup_instructions,
       // Self-service specific fields
       requested_by,
       requested_at,
@@ -84,7 +100,22 @@ export async function POST(request: Request) {
         needs_facilities: needs_facilities || false,
         expected_attendees: expected_attendees || null,
         food_served: food_served || false,
-        building_open: false,
+        // Team notes
+        program_director_notes: program_director_notes || null,
+        office_notes: office_notes || null,
+        it_notes: it_notes || null,
+        security_notes: security_notes || null,
+        facilities_notes: facilities_notes || null,
+        // IT extra fields
+        techs_needed: techs_needed || null,
+        av_equipment: av_equipment || null,
+        tech_notes: tech_notes || null,
+        // Security extra fields
+        security_personnel_needed: security_personnel_needed || null,
+        building_open: building_open || false,
+        elevator_notes: elevator_notes || null,
+        // Facilities extra fields
+        setup_instructions: setup_instructions || null,
         created_by: created_by || requested_by,
         // Self-service fields
         requested_by,
