@@ -89,6 +89,7 @@ export async function GET(request: Request) {
   const source = searchParams.get('source')
   const hideHidden = searchParams.get('hideHidden') === 'true'
   const includeVcReservations = searchParams.get('includeVcReservations') !== 'false' // default true
+  const hideClassesOnNoSchool = searchParams.get('hideClassesOnNoSchool') !== 'false' // default true
   
   const supabase = createAdminClient()
   
@@ -117,6 +118,31 @@ export async function GET(request: Request) {
   if (error) {
     console.error('Error fetching events:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  
+  // 1b. Find "no school" days from Staff Calendar all-day events
+  const noSchoolDates = new Set<string>()
+  if (hideClassesOnNoSchool && startDate) {
+    // Check for all-day Staff Calendar events containing "no school"
+    const { data: noSchoolEvents } = await supabase
+      .from('ops_events')
+      .select('start_date, end_date')
+      .eq('all_day', true)
+      .eq('primary_source', 'calendar_staff')
+      .ilike('title', '%no school%')
+      .gte('start_date', startDate)
+      .lte('start_date', endDate || startDate)
+    
+    // Add all dates covered by no-school events
+    for (const evt of noSchoolEvents || []) {
+      // Handle multi-day no-school events
+      const start = new Date(evt.start_date)
+      const end = evt.end_date ? new Date(evt.end_date) : start
+      
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        noSchoolDates.add(d.toISOString().split('T')[0])
+      }
+    }
   }
 
   // If not including VC reservations or no date range, return ops_events only
@@ -244,7 +270,29 @@ export async function GET(request: Request) {
   }
 
   // 5. Merge and sort
-  const allEvents = [...(opsEvents || []), ...vcReservationEvents]
+  let allEvents = [...(opsEvents || []), ...vcReservationEvents]
+  
+  // 5b. Filter out recurring classes on no-school days
+  if (noSchoolDates.size > 0) {
+    allEvents = allEvents.filter(evt => {
+      // If this date is a no-school day
+      if (noSchoolDates.has(evt.start_date)) {
+        // Keep Staff Calendar events (they include the "no school" notice itself)
+        if (evt.primary_source === 'calendar_staff') return true
+        // Keep other calendar events (LS, MS calendars)
+        if (evt.primary_source?.startsWith('calendar_')) return true
+        // Keep manual events
+        if (evt.primary_source === 'manual') return true
+        // Keep group events (BigQuery group events)
+        if (evt.primary_source === 'bigquery_group') return true
+        // For resource reservations: keep one-off (no recurring pattern), filter recurring
+        if (evt.recurring_pattern) return false
+        // Keep events without recurring pattern (one-offs) or real-time VC reservations
+        return true
+      }
+      return true
+    })
+  }
   
   // Sort by date, then time
   allEvents.sort((a, b) => {
