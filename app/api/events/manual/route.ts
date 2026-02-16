@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       facilities_notes,
       // IT extra fields
       techs_needed,
+      assigned_techs,
       av_equipment,
       tech_notes,
       // Security extra fields
@@ -108,6 +109,7 @@ export async function POST(request: Request) {
         facilities_notes: facilities_notes || null,
         // IT extra fields
         techs_needed: techs_needed || null,
+        assigned_techs: assigned_techs || null,
         av_equipment: av_equipment || null,
         tech_notes: tech_notes || null,
         // Security extra fields

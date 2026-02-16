@@ -84,6 +84,7 @@ export interface OpsEvent {
   
   // IT details
   techs_needed?: number
+  assigned_techs?: string[]
   av_equipment?: string
   tech_notes?: string
   

@@ -75,6 +75,8 @@ interface TeamSection {
   extraFields?: { key: keyof OpsEvent; label: string; type: 'text' | 'number' | 'textarea' | 'checkbox' }[]
 }
 
+const TECH_STAFF = ['Cesar Tejada', 'Keith Lowry', 'Niles Patel']
+
 const teamSections: TeamSection[] = [
   {
     id: 'program',
@@ -1081,8 +1083,111 @@ export default function EventDetailPage() {
               {activeSection && (
                 <div className={`p-6 ${activeSection.bgColor}`}>
                   <div className="space-y-4">
-                    {/* Extra fields specific to this team */}
-                    {activeSection.extraFields && (
+                    {/* Custom IT Section with Techs Needed checkbox/select */}
+                    {activeSection.id === 'it' && (
+                      <div className="space-y-4">
+                        {/* Techs Needed Section */}
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={!!event.techs_needed}
+                              onChange={(e) => {
+                                if (!e.target.checked) {
+                                  updateField('techs_needed', null)
+                                  updateField('assigned_techs', null)
+                                } else {
+                                  updateField('techs_needed', 1)
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                            />
+                            <span className="text-sm font-medium text-slate-700">Techs Needed</span>
+                          </label>
+                          
+                          {!!event.techs_needed && (
+                            <div className="ml-6 space-y-3">
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm text-slate-600">How many?</span>
+                                <select
+                                  value={event.techs_needed || ''}
+                                  onChange={(e) => {
+                                    updateField('techs_needed', e.target.value ? parseInt(e.target.value) : null)
+                                    if (!e.target.value) updateField('assigned_techs', null)
+                                  }}
+                                  className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 bg-white"
+                                >
+                                  <option value="1">1</option>
+                                  <option value="2">2</option>
+                                  <option value="3">3</option>
+                                </select>
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm text-slate-600 mb-1">Assign Tech Staff</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {TECH_STAFF.map((tech) => {
+                                    const assignedTechs = (event.assigned_techs as string[]) || []
+                                    const isSelected = assignedTechs.includes(tech)
+                                    return (
+                                      <label
+                                        key={tech}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                          isSelected
+                                            ? 'bg-cyan-100 border-cyan-500 text-cyan-700'
+                                            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            const current = (event.assigned_techs as string[]) || []
+                                            if (e.target.checked) {
+                                              updateField('assigned_techs', [...current, tech])
+                                            } else {
+                                              updateField('assigned_techs', current.filter(t => t !== tech))
+                                            }
+                                          }}
+                                          className="sr-only"
+                                        />
+                                        <span className="text-sm">{tech}</span>
+                                      </label>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* A/V Equipment */}
+                        <div>
+                          <label className="text-sm text-slate-700 font-medium">A/V Equipment</label>
+                          <input
+                            type="text"
+                            value={(event.av_equipment as string) || ''}
+                            onChange={(e) => updateField('av_equipment', e.target.value)}
+                            placeholder="Projector, mic, etc."
+                            className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 focus:border-cyan-500 focus:outline-none text-sm bg-white"
+                          />
+                        </div>
+                        
+                        {/* Tech Notes */}
+                        <div>
+                          <MentionInput
+                            label="Tech Notes"
+                            value={(event.tech_notes as string) || ''}
+                            onChange={(value) => updateField('tech_notes', value)}
+                            placeholder="Technical requirements... Type @ to mention someone"
+                            rows={3}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Generic extra fields for non-IT teams */}
+                    {activeSection.id !== 'it' && activeSection.extraFields && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {activeSection.extraFields.map(field => (
                           <div key={field.key} className={field.type === 'textarea' ? 'md:col-span-2' : ''}>

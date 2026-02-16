@@ -152,9 +152,13 @@ export default function AdminPage() {
   const [securityNotes, setSecurityNotes] = useState('')
   const [facilitiesNotes, setFacilitiesNotes] = useState('')
   // IT extra fields
+  const [techsNeededChecked, setTechsNeededChecked] = useState(false)
   const [techsNeeded, setTechsNeeded] = useState('')
+  const [assignedTechs, setAssignedTechs] = useState<string[]>([])
   const [avEquipment, setAvEquipment] = useState('')
   const [techNotes, setTechNotes] = useState('')
+  
+  const TECH_STAFF = ['Cesar Tejada', 'Keith Lowry', 'Niles Patel']
   // Security extra fields
   const [securityPersonnelNeeded, setSecurityPersonnelNeeded] = useState('')
   const [buildingOpen, setBuildingOpen] = useState(false)
@@ -459,6 +463,7 @@ export default function AdminPage() {
           facilities_notes: facilitiesNotes || null,
           // IT extra fields
           techs_needed: techsNeeded ? parseInt(techsNeeded) : null,
+          assigned_techs: assignedTechs.length > 0 ? assignedTechs : null,
           av_equipment: avEquipment || null,
           tech_notes: techNotes || null,
           // Security extra fields
@@ -497,7 +502,9 @@ export default function AdminPage() {
         setItNotes('')
         setSecurityNotes('')
         setFacilitiesNotes('')
+        setTechsNeededChecked(false)
         setTechsNeeded('')
+        setAssignedTechs([])
         setAvEquipment('')
         setTechNotes('')
         setSecurityPersonnelNeeded('')
@@ -1141,28 +1148,87 @@ export default function AdminPage() {
 
                               {activeTeamTab === 'it' && eventNeedsIT && (
                                 <div className="p-4 bg-cyan-50 space-y-3">
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                      <label className="block text-sm font-medium text-slate-700 mb-1">Techs Needed</label>
+                                  {/* Techs Needed Section */}
+                                  <div className="space-y-2">
+                                    <label className="flex items-center gap-2 cursor-pointer">
                                       <input
-                                        type="number"
-                                        value={techsNeeded}
-                                        onChange={(e) => setTechsNeeded(e.target.value)}
-                                        placeholder="Number"
-                                        min="0"
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                        type="checkbox"
+                                        checked={techsNeededChecked}
+                                        onChange={(e) => {
+                                          setTechsNeededChecked(e.target.checked)
+                                          if (!e.target.checked) {
+                                            setTechsNeeded('')
+                                            setAssignedTechs([])
+                                          }
+                                        }}
+                                        className="w-4 h-4 text-cyan-600 border-slate-300 rounded focus:ring-cyan-500"
                                       />
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-slate-700 mb-1">A/V Equipment</label>
-                                      <input
-                                        type="text"
-                                        value={avEquipment}
-                                        onChange={(e) => setAvEquipment(e.target.value)}
-                                        placeholder="Projector, mic, etc."
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
-                                      />
-                                    </div>
+                                      <span className="text-sm font-medium text-slate-700">Techs Needed</span>
+                                    </label>
+                                    
+                                    {techsNeededChecked && (
+                                      <div className="ml-6 space-y-2">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-sm text-slate-600">How many?</span>
+                                          <select
+                                            value={techsNeeded}
+                                            onChange={(e) => {
+                                              setTechsNeeded(e.target.value)
+                                              setAssignedTechs([])
+                                            }}
+                                            className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                          >
+                                            <option value="">Select...</option>
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3">3</option>
+                                          </select>
+                                        </div>
+                                        
+                                        {techsNeeded && (
+                                          <div>
+                                            <label className="block text-sm text-slate-600 mb-1">Assign Tech Staff</label>
+                                            <div className="flex flex-wrap gap-2">
+                                              {TECH_STAFF.map((tech) => (
+                                                <label
+                                                  key={tech}
+                                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                                    assignedTechs.includes(tech)
+                                                      ? 'bg-cyan-100 border-cyan-500 text-cyan-700'
+                                                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                                                  }`}
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={assignedTechs.includes(tech)}
+                                                    onChange={(e) => {
+                                                      if (e.target.checked) {
+                                                        setAssignedTechs([...assignedTechs, tech])
+                                                      } else {
+                                                        setAssignedTechs(assignedTechs.filter(t => t !== tech))
+                                                      }
+                                                    }}
+                                                    className="sr-only"
+                                                  />
+                                                  <span className="text-sm">{tech}</span>
+                                                </label>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">A/V Equipment</label>
+                                    <input
+                                      type="text"
+                                      value={avEquipment}
+                                      onChange={(e) => setAvEquipment(e.target.value)}
+                                      placeholder="Projector, mic, etc."
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                    />
                                   </div>
                                   <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Tech Notes</label>
@@ -1175,7 +1241,7 @@ export default function AdminPage() {
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">IT Notes</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">IT / A/V Notes</label>
                                     <textarea
                                       value={itNotes}
                                       onChange={(e) => setItNotes(e.target.value)}
