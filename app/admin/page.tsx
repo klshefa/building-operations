@@ -321,17 +321,17 @@ export default function AdminPage() {
       const syncTimes: Record<string, { completed_at: string; events_synced: number }> = {}
       
       for (const [displayKey, dbSource] of Object.entries(sourceMap)) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('ops_sync_log')
           .select('completed_at, events_synced')
           .eq('source', dbSource)
           .eq('status', 'completed')
           .order('completed_at', { ascending: false })
           .limit(1)
-          .single()
         
-        if (data) {
-          syncTimes[displayKey] = data
+        // data is an array when not using .single()
+        if (data && data.length > 0) {
+          syncTimes[displayKey] = data[0]
         }
       }
       
