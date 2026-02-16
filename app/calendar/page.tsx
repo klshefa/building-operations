@@ -240,16 +240,16 @@ export default function CalendarPage() {
             </div>
           ) : viewMode === 'month' ? (
             /* Month View */
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="flex flex-col lg:flex-row gap-6">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4"
+                className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-4 lg:p-6"
               >
                 {/* Day headers */}
                 <div className="grid grid-cols-7 gap-1 mb-2">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">
+                    <div key={day} className="text-center text-sm font-medium text-slate-500 py-2">
                       {day}
                     </div>
                   ))}
@@ -259,7 +259,7 @@ export default function CalendarPage() {
                 <div className="grid grid-cols-7 gap-1">
                   {paddedMonthDays.map((day, idx) => {
                     if (!day) {
-                      return <div key={`pad-${idx}`} className="aspect-square" />
+                      return <div key={`pad-${idx}`} className="min-h-[70px] lg:min-h-[80px]" />
                     }
 
                     const dayEvents = getEventsForDay(day)
@@ -269,18 +269,20 @@ export default function CalendarPage() {
                       <button
                         key={day.toISOString()}
                         onClick={() => setSelectedDate(day)}
-                        className={`aspect-square p-1 rounded-lg transition-all relative ${
+                        className={`min-h-[70px] lg:min-h-[80px] p-2 rounded-lg transition-all relative flex flex-col ${
                           isSelected
                             ? 'bg-shefa-blue-600 text-white'
                             : isToday(day)
-                            ? 'bg-shefa-blue-50 text-shefa-blue-700'
+                            ? 'bg-shefa-blue-50 text-shefa-blue-700 ring-2 ring-shefa-blue-300'
                             : 'hover:bg-slate-100 text-slate-700'
-                        } ${!isSameMonth(day, currentDate) ? 'opacity-50' : ''}`}
+                        } ${!isSameMonth(day, currentDate) ? 'opacity-40' : ''}`}
                       >
-                        <span className="text-sm font-medium">{format(day, 'd')}</span>
+                        <span className={`text-sm font-semibold ${isToday(day) && !isSelected ? 'bg-shefa-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center' : ''}`}>
+                          {format(day, 'd')}
+                        </span>
                         {dayEvents.length > 0 && (
-                          <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex gap-0.5">
-                            {dayEvents.slice(0, 3).map((_, i) => (
+                          <div className="mt-auto flex flex-wrap gap-0.5 justify-center">
+                            {dayEvents.slice(0, 4).map((_, i) => (
                               <span
                                 key={i}
                                 className={`w-1.5 h-1.5 rounded-full ${
@@ -288,9 +290,9 @@ export default function CalendarPage() {
                                 }`}
                               />
                             ))}
-                            {dayEvents.length > 3 && (
-                              <span className={`text-[8px] ${isSelected ? 'text-white' : 'text-slate-500'}`}>
-                                +{dayEvents.length - 3}
+                            {dayEvents.length > 4 && (
+                              <span className={`text-[10px] font-medium ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
+                                +{dayEvents.length - 4}
                               </span>
                             )}
                           </div>
@@ -305,7 +307,7 @@ export default function CalendarPage() {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white rounded-xl shadow-sm border border-slate-200 p-4"
+                className="w-full lg:w-80 xl:w-96 bg-white rounded-xl shadow-sm border border-slate-200 p-4 lg:p-6"
               >
                 <h2 className="text-lg font-semibold text-slate-800 mb-4">
                   {selectedDate ? format(selectedDate, 'EEEE, MMMM d') : 'Select a day'}
@@ -315,7 +317,7 @@ export default function CalendarPage() {
                   selectedDayEvents.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">No events on this day</p>
                   ) : (
-                    <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                    <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
                       {selectedDayEvents.map(event => (
                         <EventCard key={event.id} event={event} compact />
                       ))}
