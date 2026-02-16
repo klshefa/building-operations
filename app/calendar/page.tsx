@@ -240,16 +240,16 @@ export default function CalendarPage() {
             </div>
           ) : viewMode === 'month' ? (
             /* Month View */
-            <div className="flex flex-col lg:flex-row gap-6" style={{ height: 'calc(100vh - 180px)' }}>
+            <div className="flex flex-col lg:flex-row gap-4" style={{ height: 'calc(100vh - 160px)' }}>
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col"
+                className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-2 flex flex-col"
               >
                 {/* Day headers */}
-                <div className="grid grid-cols-7 gap-1 mb-1">
+                <div className="grid grid-cols-7 mb-1">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="text-center text-sm font-medium text-slate-500 py-2">
+                    <div key={day} className="text-center text-sm font-medium text-slate-500 py-1">
                       {day}
                     </div>
                   ))}
@@ -257,12 +257,12 @@ export default function CalendarPage() {
 
                 {/* Calendar days - rows expand to fill height */}
                 <div 
-                  className="grid grid-cols-7 gap-1 flex-1"
+                  className="grid grid-cols-7 flex-1"
                   style={{ gridTemplateRows: 'repeat(6, 1fr)' }}
                 >
                   {paddedMonthDays.map((day, idx) => {
                     if (!day) {
-                      return <div key={`pad-${idx}`} />
+                      return <div key={`pad-${idx}`} className="border-b border-r border-slate-100" />
                     }
 
                     const dayEvents = getEventsForDay(day)
@@ -272,12 +272,12 @@ export default function CalendarPage() {
                       <button
                         key={day.toISOString()}
                         onClick={() => setSelectedDate(day)}
-                        className={`p-2 rounded-lg transition-all flex flex-col h-full ${
+                        className={`p-1.5 transition-all flex flex-col h-full border-b border-r border-slate-100 ${
                           isSelected
                             ? 'bg-shefa-blue-600 text-white'
                             : isToday(day)
-                            ? 'bg-shefa-blue-50 text-shefa-blue-700 ring-2 ring-shefa-blue-300'
-                            : 'hover:bg-slate-100 text-slate-700'
+                            ? 'bg-shefa-blue-50 text-shefa-blue-700'
+                            : 'hover:bg-slate-50 text-slate-700'
                         } ${!isSameMonth(day, currentDate) ? 'opacity-40' : ''}`}
                       >
                         <span className={`text-sm font-semibold ${isToday(day) && !isSelected ? 'bg-shefa-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center' : ''}`}>
@@ -310,24 +310,24 @@ export default function CalendarPage() {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="w-full lg:w-96 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col"
+                className="w-full lg:w-72 bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex flex-col"
               >
-                <h2 className="text-lg font-semibold text-slate-800 mb-4">
-                  {selectedDate ? format(selectedDate, 'EEEE, MMMM d') : 'Select a day'}
+                <h2 className="text-base font-semibold text-slate-800 mb-3">
+                  {selectedDate ? format(selectedDate, 'EEE, MMM d') : 'Select a day'}
                 </h2>
 
                 {selectedDate ? (
                   selectedDayEvents.length === 0 ? (
-                    <p className="text-slate-500 text-center py-8">No events on this day</p>
+                    <p className="text-slate-500 text-center py-6 text-sm">No events</p>
                   ) : (
-                    <div className="space-y-3 overflow-y-auto flex-1">
+                    <div className="space-y-2 overflow-y-auto flex-1">
                       {selectedDayEvents.map(event => (
                         <EventCard key={event.id} event={event} compact />
                       ))}
                     </div>
                   )
                 ) : (
-                  <p className="text-slate-500 text-center py-8">Click on a day to see events</p>
+                  <p className="text-slate-400 text-center py-6 text-sm">Click a day to see events</p>
                 )}
               </motion.div>
             </div>
