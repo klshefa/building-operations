@@ -240,14 +240,14 @@ export default function CalendarPage() {
             </div>
           ) : viewMode === 'month' ? (
             /* Month View */
-            <div className="flex flex-col lg:flex-row gap-6">
+            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-180px)]">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-4 lg:p-6"
+                className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col"
               >
                 {/* Day headers */}
-                <div className="grid grid-cols-7 gap-1 mb-2">
+                <div className="grid grid-cols-7 gap-1 mb-1">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                     <div key={day} className="text-center text-sm font-medium text-slate-500 py-2">
                       {day}
@@ -255,11 +255,11 @@ export default function CalendarPage() {
                   ))}
                 </div>
 
-                {/* Calendar days */}
-                <div className="grid grid-cols-7 gap-1">
+                {/* Calendar days - fills remaining height */}
+                <div className="grid grid-cols-7 grid-rows-6 gap-1 flex-1">
                   {paddedMonthDays.map((day, idx) => {
                     if (!day) {
-                      return <div key={`pad-${idx}`} className="min-h-[70px] lg:min-h-[80px]" />
+                      return <div key={`pad-${idx}`} className="min-h-0" />
                     }
 
                     const dayEvents = getEventsForDay(day)
@@ -269,7 +269,7 @@ export default function CalendarPage() {
                       <button
                         key={day.toISOString()}
                         onClick={() => setSelectedDate(day)}
-                        className={`min-h-[70px] lg:min-h-[80px] p-2 rounded-lg transition-all relative flex flex-col ${
+                        className={`p-2 rounded-lg transition-all flex flex-col min-h-0 ${
                           isSelected
                             ? 'bg-shefa-blue-600 text-white'
                             : isToday(day)
@@ -285,13 +285,13 @@ export default function CalendarPage() {
                             {dayEvents.slice(0, 4).map((_, i) => (
                               <span
                                 key={i}
-                                className={`w-1.5 h-1.5 rounded-full ${
+                                className={`w-2 h-2 rounded-full ${
                                   isSelected ? 'bg-white' : 'bg-shefa-blue-500'
                                 }`}
                               />
                             ))}
                             {dayEvents.length > 4 && (
-                              <span className={`text-[10px] font-medium ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
+                              <span className={`text-xs font-medium ml-0.5 ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
                                 +{dayEvents.length - 4}
                               </span>
                             )}
@@ -307,7 +307,7 @@ export default function CalendarPage() {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="w-full lg:w-80 xl:w-96 bg-white rounded-xl shadow-sm border border-slate-200 p-4 lg:p-6"
+                className="w-full lg:w-96 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col"
               >
                 <h2 className="text-lg font-semibold text-slate-800 mb-4">
                   {selectedDate ? format(selectedDate, 'EEEE, MMMM d') : 'Select a day'}
@@ -317,7 +317,7 @@ export default function CalendarPage() {
                   selectedDayEvents.length === 0 ? (
                     <p className="text-slate-500 text-center py-8">No events on this day</p>
                   ) : (
-                    <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
+                    <div className="space-y-3 overflow-y-auto flex-1">
                       {selectedDayEvents.map(event => (
                         <EventCard key={event.id} event={event} compact />
                       ))}
