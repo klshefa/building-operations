@@ -240,7 +240,7 @@ export default function CalendarPage() {
             </div>
           ) : viewMode === 'month' ? (
             /* Month View */
-            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-180px)]">
+            <div className="flex flex-col lg:flex-row gap-6" style={{ height: 'calc(100vh - 180px)' }}>
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -255,11 +255,14 @@ export default function CalendarPage() {
                   ))}
                 </div>
 
-                {/* Calendar days - fills remaining height */}
-                <div className="grid grid-cols-7 grid-rows-6 gap-1 flex-1">
+                {/* Calendar days - rows expand to fill height */}
+                <div 
+                  className="grid grid-cols-7 gap-1 flex-1"
+                  style={{ gridTemplateRows: 'repeat(6, 1fr)' }}
+                >
                   {paddedMonthDays.map((day, idx) => {
                     if (!day) {
-                      return <div key={`pad-${idx}`} className="min-h-0" />
+                      return <div key={`pad-${idx}`} />
                     }
 
                     const dayEvents = getEventsForDay(day)
@@ -269,7 +272,7 @@ export default function CalendarPage() {
                       <button
                         key={day.toISOString()}
                         onClick={() => setSelectedDate(day)}
-                        className={`p-2 rounded-lg transition-all flex flex-col min-h-0 ${
+                        className={`p-2 rounded-lg transition-all flex flex-col h-full ${
                           isSelected
                             ? 'bg-shefa-blue-600 text-white'
                             : isToday(day)
