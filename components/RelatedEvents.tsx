@@ -99,7 +99,7 @@ export function RelatedEvents({ eventId, userEmail, className = '' }: RelatedEve
   const [loading, setLoading] = useState(true)
   const [linked, setLinked] = useState<RawEvent[]>([])
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const [showLinkModal, setShowLinkModal] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   
