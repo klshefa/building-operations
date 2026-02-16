@@ -34,6 +34,8 @@ export async function POST(request: Request) {
       needs_it,
       needs_security,
       needs_facilities,
+      expected_attendees,
+      food_served,
       // Self-service specific fields
       requested_by,
       requested_at,
@@ -80,7 +82,8 @@ export async function POST(request: Request) {
         needs_it: needs_it || false,
         needs_security: needs_security || false,
         needs_facilities: needs_facilities || false,
-        food_served: false,
+        expected_attendees: expected_attendees || null,
+        food_served: food_served || false,
         building_open: false,
         created_by: created_by || requested_by,
         // Self-service fields

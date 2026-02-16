@@ -23,6 +23,11 @@ import {
   MagnifyingGlassIcon,
   ClipboardDocumentListIcon,
   EnvelopeIcon,
+  UserGroupIcon,
+  BuildingOfficeIcon,
+  ComputerDesktopIcon,
+  ShieldCheckIcon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline'
 import type { AuditLogEntry } from '@/lib/types'
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
@@ -118,6 +123,16 @@ export default function AdminPage() {
   const [eventAllDay, setEventAllDay] = useState(false)
   const [addingEvent, setAddingEvent] = useState(false)
   const [eventStatus, setEventStatus] = useState<{ success: boolean; message: string } | null>(null)
+  // Team assignments
+  const [eventNeedsProgram, setEventNeedsProgram] = useState(false)
+  const [eventNeedsOffice, setEventNeedsOffice] = useState(false)
+  const [eventNeedsIT, setEventNeedsIT] = useState(false)
+  const [eventNeedsSecurity, setEventNeedsSecurity] = useState(false)
+  const [eventNeedsFacilities, setEventNeedsFacilities] = useState(false)
+  // Additional fields
+  const [eventExpectedAttendees, setEventExpectedAttendees] = useState('')
+  const [eventFoodServed, setEventFoodServed] = useState(false)
+  const [eventGeneralNotes, setEventGeneralNotes] = useState('')
   
   // Resource dropdown for location
   const [resources, setResources] = useState<{ id: number; description: string; resource_type?: string }[]>([])
@@ -376,6 +391,16 @@ export default function AdminPage() {
           all_day: eventAllDay,
           location: eventLocation || null,
           created_by: user?.email,
+          // Team assignments
+          needs_program_director: eventNeedsProgram,
+          needs_office: eventNeedsOffice,
+          needs_it: eventNeedsIT,
+          needs_security: eventNeedsSecurity,
+          needs_facilities: eventNeedsFacilities,
+          // Additional fields
+          expected_attendees: eventExpectedAttendees ? parseInt(eventExpectedAttendees) : null,
+          food_served: eventFoodServed,
+          general_notes: eventGeneralNotes || null,
         }),
       })
 
@@ -383,6 +408,7 @@ export default function AdminPage() {
 
       if (res.ok) {
         setEventStatus({ success: true, message: 'Event created successfully!' })
+        // Reset all fields
         setEventTitle('')
         setEventDescription('')
         setEventDate('')
@@ -390,6 +416,15 @@ export default function AdminPage() {
         setEventEndTime('')
         setEventLocation('')
         setEventAllDay(false)
+        setEventNeedsProgram(false)
+        setEventNeedsOffice(false)
+        setEventNeedsIT(false)
+        setEventNeedsSecurity(false)
+        setEventNeedsFacilities(false)
+        setEventExpectedAttendees('')
+        setEventFoodServed(false)
+        setEventGeneralNotes('')
+        setSelectedResourceId(null)
       } else {
         setEventStatus({ success: false, message: data.error || 'Failed to create event' })
       }
@@ -784,6 +819,118 @@ export default function AdminPage() {
                             value={eventDescription}
                             onChange={(e) => setEventDescription(e.target.value)}
                             placeholder="Optional event description..."
+                            rows={2}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                          />
+                        </div>
+
+                        {/* Team Assignments */}
+                        <div className="border-t border-slate-200 pt-4 mt-4">
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Team Assignments
+                          </label>
+                          <p className="text-xs text-slate-500 mb-3">Select which teams need to be involved</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEventNeedsProgram(!eventNeedsProgram)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                eventNeedsProgram
+                                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                              }`}
+                            >
+                              <UserGroupIcon className="w-4 h-4" />
+                              Program
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEventNeedsOffice(!eventNeedsOffice)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                eventNeedsOffice
+                                  ? 'bg-pink-50 border-pink-300 text-pink-700'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                              }`}
+                            >
+                              <BuildingOfficeIcon className="w-4 h-4" />
+                              Office
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEventNeedsIT(!eventNeedsIT)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                eventNeedsIT
+                                  ? 'bg-cyan-50 border-cyan-300 text-cyan-700'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                              }`}
+                            >
+                              <ComputerDesktopIcon className="w-4 h-4" />
+                              IT
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEventNeedsSecurity(!eventNeedsSecurity)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                eventNeedsSecurity
+                                  ? 'bg-amber-50 border-amber-300 text-amber-700'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                              }`}
+                            >
+                              <ShieldCheckIcon className="w-4 h-4" />
+                              Security
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEventNeedsFacilities(!eventNeedsFacilities)}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                eventNeedsFacilities
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                              }`}
+                            >
+                              <WrenchScrewdriverIcon className="w-4 h-4" />
+                              Facilities
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expected Attendees & Food */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                              Expected Attendees
+                            </label>
+                            <input
+                              type="number"
+                              value={eventExpectedAttendees}
+                              onChange={(e) => setEventExpectedAttendees(e.target.value)}
+                              placeholder="Number of attendees"
+                              min="0"
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div className="flex items-end pb-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={eventFoodServed}
+                                onChange={(e) => setEventFoodServed(e.target.checked)}
+                                className="w-4 h-4 text-shefa-blue-600 border-slate-300 rounded focus:ring-shefa-blue-500"
+                              />
+                              <span className="text-sm text-slate-700">Food will be served</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* General Notes */}
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">
+                            General Notes
+                          </label>
+                          <textarea
+                            value={eventGeneralNotes}
+                            onChange={(e) => setEventGeneralNotes(e.target.value)}
+                            placeholder="Any additional notes for all teams..."
                             rows={2}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-shefa-blue-500 focus:border-transparent"
                           />
