@@ -15,6 +15,7 @@ import {
   ShieldCheckIcon,
   WrenchScrewdriverIcon,
   AtSymbolIcon,
+  BellIcon,
 } from '@heroicons/react/24/outline'
 
 const teamIcons: Record<TeamType, React.ComponentType<{ className?: string }>> = {
@@ -40,6 +41,7 @@ export default function MyTasksPage() {
   const [userTeams, setUserTeams] = useState<TeamType[]>([])
   const [events, setEvents] = useState<OpsEvent[]>([])
   const [mentionedEvents, setMentionedEvents] = useState<OpsEvent[]>([])
+  const [subscribedEvents, setSubscribedEvents] = useState<OpsEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTeam, setSelectedTeam] = useState<TeamType | 'all'>('all')
 
@@ -52,6 +54,7 @@ export default function MyTasksPage() {
       fetchUserTeams()
       fetchEvents()
       fetchMentionedEvents()
+      fetchSubscribedEvents()
     }
   }, [user])
 
@@ -115,6 +118,45 @@ export default function MyTasksPage() {
     } catch (err) {
       console.error('[My Tasks] Error fetching mentioned events:', err)
       setMentionedEvents([])
+    }
+  }
+
+  async function fetchSubscribedEvents() {
+    if (!user?.email) return
+    
+    const today = format(new Date(), 'yyyy-MM-dd')
+    
+    try {
+      const supabase = createClient()
+      
+      // Fetch subscriptions for this user
+      const { data: subscriptions } = await supabase
+        .from('event_subscriptions')
+        .select('event_id')
+        .eq('user_email', user.email.toLowerCase())
+      
+      if (!subscriptions || subscriptions.length === 0) {
+        setSubscribedEvents([])
+        return
+      }
+      
+      // Get unique event IDs
+      const eventIds = [...new Set(subscriptions.map(s => s.event_id))]
+      
+      // Fetch those events (only future ones)
+      const { data: eventData } = await supabase
+        .from('ops_events')
+        .select('*')
+        .in('id', eventIds)
+        .gte('start_date', today)
+        .eq('is_hidden', false)
+        .neq('status', 'cancelled')
+        .order('start_date', { ascending: true })
+      
+      setSubscribedEvents(eventData || [])
+    } catch (err) {
+      console.error('[My Tasks] Error fetching subscribed events:', err)
+      setSubscribedEvents([])
     }
   }
 
@@ -214,7 +256,26 @@ export default function MyTasksPage() {
                 </motion.div>
               )}
 
-              {userTeams.length === 0 && mentionedEvents.length === 0 ? (
+              {/* Subscribed Events Section */}
+              {subscribedEvents.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-200"
+                >
+                  <h2 className="text-lg font-semibold text-amber-800 mb-4 flex items-center gap-2">
+                    <BellIcon className="w-5 h-5" />
+                    Subscribed ({subscribedEvents.length})
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {subscribedEvents.map(event => (
+                      <EventCard key={event.id} event={event} />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {userTeams.length === 0 && mentionedEvents.length === 0 && subscribedEvents.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -223,7 +284,7 @@ export default function MyTasksPage() {
                   <p className="text-slate-500">You are not assigned to any teams.</p>
                   <p className="text-sm text-slate-400 mt-2">Contact an admin to be added to a team.</p>
                 </motion.div>
-              ) : myEvents.length === 0 && mentionedEvents.length === 0 ? (
+              ) : myEvents.length === 0 && mentionedEvents.length === 0 && subscribedEvents.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
