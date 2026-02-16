@@ -306,36 +306,13 @@ export default function AdminPage() {
   }
 
   async function fetchLastSyncTimes() {
-    const supabase = createClient()
     try {
-      // Map display keys to database source names
-      const sourceMap: Record<string, string> = {
-        'resources': 'bigquery_resources',
-        'group-events': 'bigquery_group',
-        'resource-reservations': 'bigquery_resource',
-        'calendar-staff': 'calendar_staff',
-        'calendar-ls': 'calendar_ls',
-        'calendar-ms': 'calendar_ms',
+      const res = await fetch('/api/sync/status')
+      const data = await res.json()
+      
+      if (data.success && data.syncTimes) {
+        setLastSyncTimes(data.syncTimes)
       }
-      
-      const syncTimes: Record<string, { completed_at: string; events_synced: number }> = {}
-      
-      for (const [displayKey, dbSource] of Object.entries(sourceMap)) {
-        const { data, error } = await supabase
-          .from('ops_sync_log')
-          .select('completed_at, events_synced')
-          .eq('source', dbSource)
-          .eq('status', 'completed')
-          .order('completed_at', { ascending: false })
-          .limit(1)
-        
-        // data is an array when not using .single()
-        if (data && data.length > 0) {
-          syncTimes[displayKey] = data[0]
-        }
-      }
-      
-      setLastSyncTimes(syncTimes)
     } catch (err) {
       console.error('Error fetching sync times:', err)
     }
