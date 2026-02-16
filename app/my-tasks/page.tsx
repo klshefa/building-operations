@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { format, parseISO, isToday, isTomorrow, addDays } from 'date-fns'
+import { format, addDays } from 'date-fns'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,7 @@ import {
   WrenchScrewdriverIcon,
   AtSymbolIcon,
   BellIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline'
 
 const teamIcons: Record<TeamType, React.ComponentType<{ className?: string }>> = {
@@ -141,7 +142,7 @@ export default function MyTasksPage() {
   }
 
   // Filter events that need the user's team(s)
-  const myEvents = events.filter(event => {
+  const teamEvents = events.filter(event => {
     const teams = selectedTeam === 'all' ? userTeams : [selectedTeam]
     return teams.some(team => {
       switch (team) {
@@ -153,13 +154,6 @@ export default function MyTasksPage() {
         default: return false
       }
     })
-  })
-
-  const todayEvents = myEvents.filter(e => isToday(parseISO(e.start_date)))
-  const tomorrowEvents = myEvents.filter(e => isTomorrow(parseISO(e.start_date)))
-  const laterEvents = myEvents.filter(e => {
-    const date = parseISO(e.start_date)
-    return !isToday(date) && !isTomorrow(date)
   })
 
   if (authLoading) {
@@ -217,6 +211,25 @@ export default function MyTasksPage() {
             </div>
           ) : (
             <div className="space-y-8">
+              {/* Team Assigned Events Section */}
+              {teamEvents.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200"
+                >
+                  <h2 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
+                    <ClipboardDocumentListIcon className="w-5 h-5" />
+                    Team Assigned ({teamEvents.length})
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {teamEvents.map(event => (
+                      <EventCard key={event.id} event={event} />
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
               {/* Mentioned Events Section */}
               {mentionedEvents.length > 0 && (
                 <motion.div
@@ -255,79 +268,18 @@ export default function MyTasksPage() {
                 </motion.div>
               )}
 
-              {userTeams.length === 0 && mentionedEvents.length === 0 && subscribedEvents.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="bg-white rounded-xl p-12 text-center border border-slate-200"
-                >
-                  <p className="text-slate-500">You are not assigned to any teams.</p>
-                  <p className="text-sm text-slate-400 mt-2">Contact an admin to be added to a team.</p>
-                </motion.div>
-              ) : myEvents.length === 0 && mentionedEvents.length === 0 && subscribedEvents.length === 0 ? (
+              {/* Empty State */}
+              {teamEvents.length === 0 && mentionedEvents.length === 0 && subscribedEvents.length === 0 && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="bg-white rounded-xl p-12 text-center border border-slate-200"
                 >
                   <p className="text-slate-500">No events need your attention.</p>
+                  {userTeams.length === 0 && (
+                    <p className="text-sm text-slate-400 mt-2">Contact an admin to be added to a team.</p>
+                  )}
                 </motion.div>
-              ) : myEvents.length > 0 && (
-                <div className="space-y-8">
-              {/* Today */}
-              {todayEvents.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                    <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                    Today ({todayEvents.length})
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {todayEvents.map(event => (
-                      <EventCard key={event.id} event={event} />
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Tomorrow */}
-              {tomorrowEvents.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <h2 className="text-lg font-semibold text-slate-800 mb-4">
-                    Tomorrow ({tomorrowEvents.length})
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {tomorrowEvents.map(event => (
-                      <EventCard key={event.id} event={event} />
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Later */}
-              {laterEvents.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <h2 className="text-lg font-semibold text-slate-800 mb-4">
-                    Upcoming ({laterEvents.length})
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {laterEvents.map(event => (
-                      <EventCard key={event.id} event={event} />
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-                </div>
               )}
             </div>
           )}
