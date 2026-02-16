@@ -124,36 +124,16 @@ export default function MyTasksPage() {
   async function fetchSubscribedEvents() {
     if (!user?.email) return
     
-    const today = format(new Date(), 'yyyy-MM-dd')
-    
     try {
-      const supabase = createClient()
-      
-      // Fetch subscriptions for this user
-      const { data: subscriptions } = await supabase
-        .from('event_subscriptions')
-        .select('event_id')
-        .eq('user_email', user.email.toLowerCase())
-      
-      if (!subscriptions || subscriptions.length === 0) {
+      const res = await fetch(`/api/user/subscriptions?email=${encodeURIComponent(user.email)}`)
+      if (res.ok) {
+        const data = await res.json()
+        console.log('[My Tasks] Subscribed events:', data)
+        setSubscribedEvents(data.events || [])
+      } else {
+        console.error('[My Tasks] Error fetching subscriptions:', await res.text())
         setSubscribedEvents([])
-        return
       }
-      
-      // Get unique event IDs
-      const eventIds = [...new Set(subscriptions.map(s => s.event_id))]
-      
-      // Fetch those events (only future ones)
-      const { data: eventData } = await supabase
-        .from('ops_events')
-        .select('*')
-        .in('id', eventIds)
-        .gte('start_date', today)
-        .eq('is_hidden', false)
-        .neq('status', 'cancelled')
-        .order('start_date', { ascending: true })
-      
-      setSubscribedEvents(eventData || [])
     } catch (err) {
       console.error('[My Tasks] Error fetching subscribed events:', err)
       setSubscribedEvents([])
