@@ -3,6 +3,26 @@
     {
       "path": "/api/cron/weekly-digest",
       "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/sync?source=group-events",
+      "schedule": "0 */3 * * *"
+    },
+    {
+      "path": "/api/cron/sync?source=resource-reservations",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/sync?source=calendar-staff",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync?source=calendar-ls",
+      "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync?source=calendar-ms",
+      "schedule": "10 * * * *"
     }
   ]
 }
