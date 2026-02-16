@@ -76,6 +76,21 @@ const QUICK_DURATIONS = [
   { label: '2 hr', minutes: 120 },
 ]
 
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+  
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString()
+}
+
 interface EventFilter {
   id: string
   name: string
@@ -167,6 +182,9 @@ export default function AdminPage() {
   const [auditTotal, setAuditTotal] = useState(0)
   const [auditEntityFilter, setAuditEntityFilter] = useState<string>('')
   const [auditActionFilter, setAuditActionFilter] = useState<string>('')
+  
+  // Sync logs (last sync times)
+  const [lastSyncTimes, setLastSyncTimes] = useState<Record<string, { completed_at: string; events_synced: number }>>({})
 
   useEffect(() => {
     fetchUserInfo()
@@ -185,6 +203,12 @@ export default function AdminPage() {
       fetchAuditLogs()
     }
   }, [userRole, activeTab, auditPage, auditEntityFilter, auditActionFilter])
+
+  useEffect(() => {
+    if (userRole === 'admin' && activeTab === 'sync') {
+      fetchLastSyncTimes()
+    }
+  }, [userRole, activeTab])
 
   // Update end time when quick duration is selected
   useEffect(() => {
@@ -279,6 +303,36 @@ export default function AdminPage() {
       console.error('Error fetching filters:', err)
     }
     setFiltersLoading(false)
+  }
+
+  async function fetchLastSyncTimes() {
+    const supabase = createClient()
+    try {
+      // Get the most recent sync for each source
+      const sources = ['resources', 'group-events', 'resource-reservations', 'calendar_staff', 'calendar_ls', 'calendar_ms']
+      const syncTimes: Record<string, { completed_at: string; events_synced: number }> = {}
+      
+      for (const source of sources) {
+        const { data } = await supabase
+          .from('ops_sync_log')
+          .select('completed_at, events_synced')
+          .eq('source', source)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .single()
+        
+        if (data) {
+          // Normalize source name for display (calendar sources use underscore in DB)
+          const displayKey = source.replace('_', '-')
+          syncTimes[displayKey] = data
+        }
+      }
+      
+      setLastSyncTimes(syncTimes)
+    } catch (err) {
+      console.error('Error fetching sync times:', err)
+    }
   }
 
   async function fetchAuditLogs() {
@@ -579,6 +633,8 @@ export default function AdminPage() {
           ...prev,
           [source]: { success: true, message: data.message || 'Sync completed' },
         }))
+        // Refresh sync times after successful sync
+        fetchLastSyncTimes()
       } else {
         setSyncStatus(prev => ({
           ...prev,
@@ -1435,8 +1491,20 @@ export default function AdminPage() {
                       <h3 className="text-sm font-medium text-slate-700 mb-3">BigQuery Sources</h3>
                       <div className="space-y-2">
                         {['resources', 'group-events', 'resource-reservations'].map((source) => (
-                          <div key={source} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200">
-                            <span className="text-sm text-slate-700 capitalize">{source.replace('-', ' ')}</span>
+                          <div key={source} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                            <div>
+                              <span className="text-sm text-slate-700 capitalize font-medium">{source.replace('-', ' ')}</span>
+                              {lastSyncTimes[source] ? (
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  Last sync: {formatRelativeTime(lastSyncTimes[source].completed_at)}
+                                  {lastSyncTimes[source].events_synced > 0 && (
+                                    <span className="ml-1">({lastSyncTimes[source].events_synced} records)</span>
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-slate-400 mt-0.5">Never synced</p>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2">
                               {syncStatus[source] && (
                                 <span className={`text-xs ${syncStatus[source].success ? 'text-green-600' : 'text-red-600'}`}>
@@ -1465,8 +1533,20 @@ export default function AdminPage() {
                           { id: 'calendar-ls', label: 'Lower School' },
                           { id: 'calendar-ms', label: 'Middle School' },
                         ].map((source) => (
-                          <div key={source.id} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200">
-                            <span className="text-sm text-slate-700">{source.label}</span>
+                          <div key={source.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
+                            <div>
+                              <span className="text-sm text-slate-700 font-medium">{source.label}</span>
+                              {lastSyncTimes[source.id] ? (
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  Last sync: {formatRelativeTime(lastSyncTimes[source.id].completed_at)}
+                                  {lastSyncTimes[source.id].events_synced > 0 && (
+                                    <span className="ml-1">({lastSyncTimes[source.id].events_synced} events)</span>
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-slate-400 mt-0.5">Never synced</p>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2">
                               {syncStatus[source.id] && (
                                 <span className={`text-xs ${syncStatus[source.id].success ? 'text-green-600' : 'text-red-600'}`}>
