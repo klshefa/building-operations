@@ -308,23 +308,29 @@ export default function AdminPage() {
   async function fetchLastSyncTimes() {
     const supabase = createClient()
     try {
-      // Get the most recent sync for each source
-      const sources = ['resources', 'group-events', 'resource-reservations', 'calendar_staff', 'calendar_ls', 'calendar_ms']
+      // Map display keys to database source names
+      const sourceMap: Record<string, string> = {
+        'resources': 'bigquery_resources',
+        'group-events': 'bigquery_group',
+        'resource-reservations': 'bigquery_resource',
+        'calendar-staff': 'calendar_staff',
+        'calendar-ls': 'calendar_ls',
+        'calendar-ms': 'calendar_ms',
+      }
+      
       const syncTimes: Record<string, { completed_at: string; events_synced: number }> = {}
       
-      for (const source of sources) {
+      for (const [displayKey, dbSource] of Object.entries(sourceMap)) {
         const { data } = await supabase
           .from('ops_sync_log')
           .select('completed_at, events_synced')
-          .eq('source', source)
+          .eq('source', dbSource)
           .eq('status', 'completed')
           .order('completed_at', { ascending: false })
           .limit(1)
           .single()
         
         if (data) {
-          // Normalize source name for display (calendar sources use underscore in DB)
-          const displayKey = source.replace('_', '-')
           syncTimes[displayKey] = data
         }
       }

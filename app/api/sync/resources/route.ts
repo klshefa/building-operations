@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { BigQuery } from '@google-cloud/bigquery'
 import { createClient } from '@supabase/supabase-js'
 
+const SOURCE_NAME = 'bigquery_resources'
+
 function getBigQueryClient() {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
   if (credentials) {
@@ -71,6 +73,14 @@ export async function POST(request: Request) {
     if (error) {
       throw error
     }
+
+    // Log successful sync
+    await supabase.from('ops_sync_log').insert({
+      source: SOURCE_NAME,
+      status: 'completed',
+      events_synced: resources.length,
+      completed_at: new Date().toISOString(),
+    })
 
     return NextResponse.json({
       success: true,
