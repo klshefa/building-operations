@@ -25,7 +25,7 @@ import {
   BellIcon,
   BellSlashIcon,
 } from '@heroicons/react/24/outline'
-import { AvailabilityCheck } from '@/components/AvailabilityCheck'
+// AvailabilityCheck not needed for existing events - they already have the slot reserved
 import { RelatedEvents } from '@/components/RelatedEvents'
 import { ResourceScheduleSidebar } from '@/components/ResourceScheduleSidebar'
 import { MentionInput, parseMentionEmails } from '@/components/MentionInput'
@@ -918,20 +918,8 @@ export default function EventDetailPage() {
               </div>
             </div>
 
-            {/* Veracross Availability Check */}
-            {cleanLocation(event.location) && (
-              <div className="pt-3 border-t border-slate-100 mt-3">
-                <AvailabilityCheck
-                  resourceId={selectedResourceId || undefined}
-                  resourceName={cleanLocation(event.location)}
-                  date={event.start_date}
-                  startTime={toTimeInputFormat(event.start_time) || '09:00'}
-                  endTime={toTimeInputFormat(event.end_time) || '17:00'}
-                  excludeEventId={event.id}
-                  excludeEventName={event.title}
-                />
-              </div>
-            )}
+            {/* Note: Availability check removed for existing events - they already have this slot reserved.
+                The sidebar schedule shows what else is happening that day. */}
           </div>
         </motion.div>
 
