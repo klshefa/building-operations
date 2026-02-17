@@ -148,11 +148,10 @@ const teamSections: TeamSection[] = [
   },
 ]
 
-// Clean location string - remove numeric prefixes like "2 Music Room" -> "Music Room"
+// Return location as-is (previously stripped leading numbers which broke room names like "614B Classroom")
 function cleanLocation(location: string | null | undefined): string {
   if (!location) return ''
-  // Remove leading numbers and spaces (e.g., "2 Music Room" -> "Music Room")
-  return location.replace(/^\d+\s*/, '').trim()
+  return location.trim()
 }
 
 // Convert time from various formats to HH:MM for input[type="time"]
