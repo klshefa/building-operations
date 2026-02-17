@@ -142,7 +142,7 @@ export function AvailabilityCheck({
       <div className={`${className}`}>
         <div className="flex items-center gap-2 text-sm text-green-600">
           <CheckCircleIcon className="w-4 h-4" />
-          <span>Available</span>
+          <span>No conflicts</span>
         </div>
         {result.warnings && result.warnings.length > 0 && (
           <div className="mt-2 space-y-1">
