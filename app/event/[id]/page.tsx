@@ -359,12 +359,37 @@ export default function EventDetailPage() {
       const result = await response.json()
       
       if (result.data) {
-        // Find ACTUAL conflicts: same location AND overlapping time
+        // Helper to normalize titles for comparison
+        const normalizeTitle = (title: string) => 
+          title.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ')
+        
+        // Helper to check if titles are similar (same event from different source)
+        const areTitlesSimilar = (title1: string, title2: string): boolean => {
+          const t1 = normalizeTitle(title1)
+          const t2 = normalizeTitle(title2)
+          
+          // Exact match after normalization
+          if (t1 === t2) return true
+          
+          // One contains the other
+          if (t1.includes(t2) || t2.includes(t1)) return true
+          
+          // Word overlap check - if >70% of words match, it's the same event
+          const words1 = new Set(t1.split(' ').filter(w => w.length > 2))
+          const words2 = new Set(t2.split(' ').filter(w => w.length > 2))
+          if (words1.size === 0 || words2.size === 0) return false
+          
+          const intersection = [...words1].filter(w => words2.has(w))
+          const overlapRatio = intersection.length / Math.min(words1.size, words2.size)
+          return overlapRatio >= 0.7
+        }
+        
+        // Find ACTUAL conflicts: same location AND overlapping time AND DIFFERENT events
         const conflicts = result.data.filter((e: OpsEvent) => {
           // Skip self - check by ID
           if (e.id === eventData.id) return false
           
-          // Also skip if same veracross_reservation_id (handles duplicate from API vs DB)
+          // Skip if same veracross_reservation_id (handles duplicate from API vs DB)
           if (eventData.veracross_reservation_id && e.veracross_reservation_id && 
               String(eventData.veracross_reservation_id) === String(e.veracross_reservation_id)) return false
           
@@ -383,7 +408,14 @@ export default function EventDetailPage() {
           
           // Check overlap: NOT (one ends before other starts)
           const noOverlap = thisEnd <= otherStart || otherEnd <= thisStart
-          return !noOverlap
+          if (noOverlap) return false
+          
+          // CRITICAL: If same location, same time, AND similar title = SAME EVENT, NOT a conflict!
+          // This handles events that appear in multiple sources (BigQuery + VC API, etc.)
+          if (areTitlesSimilar(eventData.title, e.title)) return false
+          
+          // If we get here, it's a REAL conflict: different events at same place/time
+          return true
         })
         
         setConflictingEvents(conflicts)

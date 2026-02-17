@@ -306,7 +306,7 @@ async function detectConflicts(supabase: any, today: string) {
   // Get all events grouped by date and location
   const { data: events } = await supabase
     .from('ops_events')
-    .select('id, title, start_date, start_time, end_time, location')
+    .select('id, title, start_date, start_time, end_time, location, veracross_reservation_id')
     .gte('start_date', today)
     .eq('is_hidden', false)
     .not('location', 'is', null)
@@ -314,6 +314,31 @@ async function detectConflicts(supabase: any, today: string) {
     .order('start_time')
 
   if (!events || events.length === 0) return
+
+  // Helper to normalize titles for comparison
+  const normalizeTitle = (title: string) => 
+    title.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ')
+  
+  // Helper to check if titles are similar (same event from different source)
+  const areTitlesSimilar = (title1: string, title2: string): boolean => {
+    const t1 = normalizeTitle(title1)
+    const t2 = normalizeTitle(title2)
+    
+    // Exact match after normalization
+    if (t1 === t2) return true
+    
+    // One contains the other
+    if (t1.includes(t2) || t2.includes(t1)) return true
+    
+    // Word overlap check - if >70% of words match, it's the same event
+    const words1 = new Set(t1.split(' ').filter(w => w.length > 2))
+    const words2 = new Set(t2.split(' ').filter(w => w.length > 2))
+    if (words1.size === 0 || words2.size === 0) return false
+    
+    const intersection = [...words1].filter(w => words2.has(w))
+    const overlapRatio = intersection.length / Math.min(words1.size, words2.size)
+    return overlapRatio >= 0.7
+  }
 
   // Group by date + location
   const grouped: Record<string, any[]> = {}
@@ -323,7 +348,7 @@ async function detectConflicts(supabase: any, today: string) {
     grouped[key].push(event)
   }
 
-  // Check for overlaps
+  // Check for REAL conflicts (different events, same place, overlapping time)
   const conflictIds: string[] = []
   
   for (const key in grouped) {
@@ -335,11 +360,24 @@ async function detectConflicts(supabase: any, today: string) {
         const a = dayLocationEvents[i]
         const b = dayLocationEvents[j]
         
-        // Simple time overlap check
+        // Skip if same veracross_reservation_id
+        if (a.veracross_reservation_id && b.veracross_reservation_id &&
+            String(a.veracross_reservation_id) === String(b.veracross_reservation_id)) continue
+        
+        // Skip if titles are similar - it's the SAME event from different sources
+        if (areTitlesSimilar(a.title, b.title)) continue
+        
+        // Check time overlap
         if (a.start_time && b.start_time) {
-          // If times overlap, mark as conflict
-          // For simplicity: if events have same start time, or one starts before other ends
-          if (a.start_time === b.start_time) {
+          const aStart = a.start_time.replace(':', '')
+          const aEnd = (a.end_time || '23:59').replace(':', '')
+          const bStart = b.start_time.replace(':', '')
+          const bEnd = (b.end_time || '23:59').replace(':', '')
+          
+          // Check if times overlap
+          const noOverlap = aEnd <= bStart || bEnd <= aStart
+          if (!noOverlap) {
+            // REAL conflict: different events at same place/time
             conflictIds.push(a.id, b.id)
           }
         }
@@ -347,14 +385,21 @@ async function detectConflicts(supabase: any, today: string) {
     }
   }
 
-  // Update conflict flags
+  // Clear existing conflict flags first (they may be stale)
+  await supabase
+    .from('ops_events')
+    .update({ has_conflict: false, conflict_notes: null })
+    .gte('start_date', today)
+    .eq('has_conflict', true)
+
+  // Update conflict flags for actual conflicts
   if (conflictIds.length > 0) {
     const uniqueIds = [...new Set(conflictIds)]
     await supabase
       .from('ops_events')
       .update({ 
         has_conflict: true,
-        conflict_notes: 'Potential scheduling conflict detected'
+        conflict_notes: 'Scheduling conflict: different event at same location/time'
       })
       .in('id', uniqueIds)
   }
