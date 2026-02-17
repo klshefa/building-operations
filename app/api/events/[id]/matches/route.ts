@@ -148,6 +148,10 @@ export async function GET(
     
     const allMatchedRawIds = new Set(allMatches?.map(m => m.raw_event_id) || [])
     
+    // Also exclude raw events that are in this event's source_events array
+    // (these were used to create this aggregated event)
+    const sourceEventIds = new Set(event.source_events || [])
+    
     // Find potential matches - unmatched raw events within date range
     const startDate = new Date(event.start_date)
     const endDate = new Date(event.end_date || event.start_date)
@@ -173,6 +177,9 @@ export async function GET(
       
       // Skip if already linked to another event
       if (allMatchedRawIds.has(raw.id)) continue
+      
+      // Skip if this raw event was used to create this aggregated event
+      if (sourceEventIds.has(raw.id)) continue
       
       let score = 0
       const reasons: string[] = []
