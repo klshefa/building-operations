@@ -172,6 +172,13 @@ export async function POST(request: Request) {
         // Collect all unique sources from matched events
         const allSources = [...new Set(matchedEvents.map(e => e.source))]
         
+        // Get veracross_reservation_id from any matched event that has it
+        const reservationId = matchedEvents.find(e => e.reservation_id)?.reservation_id || null
+        // Get resource_id from raw events
+        const resourceId = matchedEvents.find(e => e.resource_id)?.resource_id || null
+        // Get recurring_pattern from raw events
+        const recurringPattern = matchedEvents.find(e => e.recurring_pattern)?.recurring_pattern || null
+        
         aggregatedEvents.push({
           title: primaryEvent.title,
           description: matchedEvents.find(e => e.description)?.description || null,
@@ -186,6 +193,9 @@ export async function POST(request: Request) {
           source_events: matchedEvents.map(e => e.id),
           primary_source: primaryEvent.source,
           sources: allSources, // All sources this event appears in
+          veracross_reservation_id: reservationId,
+          resource_id: resourceId,
+          recurring_pattern: recurringPattern,
           is_hidden: false,
           has_conflict: false,
           conflict_ok: false,
