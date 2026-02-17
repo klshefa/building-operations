@@ -187,6 +187,8 @@ export async function GET(request: Request) {
     const excludeEventId = searchParams.get('excludeEventId')
     const excludeEventName = searchParams.get('excludeEventName')
     
+    console.log(`[Availability] Check request - excludeEventId: ${excludeEventId}, excludeEventName: "${excludeEventName}"`)
+    
     if (!resourceId || !date || !startTime || !endTime) {
       return NextResponse.json({ 
         error: 'resourceId, date, startTime, and endTime are required' 
@@ -381,6 +383,12 @@ export async function GET(request: Request) {
           }
           
           // Skip if title matches excludeEventName (same event, just from VC API)
+          // Direct exact comparison first (case-insensitive)
+          if (excludeEventName && resTitle.toLowerCase().trim() === excludeEventName.toLowerCase().trim()) {
+            console.log(`[Availability] Skipping VC reservation - EXACT title match: "${resTitle}"`)
+            continue
+          }
+          // Then fuzzy match
           if (excludeEventName && areTitlesSimilar(resTitle, excludeEventName)) {
             console.log(`[Availability] Skipping VC reservation - similar title to current event: "${resTitle}" vs "${excludeEventName}"`)
             continue

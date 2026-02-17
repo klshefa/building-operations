@@ -83,7 +83,7 @@ export function AvailabilityCheck({
       return
     }
 
-    const checkKey = `${resolvedResourceId}|${date}|${startTime}|${endTime}|${excludeEventId}`
+    const checkKey = `${resolvedResourceId}|${date}|${startTime}|${endTime}|${excludeEventId}|${excludeEventName}`
     if (checkKey === lastChecked) return
 
     setChecking(true)
@@ -103,7 +103,7 @@ export function AvailabilityCheck({
     } finally {
       setChecking(false)
     }
-  }, [resolvedResourceId, date, startTime, endTime, excludeEventId, lastChecked])
+  }, [resolvedResourceId, date, startTime, endTime, excludeEventId, excludeEventName, lastChecked])
 
   useEffect(() => {
     const timer = setTimeout(() => {
