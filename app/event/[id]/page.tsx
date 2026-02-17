@@ -361,7 +361,12 @@ export default function EventDetailPage() {
       if (result.data) {
         // Find ACTUAL conflicts: same location AND overlapping time
         const conflicts = result.data.filter((e: OpsEvent) => {
+          // Skip self - check by ID
           if (e.id === eventData.id) return false
+          
+          // Also skip if same veracross_reservation_id (handles duplicate from API vs DB)
+          if (eventData.veracross_reservation_id && e.veracross_reservation_id && 
+              String(eventData.veracross_reservation_id) === String(e.veracross_reservation_id)) return false
           
           // Must have same location
           const thisLoc = cleanLocation(eventData.location)?.toLowerCase().trim()
