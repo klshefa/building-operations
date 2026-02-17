@@ -91,7 +91,9 @@ export function AvailabilityCheck({
 
     try {
       // Use the comprehensive availability check API
-      const url = `/api/availability/check?resourceId=${resolvedResourceId}&date=${date}&startTime=${startTime}&endTime=${endTime}`
+      let url = `/api/availability/check?resourceId=${resolvedResourceId}&date=${date}&startTime=${startTime}&endTime=${endTime}`
+      if (excludeEventId) url += `&excludeEventId=${encodeURIComponent(excludeEventId)}`
+      if (excludeEventName) url += `&excludeEventName=${encodeURIComponent(excludeEventName)}`
       const response = await fetch(url)
       const data = await response.json()
       setResult(data)

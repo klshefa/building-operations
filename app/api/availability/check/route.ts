@@ -150,7 +150,33 @@ function timesClose(
   return Math.abs(start2 - end1) <= threshold && Math.abs(start2 - end1) > 0
 }
 
-// GET /api/availability/check?resourceId=123&date=2026-01-28&startTime=09:00&endTime=10:00
+// Helper to normalize titles for comparison
+function normalizeTitle(title: string): string {
+  return title.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ')
+}
+
+// Helper to check if titles are similar (same event from different source)
+function areTitlesSimilar(title1: string, title2: string): boolean {
+  const t1 = normalizeTitle(title1)
+  const t2 = normalizeTitle(title2)
+  
+  // Exact match after normalization
+  if (t1 === t2) return true
+  
+  // One contains the other
+  if (t1.includes(t2) || t2.includes(t1)) return true
+  
+  // Word overlap check - if >70% of words match, it's the same event
+  const words1 = new Set(t1.split(' ').filter(w => w.length > 2))
+  const words2 = new Set(t2.split(' ').filter(w => w.length > 2))
+  if (words1.size === 0 || words2.size === 0) return false
+  
+  const intersection = [...words1].filter(w => words2.has(w))
+  const overlapRatio = intersection.length / Math.min(words1.size, words2.size)
+  return overlapRatio >= 0.7
+}
+
+// GET /api/availability/check?resourceId=123&date=2026-01-28&startTime=09:00&endTime=10:00&excludeEventId=...&excludeEventName=...
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -158,6 +184,8 @@ export async function GET(request: Request) {
     const date = searchParams.get('date')
     const startTime = searchParams.get('startTime')
     const endTime = searchParams.get('endTime')
+    const excludeEventId = searchParams.get('excludeEventId')
+    const excludeEventName = searchParams.get('excludeEventName')
     
     if (!resourceId || !date || !startTime || !endTime) {
       return NextResponse.json({ 
@@ -247,6 +275,12 @@ export async function GET(request: Request) {
     console.log('[Availability] Total ops_events to check:', allEvents.length)
     
     for (const event of allEvents) {
+      // Skip if this is the event we're checking availability FOR (exclude self)
+      if (excludeEventId && event.id === excludeEventId) continue
+      
+      // Skip if title matches excludeEventName (same event from different source)
+      if (excludeEventName && areTitlesSimilar(event.title, excludeEventName)) continue
+      
       if (event.all_day) {
         conflicts.push({
           type: 'conflict',
@@ -334,6 +368,7 @@ export async function GET(request: Request) {
         for (const res of reservations) {
           const resId = res.resource_reservation_id || res.id
           const resIdStr = String(resId)
+          const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
           
           // Skip if already processed
           if (checkedReservationIds.has(resIdStr)) continue
@@ -345,13 +380,18 @@ export async function GET(request: Request) {
             continue
           }
           
+          // Skip if title matches excludeEventName (same event, just from VC API)
+          if (excludeEventName && areTitlesSimilar(resTitle, excludeEventName)) {
+            console.log(`[Availability] Skipping VC reservation - similar title to current event: "${resTitle}" vs "${excludeEventName}"`)
+            continue
+          }
+          
           const resStart = parseTimeToMinutes(res.start_time)
           const resEnd = parseTimeToMinutes(res.end_time)
           
           if (resStart === null || resEnd === null) continue
           
           if (timesOverlap(requestStart, requestEnd, resStart, resEnd)) {
-            const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
             conflicts.push({
               type: 'conflict',
               title: resTitle,
