@@ -375,17 +375,25 @@ export async function GET(request: Request) {
         veracrossReservationsDebug.rawSample = reservations.length > 0 ? reservations[0] : null
         
         let matchedCount = 0
+        console.log(`[Availability] Looking for resource: "${resourceName}"`)
+        
         for (const res of reservations) {
           const resId = res.resource_reservation_id || res.id
           const resIdStr = String(resId)
           const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
           const resResourceName = (res.resource || '').toLowerCase().trim()
           
+          // Log first few to see what Veracross returns
+          if (matchedCount < 3 || resResourceName.includes('midrash') || resResourceName.includes('beit')) {
+            console.log(`[Availability] Checking reservation: resource="${res.resource}", title="${resTitle}"`)
+          }
+          
           // Simple exact match: Veracross resource name must equal our resource name
           if (resResourceName !== resourceName) {
             continue
           }
           
+          console.log(`[Availability] MATCHED: resource="${res.resource}", title="${resTitle}"`)
           matchedCount++
           
           // Skip if already processed

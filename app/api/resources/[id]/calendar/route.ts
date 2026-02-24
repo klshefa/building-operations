@@ -276,17 +276,24 @@ export async function GET(
         console.log(`[Calendar] veracrossIdsInOpsEvents:`, Array.from(veracrossIdsInOpsEvents))
         
         let matchedCount = 0
+        console.log(`[Calendar] Looking for resource: "${resourceName}"`)
+        
         for (const res of reservations) {
           const vcResId = String(res.resource_reservation_id || res.id)
           const resResourceName = (res.resource || '').toLowerCase().trim()
+          
+          // Log to see what Veracross returns
+          if (matchedCount < 3 || resResourceName.includes('midrash') || resResourceName.includes('beit')) {
+            console.log(`[Calendar] Checking: resource="${res.resource}", title="${res.notes || res.description || 'Reservation'}"`)
+          }
           
           // Simple exact match: Veracross resource name must equal our resource name
           if (resResourceName !== resourceName) {
             continue
           }
           
+          console.log(`[Calendar] MATCHED: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}", resource="${res.resource}"`)
           matchedCount++
-          console.log(`[Calendar] Veracross reservation: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}", resource="${res.resource}"`)
           
           // Skip if we already have this from ops_events (avoid duplicates)
           if (veracrossIdsInOpsEvents.has(vcResId)) {
