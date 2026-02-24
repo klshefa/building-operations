@@ -94,10 +94,18 @@ function parseTimeToMinutes(timeStr: string | null | undefined): number | null {
     return parseInt(isoMatch[1]) * 60 + parseInt(isoMatch[2])
   }
   
-  // Handle HH:MM format
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})/)
+  // Handle HH:MM with optional AM/PM (e.g., "12:15 pm", "1:30 PM", "09:00")
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?/i)
   if (match) {
-    return parseInt(match[1]) * 60 + parseInt(match[2])
+    let hours = parseInt(match[1])
+    const minutes = parseInt(match[2])
+    const period = match[3]?.toLowerCase()
+    
+    // Convert to 24-hour if AM/PM specified
+    if (period === 'pm' && hours < 12) hours += 12
+    if (period === 'am' && hours === 12) hours = 0
+    
+    return hours * 60 + minutes
   }
   
   return null
