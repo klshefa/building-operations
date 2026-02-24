@@ -125,8 +125,7 @@ export async function POST(request: Request) {
       start_time: start_time,
       end_time: end_time,
       requesting_person_id: String(requestor_id),  // API shows this as string
-      description: description,  // Main description field shown in Veracross UI
-      notes: description,  // Also set notes as backup
+      notes: description,  // Notes field for the event description
     }
     
     const reservationPayload = {
