@@ -338,22 +338,29 @@ export async function GET(request: Request) {
     }
     
     // 1.5 Check Veracross reservations directly from API
+    // IMPORTANT: We query by DATE only (not resource_id) because our local resource IDs 
+    // don't match Veracross's IDs. We filter by resource name locally.
     const checkedReservationIds = new Set<string>()
     let veracrossReservationsDebug: any = { status: 'not_started' }
+    
+    // Get resource name for matching
+    const resourceName = resource?.description?.toLowerCase().trim() || ''
+    const resourceAbbrev = resource?.abbreviation?.toLowerCase().trim() || ''
     
     try {
       const reservationsToken = await getReservationsToken()
       veracrossReservationsDebug.tokenObtained = true
       
-      // Fetch reservations for this resource on this date
-      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&on_or_after_start_date=${date}&on_or_before_start_date=${date}`
+      // Fetch ALL reservations for this date (no resource_id filter - IDs don't match between systems)
+      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?on_or_after_start_date=${date}&on_or_before_start_date=${date}`
       veracrossReservationsDebug.url = url
+      veracrossReservationsDebug.filteringBy = { resourceName, resourceAbbrev }
       
       const reservationsRes = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${reservationsToken}`,
           'Accept': 'application/json',
-          'X-Page-Size': '100',
+          'X-Page-Size': '200',
         },
       })
       
@@ -364,13 +371,28 @@ export async function GET(request: Request) {
         const reservations = reservationsData.data || reservationsData || []
         
         veracrossReservationsDebug.status = 'success'
-        veracrossReservationsDebug.count = reservations.length
+        veracrossReservationsDebug.totalCount = reservations.length
         veracrossReservationsDebug.rawSample = reservations.length > 0 ? reservations[0] : null
         
+        let matchedCount = 0
         for (const res of reservations) {
           const resId = res.resource_reservation_id || res.id
           const resIdStr = String(resId)
           const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
+          const resResourceName = (res.resource || '').toLowerCase().trim()
+          
+          // Filter by resource name match (since we can't filter by ID)
+          const resourceMatches = resourceName && (
+            resResourceName.includes(resourceName) || 
+            resourceName.includes(resResourceName) ||
+            (resourceAbbrev && resResourceName.includes(resourceAbbrev))
+          )
+          
+          if (!resourceMatches) {
+            continue
+          }
+          
+          matchedCount++
           
           // Skip if already processed
           if (checkedReservationIds.has(resIdStr)) continue
@@ -409,6 +431,7 @@ export async function GET(request: Request) {
             })
           }
         }
+        veracrossReservationsDebug.matchedCount = matchedCount
       } else {
         const errorText = await reservationsRes.text()
         veracrossReservationsDebug.status = 'api_error'

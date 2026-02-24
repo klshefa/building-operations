@@ -243,19 +243,24 @@ export async function GET(
     console.log(`[Calendar] Final opsEventTimeSlots:`, JSON.stringify(opsEventTimeSlots))
     
     // 2. Get Veracross reservations directly from API
+    // IMPORTANT: We query by DATE only (not resource_id) because our local resource IDs 
+    // don't match Veracross's IDs. We filter by resource name locally.
     const existingEventIds = new Set(events.map(e => e.id))
+    const resourceName = resource.description?.toLowerCase().trim() || ''
+    const resourceAbbrev = resource.abbreviation?.toLowerCase().trim() || ''
     
     try {
       const reservationsToken = await getReservationsToken()
-      // Fetch reservations for this resource on this date
-      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?resource_id=${resourceId}&on_or_after_start_date=${date}&on_or_before_start_date=${date}`
+      // Fetch ALL reservations for this date (no resource_id filter - IDs don't match between systems)
+      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?on_or_after_start_date=${date}&on_or_before_start_date=${date}`
       console.log(`[Calendar] Fetching Veracross reservations: ${url}`)
+      console.log(`[Calendar] Filtering for resource: "${resourceName}" / "${resourceAbbrev}"`)
       
       const reservationsRes = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${reservationsToken}`,
           'Accept': 'application/json',
-          'X-Page-Size': '100',
+          'X-Page-Size': '200',
         },
       })
       
@@ -266,13 +271,28 @@ export async function GET(
         console.log(`[Calendar] Veracross raw response:`, JSON.stringify(reservationsData).substring(0, 500))
         
         const reservations = reservationsData.data || reservationsData || []
-        console.log(`[Calendar] Found ${reservations.length} Veracross reservations for resource ${resourceId} on ${date}`)
+        console.log(`[Calendar] Found ${reservations.length} total Veracross reservations on ${date}`)
         
         console.log(`[Calendar] veracrossIdsInOpsEvents:`, Array.from(veracrossIdsInOpsEvents))
         
+        let matchedCount = 0
         for (const res of reservations) {
           const vcResId = String(res.resource_reservation_id || res.id)
-          console.log(`[Calendar] Veracross reservation: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}"`)
+          const resResourceName = (res.resource || '').toLowerCase().trim()
+          
+          // Filter by resource name match (since we can't filter by ID)
+          const resourceMatches = resourceName && (
+            resResourceName.includes(resourceName) || 
+            resourceName.includes(resResourceName) ||
+            (resourceAbbrev && resResourceName.includes(resourceAbbrev))
+          )
+          
+          if (!resourceMatches) {
+            continue
+          }
+          
+          matchedCount++
+          console.log(`[Calendar] Veracross reservation: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}", resource="${res.resource}"`)
           
           // Skip if we already have this from ops_events (avoid duplicates)
           if (veracrossIdsInOpsEvents.has(vcResId)) {
@@ -328,6 +348,7 @@ export async function GET(
           })
           existingEventIds.add(resId)
         }
+        console.log(`[Calendar] Matched ${matchedCount} reservations for this resource`)
       } else {
         const errorText = await reservationsRes.text()
         console.log(`[Calendar] Veracross API error: ${reservationsRes.status} - ${errorText}`)
