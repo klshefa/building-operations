@@ -280,14 +280,8 @@ export async function GET(
           const vcResId = String(res.resource_reservation_id || res.id)
           const resResourceName = (res.resource || '').toLowerCase().trim()
           
-          // Filter by resource name match (since we can't filter by ID)
-          const resourceMatches = resourceName && (
-            resResourceName.includes(resourceName) || 
-            resourceName.includes(resResourceName) ||
-            (resourceAbbrev && resResourceName.includes(resourceAbbrev))
-          )
-          
-          if (!resourceMatches) {
+          // Simple exact match: Veracross resource name must equal our resource name
+          if (resResourceName !== resourceName) {
             continue
           }
           
