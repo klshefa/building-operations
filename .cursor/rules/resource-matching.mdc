@@ -1,0 +1,34 @@
+---
+description: Resource matching contract for Veracross reservation and availability logic
+globs: app/api/availability/**/*.ts, app/api/resources/**/*.ts, app/api/events/**/*.ts, app/api/veracross/**/*.ts, app/api/sync/**/*.ts, app/api/aggregate-events/**/*.ts, lib/utils/resourceMatching.ts
+alwaysApply: false
+---
+
+# Resource Matching Contract
+
+All resource matching in this codebase MUST use functions from `lib/utils/resourceMatching.ts`.
+
+## ID Relationship
+
+`ops_resources.id` === Veracross BigQuery `Resource_ID` === Veracross REST API `resource_id`.
+These are the SAME integer ID space. Never assume they differ.
+
+## Rules
+
+1. **Never parse `res.resource` inline.** The Veracross API may return this field as a plain string OR as an object. Always use `parseVcResourceField(res)`.
+
+2. **Never do bidirectional `includes()` for location matching.** Use `locationFuzzyMatch()` which only checks if the event location contains the resource name (not the reverse).
+
+3. **Prefer ID matching over name matching.** When comparing a Veracross reservation to a local resource, use `doesVcReservationMatchResource()`. It returns `false` immediately when the Veracross ID exists but doesn't match — it does NOT fall through to name matching.
+
+4. **BigQuery sync must capture `Resource_ID`.** The `sync/resource-reservations` route must SELECT `Resource_ID` and store it in `ops_raw_events.resource_id` so aggregation can propagate it to `ops_events.resource_id`.
+
+## Available Functions
+
+| Function | Use when... |
+|----------|-------------|
+| `parseVcResourceField(res)` | Extracting name/id from a Veracross API reservation object |
+| `doesVcReservationMatchResource(res, id, desc, abbrev?)` | Checking if a VC reservation belongs to a local resource |
+| `locationFuzzyMatch(location, desc, abbrev?)` | Matching ops_events with NULL resource_id by location text |
+| `normalizeResourceName(name)` | Normalising a resource name before comparison |
+| `resourceNamesMatch(a, b)` | Comparing two normalised resource names |

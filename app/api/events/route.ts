@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { parseVcResourceField } from '@/lib/utils/resourceMatching'
 
 // Veracross API config
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
@@ -278,7 +279,8 @@ export async function GET(request: Request) {
         }
         
         // Skip if overlaps with existing ops_event (fallback dedup)
-        const resourceId = vcRes.resource_id || vcRes.resource?.id
+        const vcParsed = parseVcResourceField(vcRes)
+        const resourceId = vcParsed.id
         const vcDate = vcRes.start_date
         if (resourceId && vcDate) {
           const key = `${vcDate}-${resourceId}`
@@ -304,7 +306,7 @@ export async function GET(request: Request) {
         
         // Get resource name
         const resourceName = resourceId ? resourceMap.get(resourceId) : null
-        const locationName = resourceName || vcRes.resource?.description || 'Unknown Location'
+        const locationName = resourceName || vcParsed.name || 'Unknown Location'
         
         // Create ops_event-like object for the reservation
         vcReservationEvents.push({

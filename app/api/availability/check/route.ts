@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { doesVcReservationMatchResource, locationFuzzyMatch } from '@/lib/utils/resourceMatching'
 
 // Veracross API config
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
@@ -184,24 +185,6 @@ function areTitlesSimilar(title1: string, title2: string): boolean {
   return overlapRatio >= 0.7
 }
 
-function normalizeResourceName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/^\d+\s+/, '') // drop leading room numbers
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, ' ')
-}
-
-function resourceNamesMatch(localName: string, vcName: string): boolean {
-  const a = normalizeResourceName(localName)
-  const b = normalizeResourceName(vcName)
-  if (!a || !b) return false
-  if (a === b) return true
-  // Handle grouped names like "ulam" vs "ulam 1"
-  return a.startsWith(b + ' ') || b.startsWith(a + ' ')
-}
-
 // GET /api/availability/check?resourceId=123&date=2026-01-28&startTime=09:00&endTime=10:00&excludeEventId=...&excludeEventName=...
 export async function GET(request: Request) {
   try {
@@ -284,8 +267,7 @@ export async function GET(request: Request) {
     
     for (const event of locationEvents || []) {
       if (!event.location) continue
-      const loc = event.location.toLowerCase()
-      const matchFound = locationMatches.some(m => loc.includes(m.toLowerCase()) || m.toLowerCase().includes(loc))
+      const matchFound = locationFuzzyMatch(event.location, resource?.description || '', resource?.abbreviation)
       if (matchFound) {
         console.log('[Availability] FUZZY MATCH ops_event:', {
           title: event.title,
@@ -407,24 +389,12 @@ export async function GET(request: Request) {
           const resId = res.resource_reservation_id || res.id
           const resIdStr = String(resId)
           const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
-          const resResourceName = (res.resource || res.resource?.description || '').toString()
-          const resResourceId = res.resource_id || res.resource?.id
           
-          // Log first few to see what Veracross returns
-          const resResourceNameLower = resResourceName.toLowerCase()
-          if (matchedCount < 3 || resResourceNameLower.includes('midrash') || resResourceNameLower.includes('beit')) {
+          if (matchedCount < 3) {
             console.log(`[Availability] Checking reservation: resource="${res.resource}", title="${resTitle}"`)
           }
           
-          // Prefer matching by resource_id when Veracross provides it.
-          // Fallback to name matching only if ID matching isn't possible.
-          const idMatch = resResourceId != null && String(resResourceId) === String(resourceId)
-          const nameMatch =
-            !idMatch &&
-            (resourceNamesMatch(resourceName, resResourceName) ||
-              (resourceAbbrev ? resourceNamesMatch(resourceAbbrev, resResourceName) : false))
-
-          if (!idMatch && !nameMatch) continue
+          if (!doesVcReservationMatchResource(res, parseInt(resourceId), resourceName, resourceAbbrev)) continue
           
           console.log(`[Availability] MATCHED: resource="${res.resource}", title="${resTitle}"`)
           matchedCount++

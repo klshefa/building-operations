@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
+import { locationFuzzyMatch } from '@/lib/utils/resourceMatching'
 
 function createAdminClient() {
   return createClient(
@@ -25,26 +26,7 @@ function stringSimilarity(str1: string, str2: string): number {
   return intersection.size / union.size
 }
 
-// Check if locations match (fuzzy)
-function locationMatches(loc1: string | null, loc2: string | null): boolean {
-  if (!loc1 || !loc2) return false
-  
-  const clean1 = loc1.toLowerCase().trim()
-  const clean2 = loc2.toLowerCase().trim()
-  
-  // Exact match
-  if (clean1 === clean2) return true
-  
-  // One contains the other
-  if (clean1.includes(clean2) || clean2.includes(clean1)) return true
-  
-  // Extract room numbers and compare
-  const num1 = clean1.match(/\d+/)?.[0]
-  const num2 = clean2.match(/\d+/)?.[0]
-  if (num1 && num2 && num1 === num2) return true
-  
-  return false
-}
+// Location matching uses the shared utility from lib/utils/resourceMatching.ts
 
 // Parse time to minutes for comparison
 function parseTimeToMinutes(timeStr: string | null): number | null {
@@ -191,7 +173,7 @@ export async function GET(
       }
       
       // Location match: +0.3
-      if (locationMatches(raw.location || raw.resource, event.location)) {
+      if (event.location && locationFuzzyMatch(raw.location || raw.resource || '', event.location)) {
         score += 0.3
         reasons.push('Same location')
       }

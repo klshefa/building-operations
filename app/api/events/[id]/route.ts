@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { TeamType, OpsEvent } from '@/lib/types'
 import { buildTeamAssignmentEmail, buildEventUpdateEmail, getTeamDisplayName } from '@/lib/notifications'
 import { logAudit, getChangedFields, extractEventAuditFields } from '@/lib/audit'
+import { parseVcResourceField } from '@/lib/utils/resourceMatching'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 
@@ -318,8 +319,9 @@ export async function GET(
         console.log(`[Event API] Found reservation:`, JSON.stringify(vcRes).substring(0, 200))
         
         // Get resource name
-        const resourceId = vcRes.resource_id || vcRes.resource?.id
-        let locationName = vcRes.resource?.description || 'Unknown Location'
+        const vcParsed = parseVcResourceField(vcRes)
+        const resourceId = vcParsed.id
+        let locationName = vcParsed.name || 'Unknown Location'
         
         if (resourceId) {
           const { data: resource } = await supabase

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { locationFuzzyMatch } from '@/lib/utils/resourceMatching'
 
 // Veracross OAuth configuration
 const VERACROSS_CLIENT_ID = process.env.VERACROSS_CLIENT_ID
@@ -498,14 +499,8 @@ export async function POST(request: Request) {
           // Check if this resource matches our blocking or adjacent resources
           const resResource = res.resource || ''
           
-          const isBlocking = blockingResources.some(r => 
-            resResource.toLowerCase().includes(r.toLowerCase()) ||
-            r.toLowerCase().includes(resResource.toLowerCase())
-          )
-          const isAdjacent = adjacentResources.some(r => 
-            resResource.toLowerCase().includes(r.toLowerCase()) ||
-            r.toLowerCase().includes(resResource.toLowerCase())
-          )
+          const isBlocking = blockingResources.some(r => locationFuzzyMatch(resResource, r))
+          const isAdjacent = adjacentResources.some(r => locationFuzzyMatch(resResource, r))
           
           if (!isBlocking && !isAdjacent) continue
           

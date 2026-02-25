@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       SELECT
         Description as title,
         Resource as resource,
+        Resource_ID as resource_id,
         Start_Date as start_date,
         End_Date as end_date,
         Start_Time as start_time,
@@ -190,6 +191,7 @@ export async function POST(request: Request) {
           end_time: getTimeValue(row.end_time),
           location: null,
           resource: row.resource,
+          resource_id: row.resource_id != null ? Number(row.resource_id) : null,
           contact_person: row.contact_person === 'None' ? null : row.contact_person,
           reservation_id: row.reservation_id || null,
           recurring_pattern: row.days || null,
