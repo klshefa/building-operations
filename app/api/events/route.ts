@@ -82,6 +82,61 @@ function formatTimeDisplay(timeStr: string | null | undefined): string {
   return m === 0 ? `${hour}:00 ${ampm}` : `${hour}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
+function dedupeOpsEventsByReservationId(opsEvents: any[]): any[] {
+  const byVcId = new Map<string, any[]>()
+  const noVc: any[] = []
+
+  for (const evt of opsEvents) {
+    const vcid = evt?.veracross_reservation_id ? String(evt.veracross_reservation_id) : null
+    if (!vcid) {
+      noVc.push(evt)
+      continue
+    }
+    if (!byVcId.has(vcid)) byVcId.set(vcid, [])
+    byVcId.get(vcid)!.push(evt)
+  }
+
+  const merged: any[] = []
+  for (const [, group] of byVcId) {
+    if (group.length === 1) {
+      merged.push(group[0])
+      continue
+    }
+
+    // Prefer the VC reservation record so it stays labeled "VC Resource".
+    const vc = group.find(g => g.primary_source === 'bigquery_resource') ?? group[0]
+    const manual = group.find(g => g.primary_source === 'manual')
+    if (!manual) {
+      merged.push(vc)
+      continue
+    }
+
+    const combinedSources = [
+      ...(vc.sources?.length ? vc.sources : [vc.primary_source]),
+      ...(manual.sources?.length ? manual.sources : [manual.primary_source]),
+    ]
+
+    merged.push({
+      ...vc,
+      // Prefer manual fields (they’re user-entered) when present.
+      title: manual.title || vc.title,
+      description: manual.description ?? vc.description,
+      event_type: manual.event_type || vc.event_type,
+      general_notes: manual.general_notes ?? vc.general_notes,
+      needs_program_director: Boolean(vc.needs_program_director || manual.needs_program_director),
+      needs_office: Boolean(vc.needs_office || manual.needs_office),
+      needs_it: Boolean(vc.needs_it || manual.needs_it),
+      needs_security: Boolean(vc.needs_security || manual.needs_security),
+      needs_facilities: Boolean(vc.needs_facilities || manual.needs_facilities),
+      requested_by: manual.requested_by ?? vc.requested_by,
+      requested_at: manual.requested_at ?? vc.requested_at,
+      sources: Array.from(new Set(combinedSources)).filter(Boolean),
+    })
+  }
+
+  return [...noVc, ...merged]
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const startDate = searchParams.get('startDate')
@@ -119,6 +174,16 @@ export async function GET(request: Request) {
     console.error('Error fetching events:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Dedup any double-rows representing the same VC reservation (e.g., one VC row + one manual row)
+  // by merging manual fields into the VC reservation record.
+  const dedupedOpsEvents = dedupeOpsEventsByReservationId(opsEvents || [])
+  dedupedOpsEvents.sort((a, b) => {
+    if (a.start_date !== b.start_date) return String(a.start_date).localeCompare(String(b.start_date))
+    const aTime = timeToMinutes(a.start_time) ?? 0
+    const bTime = timeToMinutes(b.start_time) ?? 0
+    return aTime - bTime
+  })
   
   // 1b. Find "no school" days from Staff Calendar all-day events
   const noSchoolDates = new Set<string>()
@@ -147,7 +212,7 @@ export async function GET(request: Request) {
 
   // If not including VC reservations or no date range, return ops_events only
   if (!includeVcReservations || !startDate) {
-    return NextResponse.json({ data: opsEvents })
+    return NextResponse.json({ data: dedupedOpsEvents })
   }
 
   // 2. Fetch resources for location mapping
@@ -164,7 +229,7 @@ export async function GET(request: Request) {
   const veracrossIdsInOpsEvents = new Set<string>()
   const opsEventsByDateAndResource = new Map<string, { start: number; end: number }[]>()
   
-  for (const evt of opsEvents || []) {
+  for (const evt of dedupedOpsEvents) {
     if (evt.veracross_reservation_id) {
       veracrossIdsInOpsEvents.add(String(evt.veracross_reservation_id))
     }
@@ -270,7 +335,7 @@ export async function GET(request: Request) {
   }
 
   // 5. Merge and sort
-  let allEvents = [...(opsEvents || []), ...vcReservationEvents]
+  let allEvents = [...dedupedOpsEvents, ...vcReservationEvents]
   
   // 5b. Filter out recurring classes on no-school days
   if (noSchoolDates.size > 0) {

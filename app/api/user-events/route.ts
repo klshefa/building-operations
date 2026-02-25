@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     
     const { data: events, error } = await supabase
       .from('ops_events')
-      .select('id, title, description, start_date, start_time, end_time, location, status, requested_at, general_notes')
+      .select('id, title, description, start_date, start_time, end_time, location, status, requested_at, general_notes, veracross_reservation_id, primary_source, sources')
       .eq('requested_by', email)
       .gte('start_date', today)
       .order('start_date', { ascending: true })
@@ -40,7 +40,43 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     
-    return NextResponse.json({ events: events || [] })
+    const list = events || []
+
+    // Dedup same reservation appearing as both VC + manual events
+    const byVcId = new Map<string, any[]>()
+    const noVc: any[] = []
+    for (const evt of list) {
+      const vcid = evt.veracross_reservation_id ? String(evt.veracross_reservation_id) : null
+      if (!vcid) {
+        noVc.push(evt)
+        continue
+      }
+      if (!byVcId.has(vcid)) byVcId.set(vcid, [])
+      byVcId.get(vcid)!.push(evt)
+    }
+
+    const merged: any[] = []
+    for (const [, group] of byVcId) {
+      if (group.length === 1) {
+        merged.push(group[0])
+        continue
+      }
+      const vc = group.find(g => g.primary_source === 'bigquery_resource') ?? group[0]
+      const manual = group.find(g => g.primary_source === 'manual')
+      if (!manual) {
+        merged.push(vc)
+        continue
+      }
+      merged.push({
+        ...vc,
+        title: manual.title || vc.title,
+        description: manual.description ?? vc.description,
+        general_notes: manual.general_notes ?? vc.general_notes,
+        sources: Array.from(new Set([...(vc.sources || [vc.primary_source]), ...(manual.sources || [manual.primary_source])])).filter(Boolean),
+      })
+    }
+
+    return NextResponse.json({ events: [...noVc, ...merged] })
     
   } catch (error: any) {
     console.error('User events API error:', error)

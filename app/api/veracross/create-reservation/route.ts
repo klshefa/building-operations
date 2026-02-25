@@ -45,6 +45,12 @@ async function getReservationToken(): Promise<string> {
   return tokenData.access_token
 }
 
+function stripSeconds(timeStr: string): string {
+  const match = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return timeStr
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
 export interface CreateReservationRequest {
   description: string
   resource_id: number  // Veracross resource ID
@@ -211,8 +217,8 @@ export async function POST(request: Request) {
       description: description,
       start_date: start_date,
       end_date: end_date || start_date,
-      start_time: start_time,
-      end_time: end_time,
+      start_time: stripSeconds(start_time),
+      end_time: stripSeconds(end_time),
       resource_id: resource_id,
       location: resource_name,
       event_type: 'other',

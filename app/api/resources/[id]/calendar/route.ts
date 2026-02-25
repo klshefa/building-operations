@@ -86,9 +86,27 @@ function normalizeTime(timeStr: string | null | undefined): string | null {
   if (!timeStr) return null
   const iso = timeStr.match(/T(\d{2}):(\d{2})/)
   if (iso) return `${iso[1]}:${iso[2]}`
-  const hhmm = timeStr.match(/^(\d{1,2}):(\d{2})/)
-  if (hhmm) return timeStr
+  const hhmm = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?/)
+  if (hhmm) return `${hhmm[1].padStart(2, '0')}:${hhmm[2]}`
   return null
+}
+
+function normalizeResourceName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/^\d+\s+/, '') // drop leading room numbers
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, ' ')
+}
+
+function resourceNamesMatch(localName: string, vcName: string): boolean {
+  const a = normalizeResourceName(localName)
+  const b = normalizeResourceName(vcName)
+  if (!a || !b) return false
+  if (a === b) return true
+  // Handle grouped names like "ulam" vs "ulam 1"
+  return a.startsWith(b + ' ') || b.startsWith(a + ' ')
 }
 
 // Convert any time format to minutes for comparison
@@ -169,7 +187,7 @@ export async function GET(
     // 1. Get ops_events for this resource/date
     const { data: opsEvents, error: opsEventsError } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, location, status, resource_id, veracross_reservation_id')
+      .select('id, title, start_time, end_time, all_day, location, status, resource_id, veracross_reservation_id, primary_source, sources')
       .eq('resource_id', resourceId)
       .eq('start_date', date)
       .eq('is_hidden', false)
@@ -179,7 +197,43 @@ export async function GET(
     // Also track time slots from ops_events for fallback deduplication (as minutes)
     const opsEventTimeSlots: Array<{start: number, end: number}> = []
     
-    for (const event of opsEvents || []) {
+    // Dedup ops_events by veracross_reservation_id (manual + VC can both exist).
+    const opsByVcId = new Map<string, any[]>()
+    const opsWithoutVc: any[] = []
+    for (const e of opsEvents || []) {
+      const vcid = e.veracross_reservation_id ? String(e.veracross_reservation_id) : null
+      if (vcid) {
+        if (!opsByVcId.has(vcid)) opsByVcId.set(vcid, [])
+        opsByVcId.get(vcid)!.push(e)
+      } else {
+        opsWithoutVc.push(e)
+      }
+    }
+
+    const mergedOpsEvents: any[] = []
+    for (const [, group] of opsByVcId) {
+      if (group.length === 1) {
+        mergedOpsEvents.push(group[0])
+        continue
+      }
+      // Prefer the VC reservation record (keeps it labeled as VC Resource).
+      const vc = group.find(g => g.primary_source === 'bigquery_resource') ?? group[0]
+      const manual = group.find(g => g.primary_source === 'manual')
+      if (!manual) {
+        mergedOpsEvents.push(vc)
+        continue
+      }
+      // Merge minimal display fields from manual into VC record.
+      mergedOpsEvents.push({
+        ...vc,
+        title: manual.title || vc.title,
+        start_time: manual.start_time || vc.start_time,
+        end_time: manual.end_time || vc.end_time,
+      })
+    }
+    mergedOpsEvents.push(...opsWithoutVc)
+
+    for (const event of mergedOpsEvents) {
       if (event.veracross_reservation_id) {
         veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
       }
@@ -246,8 +300,8 @@ export async function GET(
     // IMPORTANT: We query by DATE only (not resource_id) because our local resource IDs 
     // don't match Veracross's IDs. We filter by resource name locally.
     const existingEventIds = new Set(events.map(e => e.id))
-    const resourceName = resource.description?.toLowerCase().trim() || ''
-    const resourceAbbrev = resource.abbreviation?.toLowerCase().trim() || ''
+    const resourceName = resource.description?.trim() || ''
+    const resourceAbbrev = resource.abbreviation?.trim() || ''
     
     try {
       const reservationsToken = await getReservationsToken()
@@ -280,17 +334,24 @@ export async function GET(
         
         for (const res of reservations) {
           const vcResId = String(res.resource_reservation_id || res.id)
-          const resResourceName = (res.resource || '').toLowerCase().trim()
+          const resResourceName = (res.resource || res.resource?.description || '').toString()
+          const resResourceId = res.resource_id || res.resource?.id
+          const resResourceNameLower = resResourceName.toLowerCase()
           
           // Log to see what Veracross returns
-          if (matchedCount < 3 || resResourceName.includes('midrash') || resResourceName.includes('beit')) {
+          if (matchedCount < 3 || resResourceNameLower.includes('midrash') || resResourceNameLower.includes('beit')) {
             console.log(`[Calendar] Checking: resource="${res.resource}", title="${res.notes || res.description || 'Reservation'}"`)
           }
           
-          // Simple exact match: Veracross resource name must equal our resource name
-          if (resResourceName !== resourceName) {
-            continue
-          }
+          // Prefer matching by resource_id when Veracross provides it.
+          // Fallback to name matching only if ID matching isn't possible.
+          const idMatch = resResourceId != null && String(resResourceId) === String(resourceId)
+          const nameMatch =
+            !idMatch &&
+            (resourceNamesMatch(resourceName, resResourceName) ||
+              (resourceAbbrev ? resourceNamesMatch(resourceAbbrev, resResourceName) : false))
+
+          if (!idMatch && !nameMatch) continue
           
           console.log(`[Calendar] MATCHED: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}", resource="${res.resource}"`)
           matchedCount++

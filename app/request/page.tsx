@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { formatTimeDisplay } from '@/lib/utils/timeDisplay'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, parseISO, addMinutes, isAfter, isPast } from 'date-fns'
 import {
@@ -555,7 +556,7 @@ export default function RequestPage() {
               {selectedResource?.description} • {format(parseISO(date), 'EEEE, MMMM d, yyyy')}
             </p>
             <p className="text-sm text-slate-600">
-              {startTime} - {endTime}
+                    {formatTimeDisplay(startTime)} - {formatTimeDisplay(endTime)}
             </p>
           </div>
           <button
@@ -871,7 +872,7 @@ export default function RequestPage() {
                 <div className="p-4 bg-slate-50 rounded-lg">
                   <p className="font-medium text-slate-800">{selectedResource?.description}</p>
                   <p className="text-sm text-slate-600">
-                    {date && format(parseISO(date), 'EEEE, MMMM d, yyyy')} • {startTime} - {endTime}
+                    {date && format(parseISO(date), 'EEEE, MMMM d, yyyy')} • {formatTimeDisplay(startTime)} - {formatTimeDisplay(endTime)}
                   </p>
                 </div>
 
@@ -1003,7 +1004,7 @@ export default function RequestPage() {
                             {event.title}
                           </p>
                           <p className="text-sm text-slate-600">
-                            {format(parseISO(event.start_date), 'EEE, MMM d')} • {event.start_time} - {event.end_time}
+                            {format(parseISO(event.start_date), 'EEE, MMM d')} • {formatTimeDisplay(event.start_time)} - {formatTimeDisplay(event.end_time)}
                           </p>
                           {event.location && (
                             <p className="text-sm text-slate-500">{event.location}</p>
@@ -1097,7 +1098,7 @@ export default function RequestPage() {
                         )}
                       </div>
                       <p className="text-xs text-slate-500">
-                        {event.startTime} - {event.endTime}
+                        {formatTimeDisplay(event.startTime)} - {formatTimeDisplay(event.endTime)}
                       </p>
                     </div>
                   ))}
@@ -1154,7 +1155,7 @@ export default function RequestPage() {
                   {date && format(parseISO(date), 'EEEE, MMMM d, yyyy')}
                 </p>
                 <p className="text-sm text-slate-600">
-                  {startTime} - {endTime}
+                  {formatTimeDisplay(startTime)} - {formatTimeDisplay(endTime)}
                 </p>
                 <p className="text-sm text-slate-500 mt-2">
                   Requested by: {staffInfo?.full_name || user.email}

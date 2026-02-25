@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import type { OpsEvent, EventSource } from '@/lib/types'
+import { formatTimeDisplay } from '@/lib/utils/timeDisplay'
 import {
   MapPinIcon,
   ClockIcon,
@@ -64,6 +65,7 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
   }
 
   if (compact) {
+    const startTime = formatTimeDisplay(event.start_time)
     return (
       <motion.div
         whileHover={{ scale: 1.02 }}
@@ -86,10 +88,10 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
             </div>
             <h4 className="font-medium text-slate-800 truncate">{event.title}</h4>
             <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
-              {event.start_time && (
+              {startTime && (
                 <span className="flex items-center gap-1">
                   <ClockIcon className="w-3 h-3" />
-                  {event.start_time}
+                  {startTime}
                 </span>
               )}
               {event.location && (
@@ -140,6 +142,9 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
     )
   }
 
+  const startTime = formatTimeDisplay(event.start_time)
+  const endTime = formatTimeDisplay(event.end_time)
+
   return (
     <motion.div
       whileHover={{ scale: 1.01 }}
@@ -183,11 +188,11 @@ export default function EventCard({ event, onClick, compact = false }: EventCard
 
       {/* Details */}
       <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 mb-3">
-        {event.start_time && (
+        {startTime && (
           <span className="flex items-center gap-1">
             <ClockIcon className="w-4 h-4 text-slate-400" />
-            {event.start_time}
-            {event.end_time && ` - ${event.end_time}`}
+            {startTime}
+            {endTime && ` - ${endTime}`}
           </span>
         )}
         {event.location && (
