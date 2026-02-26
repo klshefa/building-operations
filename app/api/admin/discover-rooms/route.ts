@@ -80,10 +80,13 @@ export async function GET(request: Request) {
     // --- Discover class schedule rooms ---
     const csToken = await getToken(CLASS_SCHEDULES_SCOPE)
     const uniqueRooms = new Map<string, { room: any; count: number; sampleScheduleId: any }>()
+    let totalSchedulesFetched = 0
+    let csApiErrors: string[] = []
+    let sampleRawSchedule: any = null
 
     let page = 1
     while (page <= 10) {
-      const res = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules?x_page_size=1000&x_page_number=${page}`, {
+      const res = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules`, {
         headers: {
           'Authorization': `Bearer ${csToken}`,
           'Accept': 'application/json',
@@ -91,10 +94,18 @@ export async function GET(request: Request) {
           'X-Page-Number': String(page),
         },
       })
-      if (!res.ok) break
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        csApiErrors.push(`Page ${page}: HTTP ${res.status} - ${errText.substring(0, 200)}`)
+        break
+      }
       const data = await res.json()
       const schedules = data.data || data || []
       if (schedules.length === 0) break
+      totalSchedulesFetched += schedules.length
+      if (!sampleRawSchedule && schedules.length > 0) {
+        sampleRawSchedule = { room: schedules[0].room, day: schedules[0].day, id: schedules[0].id }
+      }
 
       for (const s of schedules) {
         const roomDesc = (s.room?.description || '').trim()
@@ -163,7 +174,7 @@ export async function GET(request: Request) {
       const resToken = await getToken(RESERVATIONS_SCOPE)
       const today = new Date().toISOString().split('T')[0]
       const resRes = await fetch(
-        `${VERACROSS_API_BASE}/resource_reservations/reservations?on_or_after_start_date=${today}&x_page_size=200`,
+        `${VERACROSS_API_BASE}/resource_reservations/reservations?on_or_after_start_date=${today}`,
         {
           headers: {
             'Authorization': `Bearer ${resToken}`,
@@ -215,6 +226,13 @@ export async function GET(request: Request) {
         missingRooms: results.classScheduleRooms.filter(r => r.status === 'MISSING').length,
         totalReservationResources: results.reservationResources.length,
         autoFixed: results.autoFixed.length,
+      },
+      debug: {
+        totalSchedulesFetched,
+        csApiErrors,
+        sampleRawSchedule,
+        aliasCount: aliasMap.size,
+        resourceCount: resourceById.size,
       },
       ...results,
     })
