@@ -103,6 +103,14 @@ function dayMatchesTarget(dayText: string, targetDay: number): boolean {
   if (!dayText) return false
   const lower = dayText.toLowerCase().trim()
   if (DAY_MAP[lower] === targetDay) return true
+  const rangeMatch = lower.match(/^([a-z]+)\s*-\s*([a-z]+)$/)
+  if (rangeMatch) {
+    const s = DAY_MAP[rangeMatch[1]]
+    const e = DAY_MAP[rangeMatch[2]]
+    if (s !== undefined && e !== undefined) {
+      return s <= e ? (targetDay >= s && targetDay <= e) : (targetDay >= s || targetDay <= e)
+    }
+  }
   const parts = lower.split(/[^a-z]+/).filter(Boolean)
   return parts.some(p => DAY_MAP[p] === targetDay)
 }

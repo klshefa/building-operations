@@ -91,6 +91,14 @@ function dayMatchesTarget(dayText: string, targetDay: number): boolean {
   if (!dayText) return false
   const lower = dayText.toLowerCase().trim()
   if (DAY_MAP[lower] === targetDay) return true
+  const rangeMatch = lower.match(/^([a-z]+)\s*-\s*([a-z]+)$/)
+  if (rangeMatch) {
+    const s = DAY_MAP[rangeMatch[1]]
+    const e = DAY_MAP[rangeMatch[2]]
+    if (s !== undefined && e !== undefined) {
+      return s <= e ? (targetDay >= s && targetDay <= e) : (targetDay >= s || targetDay <= e)
+    }
+  }
   const parts = lower.split(/[^a-z]+/).filter(Boolean)
   return parts.some(p => DAY_MAP[p] === targetDay)
 }
@@ -164,7 +172,6 @@ export async function GET(
 
     const allOpsEvents = [...(directEvents || []), ...locationMatched]
 
-    // Dedup by veracross_reservation_id (keep one per VC ID)
     const byVcId = new Map<string, any[]>()
     const noVcId: any[] = []
     for (const evt of allOpsEvents) {
@@ -224,7 +231,6 @@ export async function GET(
         if (!(await doesReservationMatchResource(res, resourceId, supabase))) continue
         matched++
 
-        // Fallback dedup: skip if >80% time overlap with an existing ops_event
         const s = timeToMinutes(res.start_time)
         const e = timeToMinutes(res.end_time)
         if (s !== null && e !== null) {
@@ -336,7 +342,6 @@ export async function GET(
       })
     }
 
-    // Sort: all-day first, then by start time
     events.sort((a, b) => {
       if (a.allDay && !b.allDay) return -1
       if (!a.allDay && b.allDay) return 1
