@@ -1,32 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { resolveResourceId, doesReservationMatchResource, resolveClassScheduleRoom } from '@/lib/utils/resourceResolver'
+import {
+  resolveResourceId,
+  doesReservationMatchResource,
+  resolveClassScheduleRoom,
+} from '@/lib/utils/resourceResolver'
 
-// Veracross API config
-const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
-const VERACROSS_TOKEN_URL = 'https://accounts.veracross.com/shefa/oauth/token'
-const CLASS_SCHEDULES_SCOPE = 'academics.class_schedules:list academics.classes:list'
-const RESERVATIONS_SCOPE = 'resource_reservations.reservations:list'
-
-async function getReservationsToken(): Promise<string> {
-  const response = await fetch(VERACROSS_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: process.env.VERACROSS_CLIENT_ID!,
-      client_secret: process.env.VERACROSS_CLIENT_SECRET!,
-      scope: RESERVATIONS_SCOPE,
-    }),
-  })
-  
-  if (!response.ok) {
-    throw new Error(`Failed to get reservations token: ${response.status}`)
-  }
-  
-  const data = await response.json()
-  return data.access_token
-}
+const VC_API = 'https://api.veracross.com/shefa/v3'
+const VC_TOKEN_URL = 'https://accounts.veracross.com/shefa/oauth/token'
 
 function createAdminClient() {
   return createClient(
@@ -35,92 +16,83 @@ function createAdminClient() {
   )
 }
 
-async function getClassSchedulesToken(): Promise<string> {
-  const response = await fetch(VERACROSS_TOKEN_URL, {
+async function getVcToken(scope: string): Promise<string> {
+  const res = await fetch(VC_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: process.env.VERACROSS_CLIENT_ID!,
       client_secret: process.env.VERACROSS_CLIENT_SECRET!,
-      scope: CLASS_SCHEDULES_SCOPE,
+      scope,
     }),
   })
-  
-  if (!response.ok) {
-    throw new Error(`Failed to get token: ${response.status}`)
-  }
-  
-  const data = await response.json()
-  return data.access_token
+  if (!res.ok) throw new Error(`VC token error: ${res.status}`)
+  return (await res.json()).access_token
 }
 
-const dayNameToNumber: Record<string, number> = {
-  'sunday': 0, 'sun': 0, 'su': 0, 'u': 0,
-  'monday': 1, 'mon': 1, 'mo': 1, 'm': 1,
-  'tuesday': 2, 'tue': 2, 'tu': 2, 't': 2,
-  'wednesday': 3, 'wed': 3, 'we': 3, 'w': 3,
-  'thursday': 4, 'thu': 4, 'th': 4, 'r': 4,
-  'friday': 5, 'fri': 5, 'fr': 5, 'f': 5,
-  'saturday': 6, 'sat': 6, 'sa': 6,
+async function fetchAllVcPages(url: string, token: string): Promise<any[]> {
+  const all: any[] = []
+  let page = 1
+  while (page <= 20) {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'X-Page-Size': '1000',
+        'X-Page-Number': String(page),
+      },
+    })
+    if (!res.ok) break
+    const data = await res.json()
+    const items = data.data || data || []
+    all.push(...items)
+    if (items.length < 1000) break
+    page++
+  }
+  return all
 }
 
-function patternIncludesDay(pattern: string, dayOfWeek: number): boolean {
-  if (!pattern) return false
-  const patternLower = pattern.toLowerCase().trim()
-  
-  const mappedDay = dayNameToNumber[patternLower]
-  if (mappedDay !== undefined) {
-    return mappedDay === dayOfWeek
+function timeToMinutes(t: string | null | undefined): number | null {
+  if (!t) return null
+  const iso = t.match(/T(\d{2}):(\d{2})/)
+  if (iso) return parseInt(iso[1]) * 60 + parseInt(iso[2])
+  const ampm = t.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?/i)
+  if (ampm) {
+    let h = parseInt(ampm[1])
+    const m = parseInt(ampm[2])
+    if (ampm[3]?.toLowerCase() === 'pm' && h < 12) h += 12
+    if (ampm[3]?.toLowerCase() === 'am' && h === 12) h = 0
+    return h * 60 + m
   }
-  
-  const parts = patternLower.split(/[^a-z]+/).filter(Boolean)
-  for (const part of parts) {
-    const partDay = dayNameToNumber[part]
-    if (partDay === dayOfWeek) return true
-  }
-  
-  return false
+  return null
 }
 
-function normalizeTime(timeStr: string | null | undefined): string | null {
-  if (!timeStr) return null
-  const iso = timeStr.match(/T(\d{2}):(\d{2})/)
+function normalizeTime(t: string | null | undefined): string | null {
+  if (!t) return null
+  const iso = t.match(/T(\d{2}):(\d{2})/)
   if (iso) return `${iso[1]}:${iso[2]}`
-  const hhmm = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?/)
-  if (hhmm) return `${hhmm[1].padStart(2, '0')}:${hhmm[2]}`
+  const hm = t.match(/^(\d{1,2}):(\d{2})/)
+  if (hm) return `${hm[1].padStart(2, '0')}:${hm[2]}`
   return null
 }
 
-// Convert any time format to minutes for comparison
-function convertTimeToMinutes(timeStr: string | null | undefined): number | null {
-  if (!timeStr) return null
-  const str = timeStr.toLowerCase().trim()
-  
-  // ISO format: "1900-01-01T08:10:00Z" or "T08:10"
-  const isoMatch = str.match(/t(\d{2}):(\d{2})/)
-  if (isoMatch) {
-    return parseInt(isoMatch[1]) * 60 + parseInt(isoMatch[2])
-  }
-  
-  // 12-hour format: "9:00 am", "10:30 pm"
-  const ampmMatch = str.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?/)
-  if (ampmMatch) {
-    let hours = parseInt(ampmMatch[1])
-    const mins = parseInt(ampmMatch[2])
-    const ampm = ampmMatch[3]
-    if (ampm === 'pm' && hours < 12) hours += 12
-    if (ampm === 'am' && hours === 12) hours = 0
-    return hours * 60 + mins
-  }
-  
-  // 24-hour format: "09:00", "14:30"
-  const h24Match = str.match(/^(\d{1,2}):(\d{2})/)
-  if (h24Match) {
-    return parseInt(h24Match[1]) * 60 + parseInt(h24Match[2])
-  }
-  
-  return null
+const DAY_MAP: Record<string, number> = {
+  sunday: 0, sun: 0, su: 0, u: 0,
+  monday: 1, mon: 1, mo: 1, m: 1,
+  tuesday: 2, tue: 2, tu: 2, t: 2,
+  wednesday: 3, wed: 3, we: 3, w: 3,
+  thursday: 4, thu: 4, th: 4, r: 4,
+  friday: 5, fri: 5, fr: 5, f: 5,
+  saturday: 6, sat: 6, sa: 6,
+}
+
+function dayMatchesTarget(dayText: string, targetDay: number): boolean {
+  if (!dayText) return false
+  const lower = dayText.toLowerCase().trim()
+  if (DAY_MAP[lower] === targetDay) return true
+  const parts = lower.split(/[^a-z]+/).filter(Boolean)
+  return parts.some(p => DAY_MAP[p] === targetDay)
 }
 
 interface CalendarEvent {
@@ -133,7 +105,6 @@ interface CalendarEvent {
   source?: string
 }
 
-// GET /api/resources/[id]/calendar?date=2026-01-28
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -141,375 +112,218 @@ export async function GET(
   try {
     const { id } = await params
     const resourceId = parseInt(id)
-    
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
-    
+
     if (!date) {
       return NextResponse.json({ error: 'date is required' }, { status: 400 })
     }
-    
     if (isNaN(resourceId)) {
       return NextResponse.json({ error: 'Invalid resource ID' }, { status: 400 })
     }
-    
+
     const supabase = createAdminClient()
     const events: CalendarEvent[] = []
-    
-    // Get resource info
+    const debug: any = {}
+
     const { data: resource } = await supabase
       .from('ops_resources')
       .select('description, abbreviation')
       .eq('id', resourceId)
       .single()
-    
+
     if (!resource) {
       return NextResponse.json({ error: 'Resource not found' }, { status: 404 })
     }
-    
-    // 1. Get ops_events for this resource/date
-    const { data: opsEvents, error: opsEventsError } = await supabase
+
+    const vcIdsInOps = new Set<string>()
+    const opsTimeSlots: Array<{ start: number; end: number }> = []
+
+    // ─── SOURCE 1: ops_events ───────────────────────────────────
+
+    const { data: directEvents } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, location, status, resource_id, veracross_reservation_id, primary_source, sources')
+      .select('id, title, start_time, end_time, all_day, location, status, resource_id, veracross_reservation_id')
       .eq('resource_id', resourceId)
       .eq('start_date', date)
       .eq('is_hidden', false)
-    
-    // Track veracross IDs we already have from ops_events to avoid duplicates
-    const veracrossIdsInOpsEvents = new Set<string>()
-    // Also track time slots from ops_events for fallback deduplication (as minutes)
-    const opsEventTimeSlots: Array<{start: number, end: number}> = []
-    
-    // Dedup ops_events by veracross_reservation_id (manual + VC can both exist).
-    const opsByVcId = new Map<string, any[]>()
-    const opsWithoutVc: any[] = []
-    for (const e of opsEvents || []) {
-      const vcid = e.veracross_reservation_id ? String(e.veracross_reservation_id) : null
-      if (vcid) {
-        if (!opsByVcId.has(vcid)) opsByVcId.set(vcid, [])
-        opsByVcId.get(vcid)!.push(e)
-      } else {
-        opsWithoutVc.push(e)
-      }
-    }
 
-    const mergedOpsEvents: any[] = []
-    for (const [, group] of opsByVcId) {
-      if (group.length === 1) {
-        mergedOpsEvents.push(group[0])
-        continue
-      }
-      // Prefer the VC reservation record (keeps it labeled as VC Resource).
-      const vc = group.find(g => g.primary_source === 'bigquery_resource') ?? group[0]
-      const manual = group.find(g => g.primary_source === 'manual')
-      if (!manual) {
-        mergedOpsEvents.push(vc)
-        continue
-      }
-      // Merge minimal display fields from manual into VC record.
-      mergedOpsEvents.push({
-        ...vc,
-        title: manual.title || vc.title,
-        start_time: manual.start_time || vc.start_time,
-        end_time: manual.end_time || vc.end_time,
-      })
-    }
-    mergedOpsEvents.push(...opsWithoutVc)
-
-    for (const event of mergedOpsEvents) {
-      if (event.veracross_reservation_id) {
-        veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
-      }
-      // Track time slots for fallback dedup (convert to minutes)
-      const startMins = convertTimeToMinutes(event.start_time)
-      const endMins = convertTimeToMinutes(event.end_time)
-      console.log(`[Calendar] ops_event "${event.title}" times: start_time="${event.start_time}" (${startMins}min), end_time="${event.end_time}" (${endMins}min)`)
-      if (startMins !== null && endMins !== null) {
-        opsEventTimeSlots.push({ start: startMins, end: endMins })
-      }
-      // Show cancelled events greyed out
-      const title = event.status === 'cancelled' ? `[CANCELLED] ${event.title}` : event.title
-      events.push({
-        id: event.id,
-        title,
-        startTime: event.start_time,
-        endTime: event.end_time,
-        allDay: event.all_day,
-        type: 'reservation'
-      })
-    }
-    
-    // Also check events matching by location text
-    const locationMatches: string[] = []
-    if (resource?.description) locationMatches.push(resource.description)
-    if (resource?.abbreviation) locationMatches.push(resource.abbreviation)
-    
-    const { data: locationEvents } = await supabase
+    const { data: nullResEvents } = await supabase
       .from('ops_events')
       .select('id, title, start_time, end_time, all_day, location, status, veracross_reservation_id')
       .eq('start_date', date)
       .eq('is_hidden', false)
       .is('resource_id', null)
-    
-    for (const event of locationEvents || []) {
-      if (!event.location) continue
-      const resolvedLocId = await resolveResourceId(event.location, supabase)
-      if (resolvedLocId === resourceId) {
-        if (event.veracross_reservation_id) {
-          veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
+
+    const locationMatched: any[] = []
+    for (const evt of nullResEvents || []) {
+      if (!evt.location) continue
+      const resolved = await resolveResourceId(evt.location, supabase)
+      if (resolved === resourceId) locationMatched.push(evt)
+    }
+
+    const allOpsEvents = [...(directEvents || []), ...locationMatched]
+
+    // Dedup by veracross_reservation_id (keep one per VC ID)
+    const byVcId = new Map<string, any[]>()
+    const noVcId: any[] = []
+    for (const evt of allOpsEvents) {
+      const vcid = evt.veracross_reservation_id ? String(evt.veracross_reservation_id) : null
+      if (vcid) {
+        if (!byVcId.has(vcid)) byVcId.set(vcid, [])
+        byVcId.get(vcid)!.push(evt)
+      } else {
+        noVcId.push(evt)
+      }
+    }
+
+    const mergedOps: any[] = []
+    for (const [, group] of byVcId) {
+      mergedOps.push(group[0])
+    }
+    mergedOps.push(...noVcId)
+
+    for (const evt of mergedOps) {
+      if (evt.veracross_reservation_id) {
+        vcIdsInOps.add(String(evt.veracross_reservation_id))
+      }
+      const s = timeToMinutes(evt.start_time)
+      const e = timeToMinutes(evt.end_time)
+      if (s !== null && e !== null) {
+        opsTimeSlots.push({ start: s, end: e })
+      }
+      const title = evt.status === 'cancelled' ? `[CANCELLED] ${evt.title}` : evt.title
+      events.push({
+        id: evt.id,
+        title,
+        startTime: evt.start_time,
+        endTime: evt.end_time,
+        allDay: evt.all_day,
+        type: 'reservation',
+      })
+    }
+
+    debug.opsEvents = {
+      direct: directEvents?.length || 0,
+      locationMatched: locationMatched.length,
+      merged: mergedOps.length,
+    }
+
+    // ─── SOURCE 2: Veracross Reservations API ───────────────────
+
+    try {
+      const token = await getVcToken('resource_reservations.reservations:list')
+      const url = `${VC_API}/resource_reservations/reservations?on_or_after_start_date=${date}&on_or_before_start_date=${date}`
+      const reservations = await fetchAllVcPages(url, token)
+
+      let matched = 0
+      for (const res of reservations) {
+        const vcResId = String(res.resource_reservation_id || res.id)
+        if (vcIdsInOps.has(vcResId)) continue
+
+        if (!(await doesReservationMatchResource(res, resourceId, supabase))) continue
+        matched++
+
+        // Fallback dedup: skip if >80% time overlap with an existing ops_event
+        const s = timeToMinutes(res.start_time)
+        const e = timeToMinutes(res.end_time)
+        if (s !== null && e !== null) {
+          const isDupe = opsTimeSlots.some(slot => {
+            const overlapStart = Math.max(slot.start, s)
+            const overlapEnd = Math.min(slot.end, e)
+            const overlapMins = Math.max(0, overlapEnd - overlapStart)
+            const resDur = e - s
+            const slotDur = slot.end - slot.start
+            return (resDur > 0 && overlapMins / resDur > 0.8) ||
+                   (slotDur > 0 && overlapMins / slotDur > 0.8)
+          })
+          if (isDupe) continue
         }
-        // Also track time slots for fallback dedup
-        const startMins = convertTimeToMinutes(event.start_time)
-        const endMins = convertTimeToMinutes(event.end_time)
-        console.log(`[Calendar] locationEvent "${event.title}" times: start_time="${event.start_time}" (${startMins}min), end_time="${event.end_time}" (${endMins}min)`)
-        if (startMins !== null && endMins !== null) {
-          opsEventTimeSlots.push({ start: startMins, end: endMins })
-        }
-        const title = event.status === 'cancelled' ? `[CANCELLED] ${event.title}` : event.title
+
+        const eventId = `vc-res-${vcResId}`
         events.push({
-          id: event.id,
-          title,
-          startTime: event.start_time,
-          endTime: event.end_time,
-          allDay: event.all_day,
-          type: 'reservation'
+          id: eventId,
+          title: res.notes || res.description || res.name || 'Reservation',
+          startTime: normalizeTime(res.start_time),
+          endTime: normalizeTime(res.end_time),
+          allDay: false,
+          type: 'reservation',
+          source: 'veracross',
         })
       }
+
+      debug.vcReservations = { total: reservations.length, matched }
+    } catch (err: any) {
+      debug.vcReservationsError = err?.message
     }
-    
-    console.log(`[Calendar] Final opsEventTimeSlots:`, JSON.stringify(opsEventTimeSlots))
-    
-    // 2. Get Veracross reservations directly from API
-    // IMPORTANT: We query by DATE only (not resource_id) because our local resource IDs 
-    // don't match Veracross's IDs. We filter by resource name locally.
-    const existingEventIds = new Set(events.map(e => e.id))
-    const resourceName = resource.description?.trim() || ''
-    const resourceAbbrev = resource.abbreviation?.trim() || ''
-    
+
+    // ─── SOURCE 3: Veracross Class Schedules API ────────────────
+
     try {
-      const reservationsToken = await getReservationsToken()
-      // Fetch ALL reservations for this date (no resource_id filter - IDs don't match between systems)
-      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?on_or_after_start_date=${date}&on_or_before_start_date=${date}`
-      console.log(`[Calendar] Fetching Veracross reservations: ${url}`)
-      console.log(`[Calendar] Filtering for resource: "${resourceName}" / "${resourceAbbrev}"`)
-      
-      const reservationsRes = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${reservationsToken}`,
-          'Accept': 'application/json',
-          'X-Page-Size': '200',
-        },
-      })
-      
-      console.log(`[Calendar] Veracross reservations response status: ${reservationsRes.status}`)
-      
-      if (reservationsRes.ok) {
-        const reservationsData = await reservationsRes.json()
-        console.log(`[Calendar] Veracross raw response:`, JSON.stringify(reservationsData).substring(0, 500))
-        
-        const reservations = reservationsData.data || reservationsData || []
-        console.log(`[Calendar] Found ${reservations.length} total Veracross reservations on ${date}`)
-        
-        console.log(`[Calendar] veracrossIdsInOpsEvents:`, Array.from(veracrossIdsInOpsEvents))
-        
-        let matchedCount = 0
-        console.log(`[Calendar] Looking for resource: "${resourceName}"`)
-        
-        for (const res of reservations) {
-          const vcResId = String(res.resource_reservation_id || res.id)
-          
-          if (matchedCount < 3) {
-            console.log(`[Calendar] Checking: resource="${res.resource}", title="${res.notes || res.description || 'Reservation'}"`)
-          }
-          
-          if (!(await doesReservationMatchResource(res, resourceId, supabase))) continue
-          
-          console.log(`[Calendar] MATCHED: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}", resource="${res.resource}"`)
-          matchedCount++
-          
-          // Skip if we already have this from ops_events (avoid duplicates)
-          if (veracrossIdsInOpsEvents.has(vcResId)) {
-            console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - already in ops_events by ID`)
-            continue
-          }
-          
-          // Fallback: skip if we have an ops_event that overlaps (for events created before ID tracking)
-          const vcStartMins = convertTimeToMinutes(res.start_time)
-          const vcEndMins = convertTimeToMinutes(res.end_time)
-          console.log(`[Calendar] Veracross res times: start_time="${res.start_time}" (${vcStartMins}min), end_time="${res.end_time}" (${vcEndMins}min)`)
-          console.log(`[Calendar] opsEventTimeSlots:`, JSON.stringify(opsEventTimeSlots))
-          
-          if (vcStartMins !== null && vcEndMins !== null) {
-            // Check for significant overlap (>80% of either event's duration)
-            const hasOverlap = opsEventTimeSlots.some(slot => {
-              // Calculate overlap
-              const overlapStart = Math.max(slot.start, vcStartMins)
-              const overlapEnd = Math.min(slot.end, vcEndMins)
-              const overlapMins = Math.max(0, overlapEnd - overlapStart)
-              
-              const vcDuration = vcEndMins - vcStartMins
-              const slotDuration = slot.end - slot.start
-              
-              // Skip if >80% overlap with either event
-              const vcOverlapPct = vcDuration > 0 ? overlapMins / vcDuration : 0
-              const slotOverlapPct = slotDuration > 0 ? overlapMins / slotDuration : 0
-              
-              const isDupe = vcOverlapPct > 0.8 || slotOverlapPct > 0.8
-              console.log(`[Calendar] Overlap check: VC(${vcStartMins}-${vcEndMins}) vs OPS(${slot.start}-${slot.end}) | overlap=${overlapMins}min vcPct=${(vcOverlapPct*100).toFixed(0)}% slotPct=${(slotOverlapPct*100).toFixed(0)}% isDupe=${isDupe}`)
-              return isDupe
-            })
-            
-            if (hasOverlap) {
-              console.log(`[Calendar] Skipping Veracross reservation ${vcResId} - overlaps with ops_events`)
-              continue
-            }
-          }
-          
-          const resId = `vc-res-${vcResId}`
-          if (existingEventIds.has(resId)) continue
-          
-          console.log(`[Calendar] Adding reservation: ${res.notes || res.description || 'Reservation'} at ${res.start_time}-${res.end_time}`)
-          
-          events.push({
-            id: resId,
-            title: res.notes || res.description || res.name || 'Reservation',
-            startTime: normalizeTime(res.start_time),
-            endTime: normalizeTime(res.end_time),
-            allDay: false,
-            type: 'reservation',
-            source: 'veracross'
-          })
-          existingEventIds.add(resId)
+      const token = await getVcToken('academics.class_schedules:list academics.classes:list')
+
+      const classNames: Record<string, string> = {}
+      const allClasses = await fetchAllVcPages(`${VC_API}/academics/classes`, token)
+      for (const cls of allClasses) {
+        if (cls.id != null) {
+          classNames[String(cls.id)] = cls.name || cls.description || cls.course_name || ''
         }
-        console.log(`[Calendar] Matched ${matchedCount} reservations for this resource`)
-      } else {
-        const errorText = await reservationsRes.text()
-        console.log(`[Calendar] Veracross API error: ${reservationsRes.status} - ${errorText}`)
       }
-    } catch (err) {
-      console.error('[Calendar] Error fetching Veracross reservations:', err)
-    }
-    
-    // 3. Get class schedules for this resource
-    let classDebug: any = { step: 'start' }
-    try {
-      const accessToken = await getClassSchedulesToken()
-      classDebug.step = 'got token'
+
+      const schedules = await fetchAllVcPages(`${VC_API}/academics/class_schedules`, token)
+
       const dateObj = new Date(date + 'T12:00:00')
       const dayOfWeek = dateObj.getDay()
-      classDebug.dayOfWeek = dayOfWeek
-      
-      // Fetch class names and status - only include active/future classes
-      const classNamesMap: Record<string, string> = {}
-      const inactiveClassIds = new Set<string>()
-      const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json',
-          'X-Page-Size': '1000',
-        },
-      })
-      
-      if (classesRes.ok) {
-        const classesData = await classesRes.json()
-        const classes = classesData.data || classesData || []
-        for (const cls of classes) {
-          if (cls.id == null) continue
-          const internalId = String(cls.id)
-          const name = cls.name || cls.description || cls.course_name || ''
-          classNamesMap[internalId] = name
-          if (cls.status === 0) inactiveClassIds.add(internalId)
-        }
+      const seen = new Set<string>()
+      let roomMatches = 0
+      let dayMatches = 0
+
+      for (const sched of schedules) {
+        const roomId = await resolveClassScheduleRoom(sched.room, supabase)
+        if (roomId !== resourceId) continue
+        roomMatches++
+
+        const dayText = sched.day?.description || sched.day?.abbreviation || ''
+        if (!dayMatchesTarget(dayText, dayOfWeek)) continue
+        dayMatches++
+
+        const roomDesc = (sched.room?.description || '').toLowerCase()
+        const key = `${sched.class_id || sched.internal_class_id}-${roomDesc}`
+        if (seen.has(key)) continue
+        seen.add(key)
+
+        const intId = sched.internal_class_id != null ? String(sched.internal_class_id) : ''
+        const className = classNames[intId] || sched.block?.description || 'Class'
+
+        events.push({
+          id: `class-${sched.id}`,
+          title: className,
+          startTime: normalizeTime(sched.start_time),
+          endTime: normalizeTime(sched.end_time),
+          allDay: false,
+          type: 'class',
+        })
       }
-      
-      classDebug.classNamesCount = Object.keys(classNamesMap).length
-      
-      // Fetch schedules
-      const scheduleRes = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json',
-          'X-Page-Size': '1000',
-        },
-      })
-      
-      classDebug.step = 'fetching schedules'
-      classDebug.scheduleStatus = scheduleRes.status
-      if (!scheduleRes.ok) {
-        const errorText = await scheduleRes.text()
-        classDebug.scheduleError = errorText.substring(0, 200)
-      }
-      if (scheduleRes.ok) {
-        const scheduleData = await scheduleRes.json()
-        const schedules = scheduleData.data || scheduleData || []
-        classDebug.totalSchedules = schedules.length
-        
-        classDebug.roomInfo = { targetResourceId: resourceId }
-        
-        const seenKeys = new Set<string>()
-        let roomMatches = 0, dayMatches = 0, activeMatches = 0
-        
-        for (const schedule of schedules) {
-          // Resolve room via alias table — exact lookup, no fuzzy matching
-          const scheduleResourceId = await resolveClassScheduleRoom(schedule.room, supabase)
-          if (scheduleResourceId !== resourceId) continue
-          roomMatches++
-          
-          // Check day pattern
-          const dayPattern = schedule.day?.description || schedule.day?.abbreviation || ''
-          if (!patternIncludesDay(dayPattern, dayOfWeek)) continue
-          dayMatches++
-          
-          // Dedupe
-          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
-          const key = `${schedule.internal_class_id || schedule.class_id}-${scheduleRoomDesc}`
-          if (seenKeys.has(key)) continue
-          seenKeys.add(key)
-          
-          // Use internal_class_id - matches cls.id from /academics/classes
-          const internalId = schedule.internal_class_id != null ? String(schedule.internal_class_id) : ''
-          
-          // Skip only if class is explicitly inactive (status=0)
-          if (internalId && inactiveClassIds.has(internalId)) continue
-          activeMatches++
-          
-          // Get class name using the internal ID
-          const className = classNamesMap[internalId] || schedule.block?.description || 'Class'
-          
-          // Debug: capture matched rooms
-          if (!classDebug.matchedRooms) classDebug.matchedRooms = []
-          if (classDebug.matchedRooms.length < 5) {
-            classDebug.matchedRooms.push({
-              className,
-              scheduleRoom: scheduleRoomDesc,
-              resolvedId: scheduleResourceId
-            })
-          }
-          
-          events.push({
-            id: `class-${schedule.id}`,
-            title: className,
-            startTime: normalizeTime(schedule.start_time),
-            endTime: normalizeTime(schedule.end_time),
-            allDay: false,
-            type: 'class'
-          })
-        }
-        classDebug.matches = { roomMatches, dayMatches, activeMatches }
+
+      debug.classSchedules = {
+        total: schedules.length,
+        roomMatches,
+        dayMatches,
+        classNamesLoaded: Object.keys(classNames).length,
       }
     } catch (err: any) {
-      console.error('Class schedule fetch failed:', err?.message || err)
-      classDebug.error = err?.message || String(err)
+      debug.classSchedulesError = err?.message
     }
-    
-    // 3. Get school-wide calendar events
+
+    // ─── SOURCE 4: School-wide Calendar Events ──────────────────
+
     const { data: calendarEvents } = await supabase
       .from('ops_raw_events')
       .select('id, title, source, start_date, end_date')
       .in('source', ['calendar_staff', 'calendar_ls', 'calendar_ms'])
       .lte('start_date', date)
       .gte('end_date', date)
-    
+
     for (const cal of calendarEvents || []) {
       events.push({
         id: `cal-${cal.id}`,
@@ -518,47 +332,25 @@ export async function GET(
         endTime: null,
         allDay: true,
         type: 'calendar',
-        source: cal.source
+        source: cal.source,
       })
     }
-    
-    // Sort by time (all-day first, then by start time)
+
+    // Sort: all-day first, then by start time
     events.sort((a, b) => {
       if (a.allDay && !b.allDay) return -1
       if (!a.allDay && b.allDay) return 1
-      const aMin = convertTimeToMinutes(a.startTime) ?? 9999
-      const bMin = convertTimeToMinutes(b.startTime) ?? 9999
+      const aMin = timeToMinutes(a.startTime) ?? 9999
+      const bMin = timeToMinutes(b.startTime) ?? 9999
       return aMin - bMin
     })
-    
+
     return NextResponse.json({
-      resource: {
-        id: resourceId,
-        description: resource.description,
-        abbreviation: resource.abbreviation
-      },
+      resource: { id: resourceId, description: resource.description, abbreviation: resource.abbreviation },
       date,
       events,
-      classDebug,
-      dedupDebug: {
-        opsEventTimeSlots,
-        veracrossIdsInOpsEvents: Array.from(veracrossIdsInOpsEvents),
-        opsEventsCount: opsEvents?.length ?? 0,
-        locationEventsCount: locationEvents?.length ?? 0,
-        opsEventsRaw: (opsEvents || []).map(e => ({ 
-          id: e.id, 
-          title: e.title, 
-          start_time: e.start_time, 
-          end_time: e.end_time,
-          start_mins: convertTimeToMinutes(e.start_time),
-          end_mins: convertTimeToMinutes(e.end_time),
-          resource_id: e.resource_id,
-          veracross_reservation_id: e.veracross_reservation_id
-        })),
-        locationEventsCount_withLocation: (locationEvents || []).filter(e => !!e.location).length
-      }
+      debug,
     })
-    
   } catch (error: any) {
     console.error('Resource calendar error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

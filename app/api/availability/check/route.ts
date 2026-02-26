@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { resolveResourceId, doesReservationMatchResource, resolveClassScheduleRoom } from '@/lib/utils/resourceResolver'
+import {
+  resolveResourceId,
+  doesReservationMatchResource,
+  resolveClassScheduleRoom,
+} from '@/lib/utils/resourceResolver'
 
-// Veracross API config
-const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
-const VERACROSS_TOKEN_URL = 'https://accounts.veracross.com/shefa/oauth/token'
-const CLASS_SCHEDULES_SCOPE = 'academics.class_schedules:list academics.classes:list'
-const RESERVATIONS_SCOPE = 'resource_reservations.reservations:list'
+const VC_API = 'https://api.veracross.com/shefa/v3'
+const VC_TOKEN_URL = 'https://accounts.veracross.com/shefa/oauth/token'
 
 function createAdminClient() {
   return createClient(
@@ -15,118 +16,103 @@ function createAdminClient() {
   )
 }
 
-// Get a token for class schedules
-async function getClassSchedulesToken(): Promise<string> {
-  const response = await fetch(VERACROSS_TOKEN_URL, {
+async function getVcToken(scope: string): Promise<string> {
+  const res = await fetch(VC_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: process.env.VERACROSS_CLIENT_ID!,
       client_secret: process.env.VERACROSS_CLIENT_SECRET!,
-      scope: CLASS_SCHEDULES_SCOPE,
+      scope,
     }),
   })
-  
-  if (!response.ok) {
-    throw new Error(`Failed to get token: ${response.status}`)
-  }
-  
-  const data = await response.json()
-  return data.access_token
+  if (!res.ok) throw new Error(`VC token error: ${res.status}`)
+  return (await res.json()).access_token
 }
 
-// Get a token for reservations
-async function getReservationsToken(): Promise<string> {
-  const response = await fetch(VERACROSS_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: process.env.VERACROSS_CLIENT_ID!,
-      client_secret: process.env.VERACROSS_CLIENT_SECRET!,
-      scope: RESERVATIONS_SCOPE,
-    }),
-  })
-  
-  if (!response.ok) {
-    throw new Error(`Failed to get reservations token: ${response.status}`)
+async function fetchAllVcPages(url: string, token: string): Promise<any[]> {
+  const all: any[] = []
+  let page = 1
+  while (page <= 20) {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        'X-Page-Size': '1000',
+        'X-Page-Number': String(page),
+      },
+    })
+    if (!res.ok) break
+    const data = await res.json()
+    const items = data.data || data || []
+    all.push(...items)
+    if (items.length < 1000) break
+    page++
   }
-  
-  const data = await response.json()
-  return data.access_token
+  return all
 }
 
-// Map day names to day of week numbers
-const dayNameToNumber: Record<string, number> = {
-  'sunday': 0, 'sun': 0, 'su': 0, 'u': 0,
-  'monday': 1, 'mon': 1, 'mo': 1, 'm': 1,
-  'tuesday': 2, 'tue': 2, 'tu': 2, 't': 2,
-  'wednesday': 3, 'wed': 3, 'we': 3, 'w': 3,
-  'thursday': 4, 'thu': 4, 'th': 4, 'r': 4,
-  'friday': 5, 'fri': 5, 'fr': 5, 'f': 5,
-  'saturday': 6, 'sat': 6, 'sa': 6,
-}
-
-function patternIncludesDay(pattern: string, dayOfWeek: number): boolean {
-  if (!pattern) return false
-  const patternLower = pattern.toLowerCase().trim()
-  
-  const mappedDay = dayNameToNumber[patternLower]
-  if (mappedDay !== undefined) {
-    return mappedDay === dayOfWeek
+function timeToMinutes(t: string | null | undefined): number | null {
+  if (!t) return null
+  const iso = t.match(/T(\d{2}):(\d{2})/)
+  if (iso) return parseInt(iso[1]) * 60 + parseInt(iso[2])
+  const ampm = t.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?/i)
+  if (ampm) {
+    let h = parseInt(ampm[1])
+    const m = parseInt(ampm[2])
+    if (ampm[3]?.toLowerCase() === 'pm' && h < 12) h += 12
+    if (ampm[3]?.toLowerCase() === 'am' && h === 12) h = 0
+    return h * 60 + m
   }
-  
-  const parts = patternLower.split(/[^a-z]+/).filter(Boolean)
-  for (const part of parts) {
-    const partDay = dayNameToNumber[part]
-    if (partDay === dayOfWeek) return true
-  }
-  
-  return false
-}
-
-function parseTimeToMinutes(timeStr: string | null | undefined): number | null {
-  if (!timeStr) return null
-  
-  // Handle ISO datetime format like "1900-01-01T08:10:00Z"
-  const isoMatch = timeStr.match(/T(\d{2}):(\d{2})/)
-  if (isoMatch) {
-    return parseInt(isoMatch[1]) * 60 + parseInt(isoMatch[2])
-  }
-  
-  // Handle HH:MM with optional AM/PM (e.g., "12:15 pm", "1:30 PM", "09:00")
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?/i)
-  if (match) {
-    let hours = parseInt(match[1])
-    const minutes = parseInt(match[2])
-    const period = match[3]?.toLowerCase()
-    
-    // Convert to 24-hour if AM/PM specified
-    if (period === 'pm' && hours < 12) hours += 12
-    if (period === 'am' && hours === 12) hours = 0
-    
-    return hours * 60 + minutes
-  }
-  
   return null
 }
 
-function normalizeTime(timeStr: string | null | undefined): string | null {
-  if (!timeStr) return null
-  const iso = timeStr.match(/T(\d{2}):(\d{2})/)
+function fmtTime(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  const ap = h >= 12 ? 'pm' : 'am'
+  const hr = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return m === 0 ? `${hr}${ap}` : `${hr}:${String(m).padStart(2, '0')}${ap}`
+}
+
+function normalizeTime(t: string | null | undefined): string | null {
+  if (!t) return null
+  const iso = t.match(/T(\d{2}):(\d{2})/)
   if (iso) return `${iso[1]}:${iso[2]}`
-  const hhmm = timeStr.match(/^(\d{1,2}):(\d{2})/)
-  if (hhmm) return timeStr
+  const hm = t.match(/^(\d{1,2}):(\d{2})/)
+  if (hm) return t
   return null
 }
 
-function formatTimeDisplay(minutes: number): string {
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  const ampm = h >= 12 ? 'pm' : 'am'
-  const hour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
-  return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, '0')}${ampm}`
+function timesOverlap(s1: number, e1: number, s2: number, e2: number): boolean {
+  return s1 < e2 && e1 > s2
+}
+
+const DAY_MAP: Record<string, number> = {
+  sunday: 0, sun: 0, su: 0, u: 0,
+  monday: 1, mon: 1, mo: 1, m: 1,
+  tuesday: 2, tue: 2, tu: 2, t: 2,
+  wednesday: 3, wed: 3, we: 3, w: 3,
+  thursday: 4, thu: 4, th: 4, r: 4,
+  friday: 5, fri: 5, fr: 5, f: 5,
+  saturday: 6, sat: 6, sa: 6,
+}
+
+function dayMatchesTarget(dayText: string, targetDay: number): boolean {
+  if (!dayText) return false
+  const lower = dayText.toLowerCase().trim()
+  if (DAY_MAP[lower] === targetDay) return true
+  const parts = lower.split(/[^a-z]+/).filter(Boolean)
+  return parts.some(p => DAY_MAP[p] === targetDay)
+}
+
+function titlesSimilar(a: string, b: string): boolean {
+  const na = a.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ')
+  const nb = b.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ')
+  if (na === nb) return true
+  if (na.includes(nb) || nb.includes(na)) return true
+  return false
 }
 
 interface Conflict {
@@ -137,55 +123,6 @@ interface Conflict {
   message: string
 }
 
-interface AvailabilityResult {
-  available: boolean
-  conflicts: Conflict[]
-  warnings: Conflict[]
-}
-
-// Check if two time ranges overlap
-function timesOverlap(
-  start1: number, end1: number,
-  start2: number, end2: number
-): boolean {
-  return start1 < end2 && end1 > start2
-}
-
-// Check if times are close (within threshold minutes)
-function timesClose(
-  end1: number, start2: number,
-  threshold: number = 15
-): boolean {
-  return Math.abs(start2 - end1) <= threshold && Math.abs(start2 - end1) > 0
-}
-
-// Helper to normalize titles for comparison
-function normalizeTitle(title: string): string {
-  return title.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ')
-}
-
-// Helper to check if titles are similar (same event from different source)
-function areTitlesSimilar(title1: string, title2: string): boolean {
-  const t1 = normalizeTitle(title1)
-  const t2 = normalizeTitle(title2)
-  
-  // Exact match after normalization
-  if (t1 === t2) return true
-  
-  // One contains the other
-  if (t1.includes(t2) || t2.includes(t1)) return true
-  
-  // Word overlap check - if >70% of words match, it's the same event
-  const words1 = new Set(t1.split(' ').filter(w => w.length > 2))
-  const words2 = new Set(t2.split(' ').filter(w => w.length > 2))
-  if (words1.size === 0 || words2.size === 0) return false
-  
-  const intersection = [...words1].filter(w => words2.has(w))
-  const overlapRatio = intersection.length / Math.min(words1.size, words2.size)
-  return overlapRatio >= 0.7
-}
-
-// GET /api/availability/check?resourceId=123&date=2026-01-28&startTime=09:00&endTime=10:00&excludeEventId=...&excludeEventName=...
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -195,446 +132,212 @@ export async function GET(request: Request) {
     const endTime = searchParams.get('endTime')
     const excludeEventId = searchParams.get('excludeEventId')
     const excludeEventName = searchParams.get('excludeEventName')
-    
-    console.log(`[Availability] Check request - excludeEventId: ${excludeEventId}, excludeEventName: "${excludeEventName}"`)
-    
+
     if (!resourceId || !date || !startTime || !endTime) {
-      return NextResponse.json({ 
-        error: 'resourceId, date, startTime, and endTime are required' 
-      }, { status: 400 })
+      return NextResponse.json(
+        { error: 'resourceId, date, startTime, and endTime are required' },
+        { status: 400 }
+      )
     }
-    
-    const requestStart = parseTimeToMinutes(startTime)
-    const requestEnd = parseTimeToMinutes(endTime)
-    
-    if (requestStart === null || requestEnd === null) {
-      return NextResponse.json({ 
-        error: 'Invalid time format. Use HH:MM' 
-      }, { status: 400 })
+
+    const reqStart = timeToMinutes(startTime)
+    const reqEnd = timeToMinutes(endTime)
+    if (reqStart === null || reqEnd === null) {
+      return NextResponse.json({ error: 'Invalid time format' }, { status: 400 })
     }
-    
+
+    const targetId = parseInt(resourceId)
     const supabase = createAdminClient()
     const conflicts: Conflict[] = []
     const warnings: Conflict[] = []
-    
-    // Track veracross IDs to avoid duplicates between ops_events and Veracross API
-    const veracrossIdsInOpsEvents = new Set<string>()
-    
-    // 1. Check ops_events for conflicts on same resource/date
-    const { data: events, error: eventError } = await supabase
-      .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, status, location, veracross_reservation_id')
-      .eq('resource_id', parseInt(resourceId))
-      .eq('start_date', date)
-      .eq('is_hidden', false)
-      .neq('status', 'cancelled')
-    
-    // Collect veracross IDs from ops_events for deduplication
-    for (const evt of events || []) {
-      if (evt.veracross_reservation_id) {
-        veracrossIdsInOpsEvents.add(String(evt.veracross_reservation_id))
-      }
-    }
-    
-    if (eventError) {
-      console.error('Event query error:', eventError)
-    }
-    
-    // Get resource info for display/logging
+    const debug: any = {}
+
     const { data: resource } = await supabase
       .from('ops_resources')
       .select('description, abbreviation')
-      .eq('id', parseInt(resourceId))
+      .eq('id', targetId)
       .single()
-    
-    // Also check events with NULL resource_id — resolve their location via alias table
-    const { data: locationEvents } = await supabase
+
+    const vcIdsInOps = new Set<string>()
+
+    // ─── SOURCE 1: ops_events ───────────────────────────────────
+
+    const { data: directEvents } = await supabase
       .from('ops_events')
-      .select('id, title, start_time, end_time, all_day, location, status, veracross_reservation_id')
+      .select('id, title, start_time, end_time, all_day, status, location, veracross_reservation_id')
+      .eq('resource_id', targetId)
+      .eq('start_date', date)
+      .eq('is_hidden', false)
+      .neq('status', 'cancelled')
+
+    const { data: nullResEvents } = await supabase
+      .from('ops_events')
+      .select('id, title, start_time, end_time, all_day, status, location, veracross_reservation_id')
       .eq('start_date', date)
       .eq('is_hidden', false)
       .neq('status', 'cancelled')
       .is('resource_id', null)
-    
-    const allEvents = [...(events || [])]
-    
-    console.log('[Availability] ops_events by resource_id:', events?.length || 0)
-    
-    const targetId = parseInt(resourceId)
-    for (const event of locationEvents || []) {
-      if (!event.location) continue
-      const resolvedId = await resolveResourceId(event.location, supabase)
-      if (resolvedId === targetId) {
-        console.log('[Availability] ALIAS MATCH ops_event:', { title: event.title, location: event.location, resolvedId })
-        if (event.veracross_reservation_id) {
-          veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
-        }
-        allEvents.push(event)
+
+    const locationMatched: any[] = []
+    for (const evt of nullResEvents || []) {
+      if (!evt.location) continue
+      const resolved = await resolveResourceId(evt.location, supabase)
+      if (resolved === targetId) locationMatched.push(evt)
+    }
+
+    const allOpsEvents = [...(directEvents || []), ...locationMatched]
+
+    for (const evt of allOpsEvents) {
+      if (evt.veracross_reservation_id) {
+        vcIdsInOps.add(String(evt.veracross_reservation_id))
       }
     }
-    
-    console.log('[Availability] Total ops_events to check:', allEvents.length)
-    
-    for (const event of allEvents) {
-      // Skip if this is the event we're checking availability FOR (exclude self)
-      if (excludeEventId && event.id === excludeEventId) continue
-      
-      // Skip if title matches excludeEventName (same event from different source)
-      if (excludeEventName && areTitlesSimilar(event.title, excludeEventName)) continue
-      
-      if (event.all_day) {
+
+    for (const evt of allOpsEvents) {
+      if (excludeEventId && evt.id === excludeEventId) continue
+      if (excludeEventName && titlesSimilar(evt.title, excludeEventName)) continue
+
+      if (evt.all_day) {
         conflicts.push({
           type: 'conflict',
-          title: event.title,
+          title: evt.title,
           startTime: 'All day',
           endTime: '',
-          message: `❌ Conflict: ${event.title} (All day event)`
+          message: `❌ Conflict: ${evt.title} (All day event)`,
         })
         continue
       }
-      
-      const eventStart = parseTimeToMinutes(event.start_time)
-      const eventEnd = parseTimeToMinutes(event.end_time)
-      
-      if (eventStart === null || eventEnd === null) continue
-      
-      if (timesOverlap(requestStart, requestEnd, eventStart, eventEnd)) {
-        console.log('[Availability] ADDING CONFLICT from ops_event:', {
-          id: event.id,
-          title: event.title,
-          location: event.location,
-          start_time: event.start_time,
-          end_time: event.end_time
-        })
+
+      const s = timeToMinutes(evt.start_time)
+      const e = timeToMinutes(evt.end_time)
+      if (s === null || e === null) continue
+
+      if (timesOverlap(reqStart, reqEnd, s, e)) {
         conflicts.push({
           type: 'conflict',
-          title: event.title,
-          startTime: event.start_time || '',
-          endTime: event.end_time || '',
-          message: `❌ Conflict: ${event.title} (${formatTimeDisplay(eventStart)}-${formatTimeDisplay(eventEnd)})`
+          title: evt.title,
+          startTime: evt.start_time || '',
+          endTime: evt.end_time || '',
+          message: `❌ Conflict: ${evt.title} (${fmtTime(s)}-${fmtTime(e)})`,
         })
-      } else {
-        // Check for close events (warnings)
-        if (timesClose(eventEnd, requestStart)) {
-          warnings.push({
-            type: 'warning',
-            title: event.title,
-            startTime: event.start_time || '',
-            endTime: event.end_time || '',
-            message: `⚠️ Note: ${event.title} ends ${requestStart - eventEnd} min before`
-          })
-        }
-        if (timesClose(requestEnd, eventStart)) {
-          warnings.push({
-            type: 'warning',
-            title: event.title,
-            startTime: event.start_time || '',
-            endTime: event.end_time || '',
-            message: `⚠️ Note: ${event.title} starts ${eventStart - requestEnd} min after`
-          })
-        }
       }
     }
-    
-    // 1.5 Check Veracross reservations directly from API
-    // IMPORTANT: We query by DATE only (not resource_id) because our local resource IDs 
-    // don't match Veracross's IDs. We filter by resource name locally.
-    const checkedReservationIds = new Set<string>()
-    let veracrossReservationsDebug: any = { status: 'not_started' }
-    
-    // Get resource name for matching
-    const resourceName = resource?.description?.trim() || ''
-    const resourceAbbrev = resource?.abbreviation?.trim() || ''
-    
+
+    debug.opsEvents = {
+      direct: directEvents?.length || 0,
+      locationMatched: locationMatched.length,
+    }
+
+    // ─── SOURCE 2: Veracross Reservations API ───────────────────
+
     try {
-      const reservationsToken = await getReservationsToken()
-      veracrossReservationsDebug.tokenObtained = true
-      
-      // Fetch ALL reservations for this date (no resource_id filter - IDs don't match between systems)
-      const url = `${VERACROSS_API_BASE}/resource_reservations/reservations?on_or_after_start_date=${date}&on_or_before_start_date=${date}`
-      veracrossReservationsDebug.url = url
-      veracrossReservationsDebug.filteringBy = { resourceName, resourceAbbrev }
-      
-      const reservationsRes = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${reservationsToken}`,
-          'Accept': 'application/json',
-          'X-Page-Size': '200',
-        },
-      })
-      
-      veracrossReservationsDebug.httpStatus = reservationsRes.status
-      
-      if (reservationsRes.ok) {
-        const reservationsData = await reservationsRes.json()
-        const reservations = reservationsData.data || reservationsData || []
-        
-        veracrossReservationsDebug.status = 'success'
-        veracrossReservationsDebug.totalCount = reservations.length
-        veracrossReservationsDebug.rawSample = reservations.length > 0 ? reservations[0] : null
-        
-        let matchedCount = 0
-        console.log(`[Availability] Looking for resource: "${resourceName}"`)
-        
-        for (const res of reservations) {
-          const resId = res.resource_reservation_id || res.id
-          const resIdStr = String(resId)
-          const resTitle = res.notes || res.description || res.name || 'Veracross Reservation'
-          
-          if (matchedCount < 3) {
-            console.log(`[Availability] Checking reservation: resource="${res.resource}", title="${resTitle}"`)
-          }
-          
-          if (!(await doesReservationMatchResource(res, parseInt(resourceId), supabase))) continue
-          
-          console.log(`[Availability] MATCHED: resource="${res.resource}", title="${resTitle}"`)
-          matchedCount++
-          
-          // Skip if already processed
-          if (checkedReservationIds.has(resIdStr)) continue
-          checkedReservationIds.add(resIdStr)
-          
-          // Skip if we already have this reservation in ops_events (avoid duplicates)
-          if (veracrossIdsInOpsEvents.has(resIdStr)) {
-            console.log(`[Availability] Skipping VC reservation ${resIdStr} - already in ops_events`)
-            continue
-          }
-          
-          // Skip if title matches excludeEventName (same event, just from VC API)
-          // Direct exact comparison first (case-insensitive)
-          if (excludeEventName && resTitle.toLowerCase().trim() === excludeEventName.toLowerCase().trim()) {
-            console.log(`[Availability] Skipping VC reservation - EXACT title match: "${resTitle}"`)
-            continue
-          }
-          // Then fuzzy match
-          if (excludeEventName && areTitlesSimilar(resTitle, excludeEventName)) {
-            console.log(`[Availability] Skipping VC reservation - similar title to current event: "${resTitle}" vs "${excludeEventName}"`)
-            continue
-          }
-          
-          const resStart = parseTimeToMinutes(res.start_time)
-          const resEnd = parseTimeToMinutes(res.end_time)
-          
-          if (resStart === null || resEnd === null) continue
-          
-          if (timesOverlap(requestStart, requestEnd, resStart, resEnd)) {
-            conflicts.push({
-              type: 'conflict',
-              title: resTitle,
-              startTime: res.start_time || '',
-              endTime: res.end_time || '',
-              message: `❌ Conflict: ${resTitle} (${formatTimeDisplay(resStart)}-${formatTimeDisplay(resEnd)})`
-            })
-          }
+      const token = await getVcToken('resource_reservations.reservations:list')
+      const url = `${VC_API}/resource_reservations/reservations?on_or_after_start_date=${date}&on_or_before_start_date=${date}`
+      const reservations = await fetchAllVcPages(url, token)
+
+      let matched = 0
+      for (const res of reservations) {
+        const resId = String(res.resource_reservation_id || res.id)
+        if (vcIdsInOps.has(resId)) continue
+
+        if (!(await doesReservationMatchResource(res, targetId, supabase))) continue
+        matched++
+
+        const title = res.notes || res.description || res.name || 'Veracross Reservation'
+        if (excludeEventName && titlesSimilar(title, excludeEventName)) continue
+
+        const s = timeToMinutes(res.start_time)
+        const e = timeToMinutes(res.end_time)
+        if (s === null || e === null) continue
+
+        if (timesOverlap(reqStart, reqEnd, s, e)) {
+          conflicts.push({
+            type: 'conflict',
+            title,
+            startTime: res.start_time || '',
+            endTime: res.end_time || '',
+            message: `❌ Conflict: ${title} (${fmtTime(s)}-${fmtTime(e)})`,
+          })
         }
-        veracrossReservationsDebug.matchedCount = matchedCount
-      } else {
-        const errorText = await reservationsRes.text()
-        veracrossReservationsDebug.status = 'api_error'
-        veracrossReservationsDebug.error = errorText.substring(0, 200)
       }
+
+      debug.vcReservations = { total: reservations.length, matched }
     } catch (err: any) {
-      veracrossReservationsDebug.status = 'exception'
-      veracrossReservationsDebug.error = err?.message || String(err)
+      debug.vcReservationsError = err?.message
     }
-    
-    // 2. Check Veracross class schedules
+
+    // ─── SOURCE 3: Veracross Class Schedules API ────────────────
+
     try {
-      const accessToken = await getClassSchedulesToken()
+      const token = await getVcToken('academics.class_schedules:list academics.classes:list')
+
+      const classNames: Record<string, string> = {}
+      const allClasses = await fetchAllVcPages(`${VC_API}/academics/classes`, token)
+      for (const cls of allClasses) {
+        if (cls.id != null) {
+          classNames[String(cls.id)] = cls.name || cls.description || cls.course_name || ''
+        }
+      }
+
+      const schedules = await fetchAllVcPages(`${VC_API}/academics/class_schedules`, token)
+
       const dateObj = new Date(date + 'T12:00:00')
       const dayOfWeek = dateObj.getDay()
-      
-      // Fetch class names and status - only include active/future classes
-      const classNamesMap: Record<string, string> = {}
-      const inactiveClassIds = new Set<string>()
-      let sampleClass: any = null
-      let sampleSchedule: any = null
-      let classPage = 1
-      while (classPage <= 5) {
-        const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/json',
-            'X-Page-Size': '1000',
-            'X-Page-Number': String(classPage),
-          },
-        })
-        if (!classesRes.ok) break
-        const classesData = await classesRes.json()
-        const classes = classesData.data || classesData || []
-        
-        // Capture sample class for debug
-        if (classPage === 1 && classes.length > 0) {
-          sampleClass = {
-            id: classes[0].id,
-            class_id: classes[0].class_id,
-            internal_class_id: classes[0].internal_class_id,
-            status: classes[0].status,
-            name: classes[0].name
-          }
+      const seen = new Set<string>()
+      let roomMatches = 0
+      let dayMatches = 0
+      let timeConflicts = 0
+
+      for (const sched of schedules) {
+        const roomId = await resolveClassScheduleRoom(sched.room, supabase)
+        if (roomId !== targetId) continue
+        roomMatches++
+
+        const dayText = sched.day?.description || sched.day?.abbreviation || ''
+        if (!dayMatchesTarget(dayText, dayOfWeek)) continue
+        dayMatches++
+
+        const roomDesc = (sched.room?.description || '').toLowerCase()
+        const key = `${sched.class_id || sched.internal_class_id}-${roomDesc}`
+        if (seen.has(key)) continue
+        seen.add(key)
+
+        const s = timeToMinutes(sched.start_time)
+        const e = timeToMinutes(sched.end_time)
+        if (s === null || e === null) continue
+
+        const intId = sched.internal_class_id != null ? String(sched.internal_class_id) : ''
+        const className = classNames[intId] || sched.block?.description || 'Class'
+
+        if (timesOverlap(reqStart, reqEnd, s, e)) {
+          timeConflicts++
+          conflicts.push({
+            type: 'conflict',
+            title: className,
+            startTime: normalizeTime(sched.start_time) || '',
+            endTime: normalizeTime(sched.end_time) || '',
+            message: `❌ Conflict: ${className} (${fmtTime(s)}-${fmtTime(e)})`,
+          })
         }
-        
-        for (const cls of classes) {
-          if (cls.id == null) continue
-          const internalId = String(cls.id)
-          const name = cls.name || cls.description || cls.course_name || ''
-          classNamesMap[internalId] = name
-          if (cls.status === 0) {
-            inactiveClassIds.add(internalId)
-          }
-        }
-        if (classes.length < 1000) break
-        classPage++
       }
-      
-      // Fetch class schedules
-      const scheduleRes = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/json',
-          'X-Page-Size': '1000',
-        },
-      })
-      
-      if (scheduleRes.ok) {
-        const scheduleData = await scheduleRes.json()
-        const schedules = scheduleData.data || scheduleData || []
-        
-        // Deduplicate schedules
-        const seenKeys = new Set<string>()
-        
-        // Tracking counters
-        let totalSchedules = schedules.length
-        let roomMatches = 0
-        let dayMatches = 0
-        let activeMatches = 0
-        let timeOverlaps = 0
-        
-        const targetResourceId = parseInt(resourceId)
-        
-        for (const schedule of schedules) {
-          // Resolve the room via alias table — exact lookup, no fuzzy matching
-          const scheduleResourceId = await resolveClassScheduleRoom(schedule.room, supabase)
-          if (scheduleResourceId !== targetResourceId) continue
-          roomMatches++
-          
-          // Check day pattern
-          const dayPattern = schedule.day?.description || schedule.day?.abbreviation || ''
-          if (!patternIncludesDay(dayPattern, dayOfWeek)) continue
-          dayMatches++
-          
-          // Dedupe by class_id + room
-          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
-          const key = `${schedule.class_id || schedule.internal_class_id}-${scheduleRoomDesc}`
-          if (seenKeys.has(key)) continue
-          seenKeys.add(key)
-          
-          const classStart = parseTimeToMinutes(normalizeTime(schedule.start_time))
-          const classEnd = parseTimeToMinutes(normalizeTime(schedule.end_time))
-          
-          if (classStart === null || classEnd === null) continue
-          
-          // Use internal_class_id - matches cls.id from /academics/classes
-          const internalId = schedule.internal_class_id != null ? String(schedule.internal_class_id) : ''
-          
-          // Capture first schedule that passes room+day for debug
-          if (!sampleSchedule) {
-            sampleSchedule = {
-              id: schedule.id,
-              class_id: schedule.class_id,
-              internal_class_id: schedule.internal_class_id,
-              internalIdUsed: internalId,
-              room: schedule.room?.description,
-              day: schedule.day?.description
-            }
-          }
-          
-          // Skip only if class is explicitly inactive (status=0)
-          // Schedules not found in /academics/classes (e.g. resource reservation class schedules) are allowed through
-          if (internalId && inactiveClassIds.has(internalId)) continue
-          activeMatches++
-          
-          // Get class name using the internal ID
-          const className = classNamesMap[internalId] || schedule.block?.description || 'Class'
-          
-          if (timesOverlap(requestStart, requestEnd, classStart, classEnd)) {
-            timeOverlaps++
-            conflicts.push({
-              type: 'conflict',
-              title: className,
-              startTime: normalizeTime(schedule.start_time) || '',
-              endTime: normalizeTime(schedule.end_time) || '',
-              message: `❌ Conflict: ${className} (${formatTimeDisplay(classStart)}-${formatTimeDisplay(classEnd)})`
-            })
-          } else {
-            if (timesClose(classEnd, requestStart)) {
-              warnings.push({
-                type: 'warning',
-                title: className,
-                startTime: normalizeTime(schedule.start_time) || '',
-                endTime: normalizeTime(schedule.end_time) || '',
-                message: `⚠️ Note: ${className} ends ${requestStart - classEnd} min before`
-              })
-            }
-            if (timesClose(requestEnd, classStart)) {
-              warnings.push({
-                type: 'warning',
-                title: className,
-                startTime: normalizeTime(schedule.start_time) || '',
-                endTime: normalizeTime(schedule.end_time) || '',
-                message: `⚠️ Note: ${className} starts ${classStart - requestEnd} min after`
-              })
-            }
-          }
-        }
-        
-        // Build debug info
-        const debug = {
-          resource: {
-            id: resourceId,
-            description: resource?.description,
-            abbreviation: resource?.abbreviation,
-            roomNumber: (resource?.description || '').match(/^\d+/)?.[0] || ''
-          },
-          veracrossReservations: veracrossReservationsDebug,
-          classSchedules: {
-            totalSchedules,
-            roomMatches,
-            dayMatches,
-            activeMatches,
-            timeOverlaps
-          },
-          requestedDay: dayOfWeek,
-          requestedTime: { start: requestStart, end: requestEnd },
-          sampleClass,
-          sampleSchedule,
-          inactiveClassIdsCount: inactiveClassIds.size,
-          classNamesCount: Object.keys(classNamesMap).length
-        }
-        
-        return NextResponse.json({
-          available: conflicts.length === 0,
-          conflicts,
-          warnings,
-          debug
-        })
+
+      debug.classSchedules = {
+        total: schedules.length,
+        roomMatches,
+        dayMatches,
+        timeConflicts,
+        classNamesLoaded: Object.keys(classNames).length,
       }
     } catch (err: any) {
-      console.error('Class schedule check failed:', err?.message || err)
-      // Don't fail the whole request, just skip class checking
+      debug.classSchedulesError = err?.message
     }
-    
-    // Fallback response
+
     return NextResponse.json({
       available: conflicts.length === 0,
       conflicts,
       warnings,
-      debug: { 
-        veracrossReservations: veracrossReservationsDebug,
-        error: 'Class schedule check failed or no data' 
-      }
+      debug,
     })
-    
   } catch (error: any) {
     console.error('Availability check error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
