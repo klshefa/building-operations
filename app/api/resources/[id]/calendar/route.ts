@@ -466,7 +466,8 @@ export async function GET(
           dayMatches++
           
           // Dedupe
-          const key = `${schedule.internal_class_id || schedule.class_id}-${scheduleRoomLower}`
+          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
+          const key = `${schedule.internal_class_id || schedule.class_id}-${scheduleRoomDesc}`
           if (seenKeys.has(key)) continue
           seenKeys.add(key)
           
@@ -485,8 +486,8 @@ export async function GET(
           if (classDebug.matchedRooms.length < 5) {
             classDebug.matchedRooms.push({
               className,
-              scheduleRoom: scheduleRoomLower,
-              scheduleRoomNumber
+              scheduleRoom: scheduleRoomDesc,
+              resolvedId: scheduleResourceId
             })
           }
           

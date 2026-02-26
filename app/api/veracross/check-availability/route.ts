@@ -514,11 +514,13 @@ export async function POST(request: Request) {
           
           if (!overlaps && resStart !== null && resEnd !== null) continue
           
+          const resDisplayName = res.resource || res.location || res.title || 'Unknown'
+          
           const conflictInfo: ConflictInfo = {
             type: (resStart !== null && resEnd !== null && overlaps) ? 'definite' : 'possible',
             source: 'reservation',
             description: res.title || 'Reservation',
-            resource_name: resResource,
+            resource_name: resDisplayName,
             start_date: res.start_date,
             end_date: res.end_date,
             start_time: formatTimeForDisplay(res.start_time),
@@ -536,11 +538,11 @@ export async function POST(request: Request) {
             adjacentBookings.push({
               source: 'reservation',
               description: res.title || 'Reservation',
-              resource_name: resResource,
+              resource_name: resDisplayName,
               start_time: formatTimeForDisplay(res.start_time),
               end_time: formatTimeForDisplay(res.end_time),
               days_pattern: daysPattern,
-              note: `Reservation in adjacent space (${resResource})`,
+              note: `Reservation in adjacent space (${resDisplayName})`,
             })
           }
         }
