@@ -582,6 +582,24 @@ export default function AdminPage() {
     }
   }
 
+  async function toggleNewEventEmail(userId: string, current: boolean) {
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, notify_on_new_event: !current }),
+      })
+      const { error } = await res.json()
+      if (error) {
+        console.error('Error toggling new event email:', error)
+      } else {
+        fetchUsers()
+      }
+    } catch (err) {
+      console.error('Error toggling new event email:', err)
+    }
+  }
+
   async function deleteUser(userId: string, email: string) {
     if (email === user?.email) {
       alert('You cannot delete yourself')
@@ -1491,6 +1509,17 @@ export default function AdminPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
+                            <button
+                              onClick={() => toggleNewEventEmail(u.id, !!u.notify_on_new_event)}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                u.notify_on_new_event
+                                  ? 'text-shefa-blue-600 hover:bg-shefa-blue-50'
+                                  : 'text-slate-300 hover:bg-slate-100'
+                              }`}
+                              title={u.notify_on_new_event ? 'Receives new event emails (click to disable)' : 'Does not receive new event emails (click to enable)'}
+                            >
+                              <EnvelopeIcon className="w-5 h-5" />
+                            </button>
                             <button
                               onClick={() => toggleUserActive(u.id, u.is_active)}
                               className={`p-1.5 rounded-lg transition-colors ${

@@ -358,3 +358,100 @@ export function buildEventUpdateEmail(event: OpsEvent, changes: string[], subscr
     </html>
   `
 }
+
+export function buildNewEventEmail(event: OpsEvent, createdByName?: string): string {
+  const eventUrl = `${APP_URL}/event/${event.id}`
+
+  const teams: string[] = []
+  if (event.needs_program_director) teams.push('Program Director')
+  if (event.needs_office) teams.push('Office')
+  if (event.needs_it) teams.push('IT')
+  if (event.needs_security) teams.push('Security')
+  if (event.needs_facilities) teams.push('Facilities')
+
+  const teamsHtml = teams.length > 0
+    ? teams.map(t => `<span style="display:inline-block;background:#e0e7ff;color:#3730a3;padding:2px 10px;border-radius:4px;font-size:12px;margin-right:4px;">${t}</span>`).join('')
+    : '<span style="color:#94a3b8;font-size:13px;">None assigned</span>'
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; margin: 0; padding: 20px;">
+      <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <div style="background: #164a7a; color: white; padding: 24px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px;">New Event Created</h1>
+          <p style="margin: 8px 0 0; opacity: 0.8;">Building Operations</p>
+        </div>
+        
+        <div style="padding: 24px;">
+          <div style="background: #dcfce7; border: 1px solid #86efac; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="margin: 0; color: #166534; font-weight: 500;">
+              A new event has been created${createdByName ? ` by <strong>${createdByName}</strong>` : ''}
+            </p>
+          </div>
+          
+          <h2 style="margin: 0 0 16px; color: #1e293b; font-size: 20px;">${event.title}</h2>
+          
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; width: 120px; vertical-align: top;">Date</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 500;">${formatEventDate(event)}</td>
+            </tr>
+            ${event.location ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; vertical-align: top;">Location</td>
+              <td style="padding: 8px 0; color: #1e293b;">${event.location}</td>
+            </tr>
+            ` : ''}
+            ${event.description ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; vertical-align: top;">Description</td>
+              <td style="padding: 8px 0; color: #1e293b;">${event.description}</td>
+            </tr>
+            ` : ''}
+            ${event.expected_attendees ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; vertical-align: top;">Attendees</td>
+              <td style="padding: 8px 0; color: #1e293b;">${event.expected_attendees}</td>
+            </tr>
+            ` : ''}
+            ${event.food_served ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; vertical-align: top;">Food</td>
+              <td style="padding: 8px 0; color: #1e293b;">Food will be served</td>
+            </tr>
+            ` : ''}
+            ${event.general_notes ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; vertical-align: top;">Notes</td>
+              <td style="padding: 8px 0; color: #1e293b;">${event.general_notes}</td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; vertical-align: top;">Teams</td>
+              <td style="padding: 8px 0;">${teamsHtml}</td>
+            </tr>
+          </table>
+          
+          <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0; text-align: center;">
+            <a href="${eventUrl}" style="display: inline-block; background: #164a7a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500;">
+              View Event Details
+            </a>
+          </div>
+        </div>
+        
+        <div style="background: #f1f5f9; padding: 16px; text-align: center;">
+          <p style="margin: 0; font-size: 12px; color: #64748b;">
+            You received this because an admin enabled new-event notifications for you.<br>
+            <a href="${APP_URL}/admin" style="color: #164a7a;">Building Operations Portal</a>
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+}

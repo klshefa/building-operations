@@ -136,6 +136,7 @@ export interface OpsUser {
   digest_enabled?: boolean // Whether user receives weekly digest email (default true)
   notify_on_team_assignment?: boolean
   notify_on_subscribed_changes?: boolean
+  notify_on_new_event?: boolean
   created_at: string
 }
 

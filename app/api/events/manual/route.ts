@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit, extractEventAuditFields, getChangedFields } from '@/lib/audit'
+import { sendEmail, buildNewEventEmail } from '@/lib/notifications'
 import { Resend } from 'resend'
 
 function createAdminClient() {
@@ -243,6 +244,44 @@ export async function POST(request: Request) {
         apiRoute: '/api/events/manual',
         httpMethod: 'POST',
       })
+    }
+
+    // Send new-event notification to users with notify_on_new_event enabled
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const { data: recipients } = await supabase
+          .from('ops_users')
+          .select('email, name')
+          .eq('notify_on_new_event', true)
+          .eq('is_active', true)
+
+        if (recipients && recipients.length > 0) {
+          const creatorEmail = created_by || requested_by
+          let creatorName = creatorEmail
+          if (creatorEmail) {
+            const { data: staffInfo } = await supabase
+              .from('staff')
+              .select('first_name, last_name')
+              .ilike('email', creatorEmail)
+              .maybeSingle()
+            if (staffInfo) {
+              creatorName = `${staffInfo.first_name} ${staffInfo.last_name}`
+            }
+          }
+
+          const html = buildNewEventEmail(data, creatorName || undefined)
+          const result = await sendEmail({
+            to: recipients.map(r => ({ email: r.email, name: r.name })),
+            subject: `[Ops] New Event: ${data.title}`,
+            html,
+          })
+          if (!result.success) {
+            console.warn('[New Event Email] Failed to send:', result.error)
+          }
+        }
+      } catch (emailErr) {
+        console.warn('[New Event Email] Error:', emailErr)
+      }
     }
 
     // Send email notifications for self-service requests
