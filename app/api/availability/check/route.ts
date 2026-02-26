@@ -601,7 +601,7 @@ export async function GET(request: Request) {
             id: resourceId,
             description: resource?.description,
             abbreviation: resource?.abbreviation,
-            roomNumber
+            roomNumber: (resource?.description || '').match(/^\d+/)?.[0] || ''
           },
           veracrossReservations: veracrossReservationsDebug,
           classSchedules: {
