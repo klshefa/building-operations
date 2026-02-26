@@ -446,7 +446,7 @@ export async function GET(request: Request) {
       
       // Fetch class names and status - only include active/future classes
       const classNamesMap: Record<string, string> = {}
-      const activeClassIds = new Set<string>()
+      const inactiveClassIds = new Set<string>()
       let sampleClass: any = null
       let sampleSchedule: any = null
       let classPage = 1
@@ -475,20 +475,12 @@ export async function GET(request: Request) {
         }
         
         for (const cls of classes) {
-          // Status is an integer: typically 1=active, check for active status values
-          // Include classes where status is 1 (active) or missing/null
-          const statusNum = cls.status
-          // Skip if status is explicitly set to an inactive value (commonly 0 or 2+)
-          // Status 1 is typically "active", 0 might be "inactive"
-          if (statusNum === 0) continue
-          
+          if (cls.id == null) continue
+          const internalId = String(cls.id)
           const name = cls.name || cls.description || cls.course_name || ''
-          // Use internal class ID (cls.id) as the primary key
-          // This matches schedule.internal_class_id from Class Schedules API
-          if (cls.id != null) {
-            const internalId = String(cls.id)
-            classNamesMap[internalId] = name
-            activeClassIds.add(internalId)
+          classNamesMap[internalId] = name
+          if (cls.status === 0) {
+            inactiveClassIds.add(internalId)
           }
         }
         if (classes.length < 1000) break
@@ -557,8 +549,9 @@ export async function GET(request: Request) {
             }
           }
           
-          // Check if this class is active using internal_class_id
-          if (!internalId || !activeClassIds.has(internalId)) continue
+          // Skip only if class is explicitly inactive (status=0)
+          // Schedules not found in /academics/classes (e.g. resource reservation class schedules) are allowed through
+          if (internalId && inactiveClassIds.has(internalId)) continue
           activeMatches++
           
           // Get class name using the internal ID
@@ -615,8 +608,8 @@ export async function GET(request: Request) {
           requestedTime: { start: requestStart, end: requestEnd },
           sampleClass,
           sampleSchedule,
-          activeClassIdsCount: activeClassIds.size,
-          sampleActiveIds: Array.from(activeClassIds).slice(0, 3)
+          inactiveClassIdsCount: inactiveClassIds.size,
+          classNamesCount: Object.keys(classNamesMap).length
         }
         
         return NextResponse.json({

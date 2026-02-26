@@ -401,7 +401,7 @@ export async function GET(
       
       // Fetch class names and status - only include active/future classes
       const classNamesMap: Record<string, string> = {}
-      const activeClassIds = new Set<string>()
+      const inactiveClassIds = new Set<string>()
       const classesRes = await fetch(`${VERACROSS_API_BASE}/academics/classes`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -414,20 +414,15 @@ export async function GET(
         const classesData = await classesRes.json()
         const classes = classesData.data || classesData || []
         for (const cls of classes) {
-          // Status is an integer: skip if explicitly inactive (0)
-          if (cls.status === 0) continue
-          
+          if (cls.id == null) continue
+          const internalId = String(cls.id)
           const name = cls.name || cls.description || cls.course_name || ''
-          // Use internal class ID (cls.id) - matches schedule.internal_class_id
-          if (cls.id != null) {
-            const internalId = String(cls.id)
-            classNamesMap[internalId] = name
-            activeClassIds.add(internalId)
-          }
+          classNamesMap[internalId] = name
+          if (cls.status === 0) inactiveClassIds.add(internalId)
         }
       }
       
-      classDebug.activeClassIdsCount = activeClassIds.size
+      classDebug.classNamesCount = Object.keys(classNamesMap).length
       
       // Fetch schedules
       const scheduleRes = await fetch(`${VERACROSS_API_BASE}/academics/class_schedules`, {
@@ -474,8 +469,8 @@ export async function GET(
           // Use internal_class_id - matches cls.id from /academics/classes
           const internalId = schedule.internal_class_id != null ? String(schedule.internal_class_id) : ''
           
-          // Check if this class is active using internal_class_id
-          if (!internalId || !activeClassIds.has(internalId)) continue
+          // Skip only if class is explicitly inactive (status=0)
+          if (internalId && inactiveClassIds.has(internalId)) continue
           activeMatches++
           
           // Get class name using the internal ID
