@@ -122,6 +122,20 @@ export function doesVcReservationMatchResource(
 }
 
 /**
+ * Check whether a substring match sits on a word boundary — i.e. the
+ * match is not a prefix of a longer token.  "101" matches inside
+ * "101 Beit Midrash" but NOT inside "1012 Library".
+ */
+function isWordBoundaryMatch(haystack: string, needle: string): boolean {
+  const idx = haystack.indexOf(needle)
+  if (idx === -1) return false
+  const afterIdx = idx + needle.length
+  if (afterIdx >= haystack.length) return true
+  const charAfter = haystack[afterIdx]
+  return charAfter === ' ' || charAfter === '-' || charAfter === ',' || charAfter === '/'
+}
+
+/**
  * Check whether an event's free-text `location` field refers to a given
  * resource.
  *
@@ -129,6 +143,9 @@ export function doesVcReservationMatchResource(
  * resource description (or abbreviation).  We intentionally do NOT check
  * the reverse direction (`desc.includes(loc)`) because short / generic
  * location strings would otherwise match unrelated resources.
+ *
+ * Abbreviation matches require a word boundary so that abbreviation "101"
+ * matches "101 Beit Midrash" but NOT "1012 Library".
  */
 export function locationFuzzyMatch(
   eventLocation: string,
@@ -142,7 +159,7 @@ export function locationFuzzyMatch(
   if (loc.includes(desc)) return true
   if (resourceAbbreviation) {
     const abbr = resourceAbbreviation.toLowerCase().trim()
-    if (abbr && (loc === abbr || loc.includes(abbr))) return true
+    if (abbr && (loc === abbr || isWordBoundaryMatch(loc, abbr))) return true
   }
   return false
 }
