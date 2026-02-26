@@ -532,6 +532,7 @@ export async function GET(request: Request) {
           dayMatches++
           
           // Dedupe by class_id + room
+          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
           const key = `${schedule.class_id || schedule.internal_class_id}-${scheduleRoomDesc}`
           if (seenKeys.has(key)) continue
           seenKeys.add(key)
