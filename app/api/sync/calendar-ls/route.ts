@@ -3,6 +3,10 @@ import { google } from 'googleapis'
 import { createClient } from '@supabase/supabase-js'
 import { format, parseISO } from 'date-fns'
 
+function toEasternTime(d: Date): Date {
+  return new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+}
+
 const CALENDAR_ID = 'c_ll3pn34b3vul3a08qrqq6vn00g@group.calendar.google.com'
 const SOURCE_NAME = 'calendar_ls'
 
@@ -77,7 +81,7 @@ export async function POST(request: Request) {
       let endTime: string | null = null
       
       if (event.start?.dateTime) {
-        const parsed = parseISO(event.start.dateTime)
+        const parsed = toEasternTime(parseISO(event.start.dateTime))
         startDate = format(parsed, 'yyyy-MM-dd')
         startTime = format(parsed, 'h:mm a')
       } else if (event.start?.date) {
@@ -87,7 +91,7 @@ export async function POST(request: Request) {
       }
       
       if (event.end?.dateTime) {
-        endTime = format(parseISO(event.end.dateTime), 'h:mm a')
+        endTime = format(toEasternTime(parseISO(event.end.dateTime)), 'h:mm a')
       }
 
       return {
