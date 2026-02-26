@@ -144,6 +144,18 @@ export async function POST(request: Request) {
       completed_at: new Date().toISOString()
     })
 
+    // Trigger aggregation so ops_events gets the updated times
+    const url = new URL(request.url)
+    const baseUrl = `${url.protocol}//${url.host}`
+    try {
+      await fetch(`${baseUrl}/api/aggregate-events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+    } catch (e) {
+      console.warn('Post-sync aggregation failed:', e)
+    }
+
     return NextResponse.json({
       success: true,
       message: `Synced ${rawEvents.length} LS calendar events`,
