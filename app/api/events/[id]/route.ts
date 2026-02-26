@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { TeamType, OpsEvent } from '@/lib/types'
 import { buildTeamAssignmentEmail, buildEventUpdateEmail, getTeamDisplayName } from '@/lib/notifications'
 import { logAudit, getChangedFields, extractEventAuditFields } from '@/lib/audit'
-import { parseVcResourceField } from '@/lib/utils/resourceMatching'
+import { parseVcResourceField } from '@/lib/utils/resourceResolver'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 

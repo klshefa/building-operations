@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseVcResourceField } from '@/lib/utils/resourceMatching'
+import { parseVcResourceField } from '@/lib/utils/resourceResolver'
 
 // Veracross API config
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'

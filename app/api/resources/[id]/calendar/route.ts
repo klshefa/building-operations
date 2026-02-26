@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { doesVcReservationMatchResource, locationFuzzyMatch } from '@/lib/utils/resourceMatching'
+import { resolveResourceId, doesReservationMatchResource, resolveClassScheduleRoom } from '@/lib/utils/resourceResolver'
 
 // Veracross API config
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
@@ -253,7 +253,8 @@ export async function GET(
     
     for (const event of locationEvents || []) {
       if (!event.location) continue
-      if (locationFuzzyMatch(event.location, resource.description || '', resource.abbreviation)) {
+      const resolvedLocId = await resolveResourceId(event.location, supabase)
+      if (resolvedLocId === resourceId) {
         if (event.veracross_reservation_id) {
           veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
         }
@@ -321,7 +322,7 @@ export async function GET(
             console.log(`[Calendar] Checking: resource="${res.resource}", title="${res.notes || res.description || 'Reservation'}"`)
           }
           
-          if (!doesVcReservationMatchResource(res, resourceId, resourceName, resourceAbbrev)) continue
+          if (!(await doesReservationMatchResource(res, resourceId, supabase))) continue
           
           console.log(`[Calendar] MATCHED: id=${vcResId}, title="${res.notes || res.description || 'Reservation'}", resource="${res.resource}"`)
           matchedCount++
@@ -448,48 +449,15 @@ export async function GET(
         const schedules = scheduleData.data || scheduleData || []
         classDebug.totalSchedules = schedules.length
         
-        const targetRoomDesc = resource.description?.toLowerCase().trim() || ''
-        const targetRoomNumber = (resource.description || '').match(/^\d+/)?.[0] || ''
-        classDebug.roomInfo = { targetRoomDesc, targetRoomNumber }
+        classDebug.roomInfo = { targetResourceId: resourceId }
         
         const seenKeys = new Set<string>()
         let roomMatches = 0, dayMatches = 0, activeMatches = 0
         
         for (const schedule of schedules) {
-          // Get the schedule's room
-          const scheduleRoom = schedule.room?.description || ''
-          const scheduleRoomLower = scheduleRoom.toLowerCase().trim()
-          const scheduleRoomNumber = scheduleRoom.match(/^\d+/)?.[0] || ''
-          
-          // SKIP if schedule has no room assigned
-          if (!scheduleRoomLower || scheduleRoomLower === '<none specified>' || scheduleRoomLower === 'none') {
-            continue
-          }
-          
-          // CHECK: Does this schedule's room match our target room?
-          let roomMatched = false
-          
-          // For numbered rooms (313, 404): match by room number
-          if (targetRoomNumber && scheduleRoomNumber) {
-            // Exact number match OR starts with number (313 matches 313A, 313B)
-            if (scheduleRoomNumber === targetRoomNumber) {
-              roomMatched = true
-            }
-          }
-          
-          // For named rooms (Ulam, Playroof): exact match or prefix match
-          if (!roomMatched && targetRoomDesc && scheduleRoomLower) {
-            if (scheduleRoomLower === targetRoomDesc) {
-              roomMatched = true
-            } else if (scheduleRoomLower.startsWith(targetRoomDesc + ' ')) {
-              roomMatched = true
-            }
-          }
-          
-          // SKIP if room doesn't match
-          if (!roomMatched) {
-            continue
-          }
+          // Resolve room via alias table — exact lookup, no fuzzy matching
+          const scheduleResourceId = await resolveClassScheduleRoom(schedule.room, supabase)
+          if (scheduleResourceId !== resourceId) continue
           roomMatches++
           
           // Check day pattern
@@ -591,16 +559,7 @@ export async function GET(
           resource_id: e.resource_id,
           veracross_reservation_id: e.veracross_reservation_id
         })),
-        locationEventsMatched: (locationEvents || []).filter(e => {
-          if (!e.location) return false
-          return locationFuzzyMatch(e.location, resource.description || '', resource.abbreviation)
-        }).map(e => ({
-          id: e.id,
-          title: e.title,
-          start_time: e.start_time,
-          end_time: e.end_time,
-          location: e.location
-        }))
+        locationEventsCount_withLocation: (locationEvents || []).filter(e => !!e.location).length
       }
     })
     

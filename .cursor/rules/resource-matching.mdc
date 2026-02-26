@@ -1,12 +1,19 @@
 ---
 description: Resource matching contract for Veracross reservation and availability logic
-globs: app/api/availability/**/*.ts, app/api/resources/**/*.ts, app/api/events/**/*.ts, app/api/veracross/**/*.ts, app/api/sync/**/*.ts, app/api/aggregate-events/**/*.ts, lib/utils/resourceMatching.ts
+globs: app/api/availability/**/*.ts, app/api/resources/**/*.ts, app/api/events/**/*.ts, app/api/veracross/**/*.ts, app/api/sync/**/*.ts, app/api/aggregate-events/**/*.ts, lib/utils/resourceResolver.ts
 alwaysApply: false
 ---
 
 # Resource Matching Contract
 
-All resource matching in this codebase MUST use functions from `lib/utils/resourceMatching.ts`.
+All resource matching MUST use the **alias-table resolver** in `lib/utils/resourceResolver.ts`.
+The old `lib/utils/resourceMatching.ts` is deprecated — do NOT import from it.
+
+## Architecture
+
+- The `ops_resource_aliases` table maps every known text identifier (descriptions, abbreviations, Veracross IDs) to a canonical `ops_resources.id`.
+- All lookups are **exact** (case-insensitive) against this table — no fuzzy/substring matching.
+- If a lookup returns `null`, log the unresolved text so an admin can add the alias via `/api/admin/resource-aliases`.
 
 ## ID Relationship
 
@@ -15,20 +22,19 @@ These are the SAME integer ID space. Never assume they differ.
 
 ## Rules
 
-1. **Never parse `res.resource` inline.** The Veracross API may return this field as a plain string OR as an object. Always use `parseVcResourceField(res)`.
-
-2. **Never do bidirectional `includes()` for location matching.** Use `locationFuzzyMatch()` which only checks if the event location contains the resource name (not the reverse).
-
-3. **Prefer ID matching over name matching.** When comparing a Veracross reservation to a local resource, use `doesVcReservationMatchResource()`. It returns `false` immediately when the Veracross ID exists but doesn't match — it does NOT fall through to name matching.
-
-4. **BigQuery sync must capture `Resource_ID`.** The `sync/resource-reservations` route must SELECT `Resource_ID` and store it in `ops_raw_events.resource_id` so aggregation can propagate it to `ops_events.resource_id`.
+1. **Never do fuzzy/substring matching.** Use `resolveResourceId(text, supabase)` which does exact lookup in the alias table.
+2. **Never parse `res.resource` inline.** Use `parseVcResourceField(res)` or `resolveVcReservationResource(res, supabase)`.
+3. **Prefer ID matching.** Use `doesReservationMatchResource(res, localId, supabase)` to check if a reservation belongs to a resource.
+4. **Class schedule rooms** must be resolved with `resolveClassScheduleRoom(room, supabase)`.
 
 ## Available Functions
 
 | Function | Use when... |
 |----------|-------------|
-| `parseVcResourceField(res)` | Extracting name/id from a Veracross API reservation object |
-| `doesVcReservationMatchResource(res, id, desc, abbrev?)` | Checking if a VC reservation belongs to a local resource |
-| `locationFuzzyMatch(location, desc, abbrev?)` | Matching ops_events with NULL resource_id by location text |
-| `normalizeResourceName(name)` | Normalising a resource name before comparison |
-| `resourceNamesMatch(a, b)` | Comparing two normalised resource names |
+| `resolveResourceId(text, supabase)` | Mapping any text identifier to a resource_id |
+| `resolveVcResourceId(vcId, supabase)` | Validating a numeric Veracross resource ID |
+| `resolveVcReservationResource(res, supabase)` | Getting resource_id from a VC reservation object |
+| `doesReservationMatchResource(res, localId, supabase)` | Checking if a VC reservation belongs to a local resource |
+| `resolveClassScheduleRoom(room, supabase)` | Mapping a class schedule room to resource_id |
+| `parseVcResourceField(res)` | Extracting name/id from a VC reservation (no DB needed) |
+| `invalidateAliasCache()` | After adding new aliases |

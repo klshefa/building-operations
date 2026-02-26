@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { doesVcReservationMatchResource, locationFuzzyMatch } from '@/lib/utils/resourceMatching'
+import { resolveResourceId, doesReservationMatchResource, resolveClassScheduleRoom } from '@/lib/utils/resourceResolver'
 
 // Veracross API config
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
@@ -240,17 +240,14 @@ export async function GET(request: Request) {
       console.error('Event query error:', eventError)
     }
     
-    // Also get events that match by location text
+    // Get resource info for display/logging
     const { data: resource } = await supabase
       .from('ops_resources')
       .select('description, abbreviation')
       .eq('id', parseInt(resourceId))
       .single()
     
-    const locationMatches: string[] = []
-    if (resource?.description) locationMatches.push(resource.description)
-    if (resource?.abbreviation) locationMatches.push(resource.abbreviation)
-    
+    // Also check events with NULL resource_id — resolve their location via alias table
     const { data: locationEvents } = await supabase
       .from('ops_events')
       .select('id, title, start_time, end_time, all_day, location, status, veracross_reservation_id')
@@ -259,22 +256,16 @@ export async function GET(request: Request) {
       .neq('status', 'cancelled')
       .is('resource_id', null)
     
-    // Combine and check for overlaps
     const allEvents = [...(events || [])]
     
     console.log('[Availability] ops_events by resource_id:', events?.length || 0)
-    console.log('[Availability] locationMatches for fuzzy:', locationMatches)
     
+    const targetId = parseInt(resourceId)
     for (const event of locationEvents || []) {
       if (!event.location) continue
-      const matchFound = locationFuzzyMatch(event.location, resource?.description || '', resource?.abbreviation)
-      if (matchFound) {
-        console.log('[Availability] FUZZY MATCH ops_event:', {
-          title: event.title,
-          location: event.location,
-          locationMatches
-        })
-        // Track veracross ID from location-matched events too
+      const resolvedId = await resolveResourceId(event.location, supabase)
+      if (resolvedId === targetId) {
+        console.log('[Availability] ALIAS MATCH ops_event:', { title: event.title, location: event.location, resolvedId })
         if (event.veracross_reservation_id) {
           veracrossIdsInOpsEvents.add(String(event.veracross_reservation_id))
         }
@@ -394,7 +385,7 @@ export async function GET(request: Request) {
             console.log(`[Availability] Checking reservation: resource="${res.resource}", title="${resTitle}"`)
           }
           
-          if (!doesVcReservationMatchResource(res, parseInt(resourceId), resourceName, resourceAbbrev)) continue
+          if (!(await doesReservationMatchResource(res, parseInt(resourceId), supabase))) continue
           
           console.log(`[Availability] MATCHED: resource="${res.resource}", title="${resTitle}"`)
           matchedCount++
@@ -517,39 +508,6 @@ export async function GET(request: Request) {
         const scheduleData = await scheduleRes.json()
         const schedules = scheduleData.data || scheduleData || []
         
-        // Get resource info for matching
-        const roomDesc = resource?.description?.toLowerCase() || ''
-        const roomAbbrev = resource?.abbreviation?.toLowerCase() || ''
-        const roomNumber = (resource?.description || '').match(/^\d+/)?.[0] || ''
-        
-        // Room grouping: 313 includes 313A, 313B; Ulam includes Ulam 1, Ulam 2; etc.
-        const roomMatchesGroup = (scheduleRoomDesc: string, scheduleRoomNumber: string): boolean => {
-          // Skip empty rooms
-          if (!scheduleRoomDesc || scheduleRoomDesc === '<none specified>' || scheduleRoomDesc === 'none') return false
-          
-          // For numbered rooms (313, 404, etc): match if schedule room STARTS with that number
-          if (roomNumber && scheduleRoomNumber) {
-            if (scheduleRoomNumber === roomNumber || scheduleRoomDesc.startsWith(roomNumber)) {
-              return true
-            }
-          }
-          
-          // For named rooms (Ulam, Playroof): match if schedule room STARTS with the base name
-          if (roomDesc && scheduleRoomDesc) {
-            // Exact match
-            if (roomDesc === scheduleRoomDesc) return true
-            // Base name match (ulam matches ulam 1, ulam 2)
-            if (scheduleRoomDesc.startsWith(roomDesc + ' ') || scheduleRoomDesc.startsWith(roomDesc + '-')) return true
-            // Reverse: if we're booking "ulam 1", also show parent "ulam" events
-            if (roomDesc.startsWith(scheduleRoomDesc + ' ') || roomDesc.startsWith(scheduleRoomDesc + '-')) return true
-          }
-          
-          // Abbreviation match
-          if (roomAbbrev && roomAbbrev === scheduleRoomDesc) return true
-          
-          return false
-        }
-        
         // Deduplicate schedules
         const seenKeys = new Set<string>()
         
@@ -560,12 +518,12 @@ export async function GET(request: Request) {
         let activeMatches = 0
         let timeOverlaps = 0
         
+        const targetResourceId = parseInt(resourceId)
+        
         for (const schedule of schedules) {
-          const scheduleRoomDesc = (schedule.room?.description || '').toLowerCase().trim()
-          const scheduleRoomNumber = (schedule.room?.description || '').match(/^\d+/)?.[0] || ''
-          
-          // Check room grouping
-          if (!roomMatchesGroup(scheduleRoomDesc, scheduleRoomNumber)) continue
+          // Resolve the room via alias table — exact lookup, no fuzzy matching
+          const scheduleResourceId = await resolveClassScheduleRoom(schedule.room, supabase)
+          if (scheduleResourceId !== targetResourceId) continue
           roomMatches++
           
           // Check day pattern

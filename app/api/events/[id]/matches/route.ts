@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
-import { locationFuzzyMatch } from '@/lib/utils/resourceMatching'
+import { resolveResourceId } from '@/lib/utils/resourceResolver'
 
 function createAdminClient() {
   return createClient(
@@ -26,7 +26,7 @@ function stringSimilarity(str1: string, str2: string): number {
   return intersection.size / union.size
 }
 
-// Location matching uses the shared utility from lib/utils/resourceMatching.ts
+// Location matching uses the alias-table resolver from lib/utils/resourceResolver.ts
 
 // Parse time to minutes for comparison
 function parseTimeToMinutes(timeStr: string | null): number | null {
@@ -172,10 +172,15 @@ export async function GET(
         reasons.push('Same date')
       }
       
-      // Location match: +0.3
-      if (event.location && locationFuzzyMatch(raw.location || raw.resource || '', event.location)) {
-        score += 0.3
-        reasons.push('Same location')
+      // Location match: +0.3 — resolve both sides via alias table
+      if (event.location) {
+        const rawLocText = raw.location || raw.resource || ''
+        const rawLocId = await resolveResourceId(rawLocText, supabase)
+        const eventLocId = await resolveResourceId(event.location, supabase)
+        if (rawLocId != null && eventLocId != null && rawLocId === eventLocId) {
+          score += 0.3
+          reasons.push('Same location')
+        }
       }
       
       // Time overlap: +0.2

@@ -15,6 +15,35 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 
+// ---------------------------------------------------------------------------
+// Veracross API field parsing (pure — no DB required)
+// ---------------------------------------------------------------------------
+
+export interface VcResourceInfo {
+  name: string
+  id: number | null
+}
+
+/**
+ * Safely extract the resource name and ID from a Veracross API reservation
+ * object. Handles both string and object forms of `res.resource`.
+ */
+export function parseVcResourceField(res: any): VcResourceInfo {
+  const raw = res.resource
+  const name =
+    typeof raw === 'string'
+      ? raw
+      : (raw?.description || raw?.name || '')
+  const id =
+    res.resource_id ??
+    (typeof raw === 'object' && raw !== null ? raw?.id : null) ??
+    null
+  return {
+    name: String(name).trim(),
+    id: id != null ? Number(id) : null,
+  }
+}
+
 let aliasCache: Map<string, number> | null = null
 let cacheTimestamp = 0
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes

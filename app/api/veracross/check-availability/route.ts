@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { locationFuzzyMatch } from '@/lib/utils/resourceMatching'
+import { resolveResourceId, resolveClassScheduleRoom, resolveVcReservationResource } from '@/lib/utils/resourceResolver'
 
 // Veracross OAuth configuration
 const VERACROSS_CLIENT_ID = process.env.VERACROSS_CLIENT_ID
@@ -259,9 +259,21 @@ export async function POST(request: Request) {
     // Get related resources (blocking and adjacent)
     const { blocking: blockingResources, adjacent: adjacentResources } = getRelatedResourceNames(resource_name)
     
+    // Resolve all resource names to IDs via alias table
+    const blockingIds = new Set<number>()
+    const adjacentIds = new Set<number>()
+    for (const name of blockingResources) {
+      const id = await resolveResourceId(name, supabase)
+      if (id != null) blockingIds.add(id)
+    }
+    for (const name of adjacentResources) {
+      const id = await resolveResourceId(name, supabase)
+      if (id != null) adjacentIds.add(id)
+    }
+    
     console.log(`Checking availability for ${resource_name} on ${date} (${dayName})`)
-    console.log(`Blocking resources: ${blockingResources.join(', ')}`)
-    console.log(`Adjacent resources: ${adjacentResources.join(', ')}`)
+    console.log(`Blocking resources: ${blockingResources.join(', ')} → IDs: ${[...blockingIds].join(', ')}`)
+    console.log(`Adjacent resources: ${adjacentResources.join(', ')} → IDs: ${[...adjacentIds].join(', ')}`)
 
     const conflicts: ConflictInfo[] = []
     const possibleConflicts: ConflictInfo[] = []
@@ -344,31 +356,11 @@ export async function POST(request: Request) {
           if (!roomDesc && !roomAbbrev && !roomName) continue
           if (roomDesc === '<None Specified>') continue
           
-          // Extract room number from the API room (e.g., "902" from "902 Classroom")
-          const apiRoomNumber = roomDesc.match(/^\d+/)?.[0] || roomAbbrev || ''
+          // Resolve room via alias table
+          const scheduleRoomId = await resolveClassScheduleRoom(schedule.room, supabase)
           
-          // Check if ANY room field matches our blocking or adjacent resources
-          const matchesResource = (resourceList: string[]) => {
-            return resourceList.some(r => {
-              // Extract room number from the resource name (e.g., "902" from "902 Classroom")
-              const resourceNumber = r.match(/^\d+/)?.[0] || ''
-              
-              // Match by room number (most reliable)
-              if (resourceNumber && apiRoomNumber && resourceNumber === apiRoomNumber) {
-                return true
-              }
-              
-              // Fallback: exact match on description
-              if (roomDesc && r.toLowerCase() === roomDesc.toLowerCase()) {
-                return true
-              }
-              
-              return false
-            })
-          }
-          
-          const isBlocking = matchesResource(blockingResources)
-          const isAdjacent = matchesResource(adjacentResources)
+          const isBlocking = scheduleRoomId != null && blockingIds.has(scheduleRoomId)
+          const isAdjacent = scheduleRoomId != null && adjacentIds.has(scheduleRoomId)
           
           if (!isBlocking && !isAdjacent) continue
           
@@ -496,11 +488,11 @@ export async function POST(request: Request) {
             }
           }
           
-          // Check if this resource matches our blocking or adjacent resources
-          const resResource = res.resource || ''
+          // Resolve reservation resource via alias table
+          const resResourceId = await resolveVcReservationResource(res, supabase)
           
-          const isBlocking = blockingResources.some(r => locationFuzzyMatch(resResource, r))
-          const isAdjacent = adjacentResources.some(r => locationFuzzyMatch(resResource, r))
+          const isBlocking = resResourceId != null && blockingIds.has(resResourceId)
+          const isAdjacent = resResourceId != null && adjacentIds.has(resResourceId)
           
           if (!isBlocking && !isAdjacent) continue
           
