@@ -194,6 +194,7 @@ export async function GET(request: Request) {
     }
 
     const allOpsEvents = [...(directEvents || []), ...locationMatched]
+    const opsSlots: Array<{ title: string; start: number; end: number }> = []
 
     for (const evt of allOpsEvents) {
       if (evt.veracross_reservation_id) {
@@ -219,6 +220,8 @@ export async function GET(request: Request) {
       const s = timeToMinutes(evt.start_time)
       const e = timeToMinutes(evt.end_time)
       if (s === null || e === null) continue
+
+      opsSlots.push({ title: evt.title, start: s, end: e })
 
       if (timesOverlap(reqStart, reqEnd, s, e)) {
         conflicts.push({
@@ -257,6 +260,12 @@ export async function GET(request: Request) {
         const s = timeToMinutes(res.start_time)
         const e = timeToMinutes(res.end_time)
         if (s === null || e === null) continue
+
+        // Skip if an ops_event already covers this slot with a similar title
+        const isDupe = opsSlots.some(slot =>
+          titlesSimilar(slot.title, title) && timesOverlap(slot.start, slot.end, s, e)
+        )
+        if (isDupe) continue
 
         if (timesOverlap(reqStart, reqEnd, s, e)) {
           conflicts.push({

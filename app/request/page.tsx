@@ -171,20 +171,16 @@ export default function RequestPage() {
   }, [selectedResource, date])
 
   useEffect(() => {
-    // Auto-check availability when all required fields are filled
-    console.log('Availability check state:', { 
-      selectedResource: selectedResource?.description || null, 
-      date, 
-      startTime, 
-      endTime 
-    })
+    setAvailability(null)
     if (selectedResource && date && startTime && endTime) {
+      setCheckingAvailability(true)
       const debounceTimer = setTimeout(() => {
         checkAvailability()
       }, 500)
-      return () => clearTimeout(debounceTimer)
-    } else {
-      setAvailability(null)
+      return () => {
+        clearTimeout(debounceTimer)
+        setCheckingAvailability(false)
+      }
     }
   }, [selectedResource, date, startTime, endTime])
 
@@ -831,7 +827,7 @@ export default function RequestPage() {
                   </motion.div>
                 )}
 
-                {checkingAvailability && (
+                {checkingAvailability && !availability && (
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-3">
                     <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
                     <span className="text-slate-600">Checking availability...</span>
