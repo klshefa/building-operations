@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { BigQuery } from '@google-cloud/bigquery'
 import { createClient } from '@supabase/supabase-js'
 import { format, parse } from 'date-fns'
+import { SyncMonitor } from '@/lib/sync-monitor'
 
 function getBigQueryClient() {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
@@ -42,6 +43,8 @@ function getCurrentSchoolYear(): { start: string; end: string } {
 
 export async function POST(request: Request) {
   const startTime = Date.now()
+  const monitor = new SyncMonitor()
+  await monitor.syncStart('group-events-sync', 'bigquery')
   const schoolYear = getCurrentSchoolYear()
   const today = format(new Date(), 'yyyy-MM-dd')
 
@@ -78,6 +81,7 @@ export async function POST(request: Request) {
     console.log(`Fetched ${rows.length} group events from BigQuery`)
 
     if (rows.length === 0) {
+      await monitor.syncComplete({ status: 'success', records_processed: 0 })
       return NextResponse.json({
         success: true,
         message: 'No group events to sync',
@@ -149,6 +153,11 @@ export async function POST(request: Request) {
       console.warn('Post-sync aggregation failed:', e)
     }
 
+    await monitor.syncComplete({
+      status: 'success',
+      records_processed: rawEvents.length,
+      records_updated: rawEvents.length,
+    })
     return NextResponse.json({
       success: true,
       message: `Synced ${rawEvents.length} group events`,
@@ -158,6 +167,10 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Sync error:', error)
+    await monitor.syncComplete({
+      status: 'failed',
+      error_message: error.message || 'Sync failed',
+    })
     return NextResponse.json({
       success: false,
       error: error.message || 'Sync failed',

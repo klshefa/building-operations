@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { BigQuery } from '@google-cloud/bigquery'
 import { createClient } from '@supabase/supabase-js'
 import { format, parse, eachDayOfInterval, addDays, parseISO, isAfter, isBefore, getDay } from 'date-fns'
+import { SyncMonitor } from '@/lib/sync-monitor'
 
 function getBigQueryClient() {
   const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
@@ -79,6 +80,8 @@ function expandRecurringDates(startDate: string, endDate: string, daysPattern: s
 
 export async function POST(request: Request) {
   const startTime = Date.now()
+  const monitor = new SyncMonitor()
+  await monitor.syncStart('resource-reservations-sync', 'bigquery')
   const schoolYear = getCurrentSchoolYear()
   const today = format(new Date(), 'yyyy-MM-dd')
   const schoolYearEnd = parseISO(schoolYear.end)
@@ -135,6 +138,7 @@ export async function POST(request: Request) {
     }
 
     if (rows.length === 0) {
+      await monitor.syncComplete({ status: 'success', records_processed: 0 })
       return NextResponse.json({
         success: true,
         message: 'No resource reservations to sync',
@@ -248,6 +252,11 @@ export async function POST(request: Request) {
       console.warn('Post-sync aggregation failed:', e)
     }
 
+    await monitor.syncComplete({
+      status: 'success',
+      records_processed: dedupedEvents.length,
+      records_updated: insertedCount,
+    })
     return NextResponse.json({
       success: true,
       message: `Synced ${insertedCount} resource reservations`,
@@ -257,6 +266,10 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Sync error:', error)
+    await monitor.syncComplete({
+      status: 'failed',
+      error_message: error.message || 'Sync failed',
+    })
     return NextResponse.json({
       success: false,
       error: error.message || 'Sync failed',

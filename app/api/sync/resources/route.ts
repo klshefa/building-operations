@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { BigQuery } from '@google-cloud/bigquery'
 import { createClient } from '@supabase/supabase-js'
+import { SyncMonitor } from '@/lib/sync-monitor'
 
 const SOURCE_NAME = 'bigquery_resources'
 
@@ -24,6 +25,8 @@ function getSupabaseClient() {
 
 export async function POST(request: Request) {
   const startTime = Date.now()
+  const monitor = new SyncMonitor()
+  await monitor.syncStart('resources-sync', 'bigquery')
 
   try {
     const bigquery = getBigQueryClient()
@@ -46,6 +49,7 @@ export async function POST(request: Request) {
     console.log(`Fetched ${rows.length} resources from BigQuery`)
 
     if (rows.length === 0) {
+      await monitor.syncComplete({ status: 'success', records_processed: 0 })
       return NextResponse.json({
         success: true,
         message: 'No resources to sync',
@@ -82,6 +86,11 @@ export async function POST(request: Request) {
       completed_at: new Date().toISOString(),
     })
 
+    await monitor.syncComplete({
+      status: 'success',
+      records_processed: resources.length,
+      records_updated: resources.length,
+    })
     return NextResponse.json({
       success: true,
       message: `Synced ${resources.length} resources`,
@@ -91,6 +100,10 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Sync error:', error)
+    await monitor.syncComplete({
+      status: 'failed',
+      error_message: error.message || 'Sync failed',
+    })
     return NextResponse.json({
       success: false,
       error: error.message || 'Sync failed',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { createClient } from '@supabase/supabase-js'
 import { format, parseISO } from 'date-fns'
+import { SyncMonitor } from '@/lib/sync-monitor'
 
 function toEasternTime(d: Date): Date {
   return new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }))
@@ -53,10 +54,12 @@ function getCurrentSchoolYear(): { start: string; end: string } {
 
 export async function POST(request: Request) {
   const startTime = Date.now()
-  const schoolYear = getCurrentSchoolYear()
-  const today = new Date()
+  const monitor = new SyncMonitor()
 
   try {
+    await monitor.syncStart('calendar-staff-sync', 'google-calendar')
+    const schoolYear = getCurrentSchoolYear()
+    const today = new Date()
     const auth = getGoogleAuth()
     const calendar = google.calendar({ version: 'v3', auth })
     const supabase = getSupabaseClient()
@@ -75,6 +78,7 @@ export async function POST(request: Request) {
     console.log(`Fetched ${events.length} events from Staff Calendar`)
 
     if (events.length === 0) {
+      await monitor.syncComplete({ status: 'success', records_processed: 0 })
       return NextResponse.json({
         success: true,
         message: 'No calendar events to sync',
@@ -174,6 +178,11 @@ export async function POST(request: Request) {
       console.warn('Post-sync aggregation failed:', e)
     }
 
+    await monitor.syncComplete({
+      status: 'success',
+      records_processed: rawEvents.length,
+      records_updated: rawEvents.length,
+    })
     return NextResponse.json({
       success: true,
       message: `Synced ${rawEvents.length} staff calendar events`,
@@ -183,7 +192,10 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Calendar sync error:', error)
-    
+    await monitor.syncComplete({
+      status: 'failed',
+      error_message: error.message || 'Calendar sync failed',
+    })
     // Log error
     const supabase = getSupabaseClient()
     await supabase
