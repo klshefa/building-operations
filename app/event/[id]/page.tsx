@@ -191,6 +191,12 @@ export default function EventDetailPage() {
   const [initialMentions, setInitialMentions] = useState<Record<string, string[]>>({})
   const [currentUser, setCurrentUser] = useState<{ email: string } | null>(null)
 
+  // Maintenance calendar button
+  const [maintStatus, setMaintStatus] = useState<'hidden' | 'checking' | 'ready' | 'adding' | 'exists' | 'added' | 'error'>('hidden')
+  const [maintLink, setMaintLink] = useState<string | null>(null)
+  const [maintMatchType, setMaintMatchType] = useState<string | null>(null)
+  const [maintError, setMaintError] = useState<string | null>(null)
+
   useEffect(() => {
     fetchEvent()
     fetchResources()
@@ -570,6 +576,69 @@ export default function EventDetailPage() {
     }
   }
 
+  // Check maintenance calendar status when event loads
+  useEffect(() => {
+    if (!event) return
+    if (event.primary_source === 'calendar_maintenance') {
+      setMaintStatus('exists')
+      setMaintMatchType('source')
+      return
+    }
+    if (!event.start_date || !event.location) {
+      setMaintStatus('hidden')
+      return
+    }
+    setMaintStatus('checking')
+    fetch('/api/calendar/maintenance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: event.id, mode: 'check' }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.exists) {
+          setMaintStatus('exists')
+          setMaintLink(data.htmlLink || null)
+          setMaintMatchType(data.match_type || null)
+        } else {
+          setMaintStatus('ready')
+        }
+      })
+      .catch(() => {
+        setMaintStatus('ready')
+      })
+  }, [event?.id, event?.primary_source, event?.start_date, event?.location])
+
+  async function addToMaintenanceCal() {
+    if (!event || maintStatus !== 'ready') return
+    setMaintStatus('adding')
+    setMaintError(null)
+    try {
+      const res = await fetch('/api/calendar/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: event.id, mode: 'ensure' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setMaintError(data.error || 'Failed to add to calendar')
+        setMaintStatus('error')
+        return
+      }
+      if (data.exists) {
+        setMaintStatus('exists')
+        setMaintLink(data.htmlLink || null)
+        setMaintMatchType(data.match_type || null)
+      } else if (data.created) {
+        setMaintStatus('added')
+        setMaintLink(data.htmlLink || null)
+      }
+    } catch {
+      setMaintError('Network error')
+      setMaintStatus('error')
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -643,6 +712,64 @@ export default function EventDetailPage() {
                   <BellIcon className="w-5 h-5" />
                 )}
               </button>
+
+              {/* Add to Maintenance Calendar */}
+              {maintStatus !== 'hidden' && (
+                <div className="flex items-center gap-2">
+                  {maintStatus === 'checking' && (
+                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 text-slate-400 text-sm">
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                  {maintStatus === 'ready' && (
+                    <button
+                      onClick={addToMaintenanceCal}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors text-sm font-medium"
+                    >
+                      <WrenchScrewdriverIcon className="w-4 h-4" />
+                      Add to Maint Cal
+                    </button>
+                  )}
+                  {maintStatus === 'adding' && (
+                    <button
+                      disabled
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-400 text-sm font-medium"
+                    >
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Adding...
+                    </button>
+                  )}
+                  {(maintStatus === 'exists' || maintStatus === 'added') && (
+                    maintLink ? (
+                      <a
+                        href={maintLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-700 text-sm font-medium hover:bg-green-100 transition-colors"
+                        title={maintMatchType === 'fuzzy' ? 'Similar event found on Maintenance Cal' : undefined}
+                      >
+                        <CheckIcon className="w-4 h-4" />
+                        {maintStatus === 'added' ? 'Added' : 'On Maint Cal'}
+                      </a>
+                    ) : (
+                      <span className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-green-700 text-sm font-medium">
+                        <CheckIcon className="w-4 h-4" />
+                        On Maint Cal
+                      </span>
+                    )
+                  )}
+                  {maintStatus === 'error' && (
+                    <button
+                      onClick={addToMaintenanceCal}
+                      title={maintError || 'Failed — click to retry'}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors text-sm font-medium"
+                    >
+                      <ExclamationTriangleIcon className="w-4 h-4" />
+                      Retry
+                    </button>
+                  )}
+                </div>
+              )}
               
               {!(event as any)?._vcReadOnly && (
                 <button
