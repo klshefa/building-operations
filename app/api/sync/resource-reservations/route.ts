@@ -194,7 +194,6 @@ export async function POST(request: Request) {
           end_time: getTimeValue(row.end_time),
           location: null,
           resource: row.resource,
-          resource_id: null,
           contact_person: row.contact_person === 'None' ? null : row.contact_person,
           reservation_id: row.reservation_id || null,
           recurring_pattern: row.days || null,
