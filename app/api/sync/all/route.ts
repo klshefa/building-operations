@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const maxDuration = 300
+
 const SYNC_ENDPOINTS = [
   'resources',
   'group-events',
