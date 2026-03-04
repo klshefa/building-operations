@@ -141,16 +141,17 @@ export async function POST(request: Request) {
       completed_at: new Date().toISOString()
     })
 
-    // Trigger aggregation so ops_events reflects the updated data
-    const url = new URL(request.url)
-    const baseUrl = `${url.protocol}//${url.host}`
-    try {
-      await fetch(`${baseUrl}/api/aggregate-events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-    } catch (e) {
-      console.warn('Post-sync aggregation failed:', e)
+    const reqUrl = new URL(request.url)
+    if (reqUrl.searchParams.get('skipAggregation') !== 'true') {
+      const baseUrl = `${reqUrl.protocol}//${reqUrl.host}`
+      try {
+        await fetch(`${baseUrl}/api/aggregate-events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      } catch (e) {
+        console.warn('Post-sync aggregation failed:', e)
+      }
     }
 
     await monitor.syncComplete({

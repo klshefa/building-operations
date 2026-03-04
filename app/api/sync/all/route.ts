@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   for (const endpoint of SYNC_ENDPOINTS) {
     try {
       console.log(`Syncing ${endpoint}...`)
-      const response = await fetch(`${baseUrl}/api/sync/${endpoint}`, {
+      const response = await fetch(`${baseUrl}/api/sync/${endpoint}?skipAggregation=true`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
