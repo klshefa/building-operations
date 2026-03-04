@@ -30,6 +30,8 @@ export async function GET(request: Request) {
     'calendar-staff': '/api/sync/calendar-staff',
     'calendar-ls': '/api/sync/calendar-ls',
     'calendar-ms': '/api/sync/calendar-ms',
+    'calendar-maintenance': '/api/sync/calendar-maintenance',
+    'calendar-admissions': '/api/sync/calendar-admissions',
   }
 
   const endpoint = syncEndpoints[source]
@@ -50,6 +52,15 @@ export async function GET(request: Request) {
     const data = await response.json()
     
     console.log(`[Cron] Sync complete for ${source}:`, data)
+
+    if (!response.ok || data.success === false) {
+      return NextResponse.json({
+        success: false,
+        source,
+        error: data.error || `Downstream returned ${response.status}`,
+        result: data,
+      }, { status: response.status >= 400 ? response.status : 500 })
+    }
     
     return NextResponse.json({
       success: true,

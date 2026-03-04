@@ -29,24 +29,10 @@ import { AvailabilityCheck } from '@/components/AvailabilityCheck'
 import { RelatedEvents } from '@/components/RelatedEvents'
 import { ResourceScheduleSidebar } from '@/components/ResourceScheduleSidebar'
 import { MentionInput, parseMentionEmails } from '@/components/MentionInput'
+import { SOURCE_LABELS, SOURCE_COLORS } from '@/lib/calendar-config'
 
-const sourceLabels: Record<EventSource, string> = {
-  bigquery_group: 'VC Event',
-  bigquery_resource: 'VC Resource',
-  calendar_staff: 'Staff Cal',
-  calendar_ls: 'LS Cal',
-  calendar_ms: 'MS Cal',
-  manual: 'Manual',
-}
-
-const sourceColors: Record<EventSource, string> = {
-  bigquery_group: 'bg-purple-100 text-purple-700',
-  bigquery_resource: 'bg-blue-100 text-blue-700',
-  calendar_staff: 'bg-green-100 text-green-700',
-  calendar_ls: 'bg-orange-100 text-orange-700',
-  calendar_ms: 'bg-teal-100 text-teal-700',
-  manual: 'bg-slate-100 text-slate-700',
-}
+const sourceLabels = SOURCE_LABELS
+const sourceColors = SOURCE_COLORS
 
 const eventTypes: { value: EventType; label: string }[] = [
   { value: 'program_event', label: 'Program Event' },

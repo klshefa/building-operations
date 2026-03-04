@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import type { OpsEvent, EventSource } from '@/lib/types'
 import { formatTimeDisplay } from '@/lib/utils/timeDisplay'
+import { SOURCE_LABELS, SOURCE_COLORS } from '@/lib/calendar-config'
 import {
   MapPinIcon,
   ClockIcon,
@@ -17,23 +18,8 @@ import {
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
 
-const sourceLabels: Record<EventSource, string> = {
-  bigquery_group: 'VC Event',
-  bigquery_resource: 'VC Resource',
-  calendar_staff: 'Staff Cal',
-  calendar_ls: 'LS Cal',
-  calendar_ms: 'MS Cal',
-  manual: 'Manual',
-}
-
-const sourceColors: Record<EventSource, string> = {
-  bigquery_group: 'bg-purple-100 text-purple-700',
-  bigquery_resource: 'bg-blue-100 text-blue-700',
-  calendar_staff: 'bg-green-100 text-green-700',
-  calendar_ls: 'bg-orange-100 text-orange-700',
-  calendar_ms: 'bg-teal-100 text-teal-700',
-  manual: 'bg-slate-100 text-slate-700',
-}
+const sourceLabels = SOURCE_LABELS
+const sourceColors = SOURCE_COLORS
 
 interface EventCardProps {
   event: OpsEvent

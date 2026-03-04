@@ -164,7 +164,7 @@ export async function POST(request: Request) {
         
         // Create aggregated event from matched events
         // Priority: bigquery_group > calendar_staff > calendar_ls/ms > bigquery_resource > manual
-        const sourcePriority = ['bigquery_group', 'calendar_staff', 'calendar_ls', 'calendar_ms', 'bigquery_resource', 'manual']
+        const sourcePriority = ['bigquery_group', 'calendar_staff', 'calendar_ls', 'calendar_ms', 'calendar_maintenance', 'calendar_admissions', 'bigquery_resource', 'manual']
         const primaryEvent = matchedEvents.sort((a, b) => 
           sourcePriority.indexOf(a.source) - sourcePriority.indexOf(b.source)
         )[0]

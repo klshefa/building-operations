@@ -326,7 +326,7 @@ export async function GET(
     const { data: calendarEvents } = await supabase
       .from('ops_raw_events')
       .select('id, title, source, start_date, end_date')
-      .in('source', ['calendar_staff', 'calendar_ls', 'calendar_ms'])
+      .in('source', ['calendar_staff', 'calendar_ls', 'calendar_ms', 'calendar_maintenance', 'calendar_admissions'])
       .lte('start_date', date)
       .gte('end_date', date)
 

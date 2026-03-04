@@ -25,6 +25,7 @@ import {
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
 import type { OpsEvent, EventSource } from '@/lib/types'
+import { CALENDAR_VIEW_SOURCE_COLORS, SOURCE_LABELS } from '@/lib/calendar-config'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -40,23 +41,8 @@ import {
 
 type ViewMode = 'month' | 'week' | 'day'
 
-const sourceColors: Record<EventSource, string> = {
-  bigquery_group: 'bg-purple-100 text-purple-700',
-  bigquery_resource: 'bg-blue-100 text-blue-700',
-  calendar_staff: 'bg-amber-100 text-amber-700',
-  calendar_ls: 'bg-green-100 text-green-700',
-  calendar_ms: 'bg-teal-100 text-teal-700',
-  manual: 'bg-slate-100 text-slate-700',
-}
-
-const sourceLabels: Record<EventSource, string> = {
-  bigquery_group: 'VC Event',
-  bigquery_resource: 'VC Resource',
-  calendar_staff: 'Staff Cal',
-  calendar_ls: 'LS Cal',
-  calendar_ms: 'MS Cal',
-  manual: 'Manual',
-}
+const sourceColors = CALENDAR_VIEW_SOURCE_COLORS
+const sourceLabels = SOURCE_LABELS
 
 export default function CalendarPage() {
   const router = useRouter()

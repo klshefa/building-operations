@@ -11,6 +11,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon
 } from '@heroicons/react/24/outline'
+import { SOURCE_LABELS, SOURCE_COLORS } from '@/lib/calendar-config'
 
 interface RawEvent {
   id: string
@@ -42,30 +43,12 @@ interface RelatedEventsProps {
   className?: string
 }
 
-// Format source name for display
 function formatSource(source: string): string {
-  const sourceMap: Record<string, string> = {
-    'bigquery_group': 'VC Event',
-    'bigquery_resource': 'VC Resource',
-    'calendar_staff': 'Staff Cal',
-    'calendar_ls': 'LS Cal',
-    'calendar_ms': 'MS Cal',
-    'manual': 'Manual'
-  }
-  return sourceMap[source] || source
+  return (SOURCE_LABELS as Record<string, string>)[source] || source
 }
 
-// Get source badge color
 function getSourceColor(source: string): string {
-  const colorMap: Record<string, string> = {
-    'bigquery_group': 'bg-purple-100 text-purple-700',
-    'bigquery_resource': 'bg-blue-100 text-blue-700',
-    'calendar_staff': 'bg-green-100 text-green-700',
-    'calendar_ls': 'bg-orange-100 text-orange-700',
-    'calendar_ms': 'bg-teal-100 text-teal-700',
-    'manual': 'bg-slate-100 text-slate-700'
-  }
-  return colorMap[source] || 'bg-slate-100 text-slate-700'
+  return (SOURCE_COLORS as Record<string, string>)[source] || 'bg-slate-100 text-slate-700'
 }
 
 // Format time for display

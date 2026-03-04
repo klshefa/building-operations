@@ -9,6 +9,7 @@ import { StaffLookup, type StaffMember } from '@/components/StaffLookup'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import type { OpsUser, UserRole, TeamType } from '@/lib/types'
+import { GOOGLE_CALENDARS } from '@/lib/calendar-config'
 import {
   UserPlusIcon,
   TrashIcon,
@@ -1606,11 +1607,7 @@ export default function AdminPage() {
                     <div className="p-4 bg-slate-50 rounded-lg">
                       <h3 className="text-sm font-medium text-slate-700 mb-3">Google Calendars</h3>
                       <div className="space-y-2">
-                        {[
-                          { id: 'calendar-staff', label: 'Staff Calendar' },
-                          { id: 'calendar-ls', label: 'Lower School' },
-                          { id: 'calendar-ms', label: 'Middle School' },
-                        ].map((source) => (
+                        {GOOGLE_CALENDARS.map((cal) => ({ id: cal.slug, label: cal.name })).map((source) => (
                           <div key={source.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
                             <div>
                               <span className="text-sm text-slate-700 font-medium">{source.label}</span>

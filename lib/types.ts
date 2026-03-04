@@ -1,5 +1,5 @@
 // Event sources
-export type EventSource = 'bigquery_group' | 'bigquery_resource' | 'calendar_staff' | 'calendar_ls' | 'calendar_ms' | 'manual'
+export type EventSource = 'bigquery_group' | 'bigquery_resource' | 'calendar_staff' | 'calendar_ls' | 'calendar_ms' | 'calendar_maintenance' | 'calendar_admissions' | 'manual'
 
 // Event types
 export type EventType = 

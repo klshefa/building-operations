@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     
     if (usersError) {
       console.error('[Weekly Digest] Error fetching users:', usersError)
-      return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
+      return NextResponse.json({ success: false, error: 'Failed to fetch users' }, { status: 500 })
     }
     
     if (!users || users.length === 0) {
@@ -251,7 +251,7 @@ export async function GET(request: Request) {
     
   } catch (error: any) {
     console.error('[Weekly Digest] Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
 

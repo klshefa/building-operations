@@ -20,6 +20,8 @@ export async function GET() {
       'calendar-staff': 'calendar_staff',
       'calendar-ls': 'calendar_ls',
       'calendar-ms': 'calendar_ms',
+      'calendar-maintenance': 'calendar_maintenance',
+      'calendar-admissions': 'calendar_admissions',
     }
     
     const syncTimes: Record<string, { completed_at: string; events_synced: number }> = {}

@@ -8,6 +8,7 @@ import { format, parseISO, addDays } from 'date-fns'
 import Navbar from '@/components/Navbar'
 import EventCard from '@/components/EventCard'
 import type { OpsEvent, EventSource } from '@/lib/types'
+import { SOURCE_FILTERS } from '@/lib/calendar-config'
 import {
   FunnelIcon,
   MagnifyingGlassIcon,
@@ -15,15 +16,7 @@ import {
   EyeIcon,
 } from '@heroicons/react/24/outline'
 
-const sourceFilters: { value: EventSource | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Sources' },
-  { value: 'bigquery_group', label: 'Group Events' },
-  { value: 'bigquery_resource', label: 'Resource Reservations' },
-  { value: 'calendar_staff', label: 'Staff Calendar' },
-  { value: 'calendar_ls', label: 'Lower School' },
-  { value: 'calendar_ms', label: 'Middle School' },
-  { value: 'manual', label: 'Manual' },
-]
+const sourceFilters = SOURCE_FILTERS
 
 export default function EventsPage() {
   const router = useRouter()

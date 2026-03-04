@@ -7,6 +7,8 @@ const SYNC_ENDPOINTS = [
   'calendar-staff',
   'calendar-ls',
   'calendar-ms',
+  'calendar-maintenance',
+  'calendar-admissions',
 ]
 
 export async function POST(request: Request) {
@@ -84,6 +86,8 @@ export async function POST(request: Request) {
 
   const allSuccess = Object.values(results).every(r => r.success)
 
+  const status = allSuccess ? 200 : 500
+
   return NextResponse.json({
     success: allSuccess,
     message: allSuccess 
@@ -91,5 +95,5 @@ export async function POST(request: Request) {
       : 'Some syncs failed',
     results,
     duration_ms: Date.now() - startTime
-  })
+  }, { status })
 }
