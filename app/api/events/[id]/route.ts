@@ -447,7 +447,7 @@ export async function PATCH(
   
   try {
     // Baseline auth: every PATCH must come from an authenticated ops user
-    const auth = await verifyApiAuth()
+    const auth = await verifyApiAuth(request)
     if (isAuthError(auth)) {
       return NextResponse.json({ error: auth.error }, { status: auth.status })
     }

@@ -464,6 +464,16 @@ export default function EventDetailPage() {
     }
   }
 
+  async function getAuthHeaders(): Promise<Record<string, string>> {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`
+    }
+    return headers
+  }
+
   async function saveEvent() {
     if (!event) return
     
@@ -471,9 +481,10 @@ export default function EventDetailPage() {
     setSaveStatus('idle')
     
     try {
+      const headers = await getAuthHeaders()
       const response = await fetch(`/api/events/${params.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(event),
       })
       
@@ -667,9 +678,10 @@ export default function EventDetailPage() {
     setApproving(true)
     setApproveError(null)
     try {
+      const headers = await getAuthHeaders()
       const res = await fetch(`/api/events/${event.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ teams_approved_at: new Date().toISOString() }),
       })
       if (!res.ok) {

@@ -26,27 +26,64 @@ export interface AuthError {
 }
 
 /**
+ * Extract the Supabase user from either a Bearer token or server-side cookies.
+ *
+ * Priority:
+ *  1. Authorization: Bearer <access_token>  (reliable from client-side fetch)
+ *  2. Cookie-based session via createServerClient (requires middleware for refresh)
+ *
+ * Passing the incoming Request is strongly recommended so the Bearer path can
+ * be used; the cookie path is kept as a fallback for server-component callers.
+ */
+async function resolveUser(request?: Request) {
+  // 1. Try Bearer token from request headers
+  if (request) {
+    const authHeader = request.headers.get('authorization') || ''
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+
+    if (token) {
+      const adminClient = createAdminClient()
+      const { data: { user }, error } = await adminClient.auth.getUser(token)
+      if (!error && user?.email) return { user, source: 'bearer' as const }
+    }
+  }
+
+  // 2. Fallback: cookie-based session (works when middleware refreshes cookies)
+  try {
+    const supabase = await createServerClient()
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (!error && user?.email) return { user, source: 'cookie' as const }
+  } catch {
+    // cookies() can throw in certain contexts; fall through
+  }
+
+  return null
+}
+
+/**
  * Verify API request authentication
- * 
+ *
  * Checks:
- * 1. User has valid session
+ * 1. User has valid session (Bearer token or cookie)
  * 2. User email is @shefaschool.org
  * 3. User exists in ops_users table (or super_admins)
- * 
+ *
+ * @param request - The incoming Request object (pass this so Bearer tokens work)
  * @returns AuthResult on success, AuthError on failure
  */
-export async function verifyApiAuth(): Promise<AuthResult | AuthError> {
+export async function verifyApiAuth(request?: Request): Promise<AuthResult | AuthError> {
   try {
-    // Get session using anon key client
-    const supabase = await createServerClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user?.email) {
+    const resolved = await resolveUser(request)
+
+    if (!resolved?.user?.email) {
       return { error: 'Unauthorized - no valid session', status: 401 }
     }
 
+    const email: string = resolved.user.email
+    const userId: string = resolved.user.id
+
     // Check domain
-    if (!user.email.endsWith('@shefaschool.org')) {
+    if (!email.endsWith('@shefaschool.org')) {
       return { error: 'Unauthorized - invalid domain', status: 401 }
     }
 
@@ -55,13 +92,13 @@ export async function verifyApiAuth(): Promise<AuthResult | AuthError> {
     const { data: opsUser } = await adminClient
       .from('ops_users')
       .select('role, teams, is_active')
-      .eq('email', user.email.toLowerCase())
+      .eq('email', email.toLowerCase())
       .eq('is_active', true)
       .maybeSingle()
 
     if (opsUser) {
       return {
-        user: { email: user.email, id: user.id },
+        user: { email, id: userId },
         role: opsUser.role,
         teams: opsUser.teams || [],
         isAdmin: opsUser.role === 'admin'
@@ -72,12 +109,12 @@ export async function verifyApiAuth(): Promise<AuthResult | AuthError> {
     const { data: superAdmin } = await adminClient
       .from('super_admins')
       .select('id')
-      .eq('email', user.email.toLowerCase())
+      .eq('email', email.toLowerCase())
       .maybeSingle()
 
     if (superAdmin) {
       return {
-        user: { email: user.email, id: user.id },
+        user: { email, id: userId },
         role: 'admin',
         teams: [],
         isAdmin: true
