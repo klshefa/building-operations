@@ -256,9 +256,18 @@ Non-admin users do not see the panel at all (server enforces 403 if attempted).
 - **Notify Teams** is an atomic save+notify. No separate Save required.
 - **Save Changes** is for non-notify edits (or adding new teams after initial notification).
 
+### UX copy (final)
+
+| State | Heading | Body |
+|-------|---------|------|
+| Non-self-service, pending | Team Notifications | "Select the teams needed below, then click **Notify Teams** to save your selections and email all assigned team members." |
+| Non-self-service, notified | Teams Notified | "Teams notified [timestamp]. To notify a newly added team, assign it below and click Save Changes." |
+| Self-service, pending | Self-Service Request — Teams Pending Approval | "This event was requested by **[name]**. Team members will **not** be notified until an admin approves the team assignments below." |
+| Self-service, notified | Teams Notified | "Requested by **[name]**. Teams notified [timestamp]. To notify a newly added team, assign it below and click Save Changes." |
+
 ### Files changed
 
 | File | Change |
 |------|--------|
-| `app/event/[id]/page.tsx` | `approveTeams()` now includes all `needs_*` fields in PATCH payload; clears `hasChanges` on success |
+| `app/event/[id]/page.tsx` | `approveTeams()` now includes all `needs_*` fields in PATCH payload; clears `hasChanges` on success; UX copy updated to match atomic behavior |
 | `docs/auth-notes.md` | This section |

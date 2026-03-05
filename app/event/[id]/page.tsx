@@ -206,7 +206,6 @@ export default function EventDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [approving, setApproving] = useState(false)
   const [approveError, setApproveError] = useState<string | null>(null)
-  const [notifyDebug, setNotifyDebug] = useState<string | null>(null)
 
   // Attachments
   const [attachments, setAttachments] = useState<EventAttachment[]>([])
@@ -707,25 +706,21 @@ export default function EventDetailPage() {
     if (!event || approving) return
     setApproving(true)
     setApproveError(null)
-    setNotifyDebug(null)
     try {
       const headers = await getAuthHeaders()
-      const payload = {
-        needs_program_director: event.needs_program_director ?? false,
-        needs_office: event.needs_office ?? false,
-        needs_it: event.needs_it ?? false,
-        needs_security: event.needs_security ?? false,
-        needs_facilities: event.needs_facilities ?? false,
-        teams_approved_at: new Date().toISOString(),
-      }
-      setNotifyDebug(`SENT: ${JSON.stringify(payload)}`)
       const res = await fetch(`/api/events/${event.id}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          needs_program_director: event.needs_program_director ?? false,
+          needs_office: event.needs_office ?? false,
+          needs_it: event.needs_it ?? false,
+          needs_security: event.needs_security ?? false,
+          needs_facilities: event.needs_facilities ?? false,
+          teams_approved_at: new Date().toISOString(),
+        }),
       })
       const result = await res.json()
-      setNotifyDebug(`SENT: ${JSON.stringify(payload)} | STATUS: ${res.status} | RESP teams_approved_at: ${result.data?.teams_approved_at ?? 'missing'}`)
       if (!res.ok) {
         setApproveError(result.error || 'Failed to notify')
         setApproving(false)
@@ -733,8 +728,7 @@ export default function EventDetailPage() {
       }
       setEvent(result.data)
       setHasChanges(false)
-    } catch (err) {
-      setNotifyDebug(`ERROR: ${err instanceof Error ? err.message : String(err)}`)
+    } catch {
       setApproveError('Network error')
     } finally {
       setApproving(false)
@@ -1399,19 +1393,19 @@ export default function EventDetailPage() {
                     <p className="text-sm text-green-700 mt-1">
                       {event.requested_by && <>Requested by <strong>{event.requested_by}</strong>. </>}
                       Teams notified {new Date(event.teams_approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
-                      {!event.requested_by && <> Newly added teams will be emailed on Save.</>}
+                      {' '}To notify a newly added team, assign it below and click Save Changes.
                     </p>
                   </>
                 ) : (
                   <>
                     <h3 className="font-medium text-blue-800">
-                      {event.requested_by ? 'Self-Service Request — Teams Pending Approval' : 'Team Notifications'} <span className="text-xs text-blue-400 font-normal">(v2)</span>
+                      {event.requested_by ? 'Self-Service Request — Teams Pending Approval' : 'Team Notifications'}
                     </h3>
                     <p className="text-sm text-blue-700 mt-1">
                       {event.requested_by ? (
                         <>This event was requested by <strong>{event.requested_by}</strong>. Team members will <strong>not</strong> be notified until an admin approves the team assignments below.</>
                       ) : (
-                        <>Click below to notify all assigned team members. After notifying, newly added teams will be emailed automatically on Save.</>
+                        <>Select the teams needed below, then click <strong>Notify Teams</strong> to save your selections and email all assigned team members.</>
                       )}
                     </p>
                   </>
@@ -1438,9 +1432,6 @@ export default function EventDetailPage() {
                     <span className="text-sm text-red-600">{approveError}</span>
                   )}
                 </div>
-                {notifyDebug && (
-                  <p className="mt-2 text-xs text-slate-500 font-mono break-all bg-slate-100 rounded p-2">{notifyDebug}</p>
-                )}
               </div>
             </div>
           </div>
