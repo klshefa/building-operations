@@ -47,7 +47,7 @@ A shared `getAuthHeaders()` helper in `app/event/[id]/page.tsx` handles this for
 
 | Route | Method | Auth required | Admin required |
 |-------|--------|---------------|----------------|
-| `/api/events/[id]` | PATCH | Yes (all requests) | Yes — if setting `teams_approved_at` or modifying `needs_*` on self-service events |
+| `/api/events/[id]` | PATCH | Yes (all requests) | Yes — if setting `teams_approved_at` (any event) or modifying `needs_*` on self-service events |
 
 ## Pitfalls
 
@@ -181,4 +181,57 @@ Once approved, the first block (with the button) unmounted entirely.
 |------|--------|
 | `app/api/events/[id]/route.ts` | Added `isPendingSelfService` gate to skip emails on Save |
 | `app/event/[id]/page.tsx` | Unified approval banner; button stays visible + disabled after approval |
+| `docs/auth-notes.md` | This section |
+
+---
+
+## Notify Teams expanded to all events (2026-02-25)
+
+### What changed
+
+The "Approve & Notify Teams" panel was previously restricted to self-service events (`requested_by != null`). It is now available on **all events** for admins, regardless of event source (calendar sync, manual, Veracross, etc.).
+
+### Why
+
+Admins frequently add teams to calendar-synced events and need to notify those team members. Previously there was no explicit notification control — team emails were sent silently on Save (false→true), but the admin had no visibility into whether notifications were sent.
+
+### UI behavior
+
+The panel now shows for all events when the user is admin:
+
+| Event type | State | Panel heading | Button |
+|------------|-------|---------------|--------|
+| Self-service | Pending | "Self-Service Request — Teams Pending Approval" | "Approve & Notify Teams" |
+| Self-service | Approved | "Teams Notified" + requester + timestamp | "Notified" (disabled) |
+| Non-self-service | Not yet notified | "Team Notifications" | "Notify Teams" |
+| Non-self-service | Notified | "Teams Notified" + timestamp | "Notified" (disabled) |
+
+Non-admin users do not see the panel at all (server enforces 403 if attempted).
+
+### Email sending rules (complete)
+
+| Scenario | Behavior |
+|----------|----------|
+| Admin creates event via portal with teams | Teams emailed immediately; `teams_approved_at` auto-set |
+| Self-service, not approved: Save with team changes | Teams saved, **no emails** (deferred to approval) |
+| Self-service: Approve clicked | Emails ALL currently-true teams once |
+| Self-service, already approved: add new team + Save | Emails **only** the newly-added team |
+| Calendar/synced event: add team + Save (first time) | Emails the newly-added team; `teams_approved_at` auto-set |
+| Any event, already notified: add new team + Save | Emails **only** the newly-added team |
+| Notify Teams clicked (any event, teams_approved_at null) | Emails ALL currently-true teams once |
+
+### Double-send prevention
+
+`teams_approved_at` is automatically set when team emails are sent, even outside the explicit "Notify" button flow. This prevents a scenario where teams are emailed on Save and then re-emailed via the Notify button. Specifically:
+
+- `POST /api/events/manual`: after sending team emails on create, sets `teams_approved_at`
+- `PATCH /api/events/[id]`: after sending team emails via the normal false→true path on a non-self-service event with `teams_approved_at = null`, auto-sets `teams_approved_at`
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `app/event/[id]/page.tsx` | Panel no longer gated by `requested_by`; shows for all events (admin-only); wording adapts to event type |
+| `app/api/events/[id]/route.ts` | Auto-sets `teams_approved_at` after sending team emails on non-self-service events |
+| `app/api/events/manual/route.ts` | Auto-sets `teams_approved_at` after sending team emails on create |
 | `docs/auth-notes.md` | This section |

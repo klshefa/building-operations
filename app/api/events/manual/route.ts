@@ -252,7 +252,7 @@ export async function POST(request: Request) {
     console.log(`[ManualEvent] teams: PD=${data.needs_program_director} Office=${data.needs_office} IT=${data.needs_it} Security=${data.needs_security} Facilities=${data.needs_facilities}`)
 
     // Send team assignment emails for admin-created events (not self-service).
-    // Self-service events defer team emails until admin approval (Phase 2).
+    // Self-service events defer team emails until admin approval.
     if (!isSelfService && process.env.RESEND_API_KEY) {
       const supabaseForEmail = createAdminClient()
       const assignedTeams = getAssignedTeams(data)
@@ -260,6 +260,14 @@ export async function POST(request: Request) {
         try {
           const result = await sendTeamAssignmentEmails(supabaseForEmail, data as OpsEvent, assignedTeams, 'create')
           console.log(`[ManualEvent] Team emails sent: ${result.teamsNotified.join(',')} (${result.recipientCount} recipients)`)
+
+          // Mark teams as notified so the UI shows "Notified" instead of
+          // offering a redundant "Notify Teams" button on the detail page.
+          await supabase
+            .from('ops_events')
+            .update({ teams_approved_at: new Date().toISOString() })
+            .eq('id', data.id)
+          data.teams_approved_at = new Date().toISOString()
         } catch (err) {
           console.error('[ManualEvent] Failed to send team assignment emails:', err)
         }

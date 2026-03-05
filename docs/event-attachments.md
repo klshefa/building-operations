@@ -75,6 +75,10 @@ Signed URL expires after 1 hour.
 
 Admin = `ops_users.role === 'admin'` OR exists in `super_admins` table (via `verifyApiAuth`).
 
+### Event-ID Binding (cross-event isolation)
+
+All attachment operations must be scoped by both `attachment_id` and `event_id` (even after a successful SELECT), to prevent cross-event mutation if control flow changes in the future. Every `[attachmentId]` route query includes `.eq('event_id', id)` — both on the initial lookup **and** on every mutating statement (DELETE, UPDATE). This means an attachment belonging to event B can never be read, modified, or deleted through event A's URL path, even if the caller knows the attachment UUID.
+
 ## Setup Instructions
 
 ### 1. Run the migration
@@ -95,7 +99,7 @@ No additional RLS policies needed on the bucket — all storage operations use t
 
 ## Versioning / Replace Behavior
 
-Replace overwrites: the old storage object is deleted and the new file is uploaded at a fresh path under the same attachment ID. The DB record is updated in place (`file_name`, `storage_path`, `content_type`, `size_bytes`, `updated_at`). There is no version history — if version tracking is needed later, a `version` column can be added.
+Replace overwrites: the new file is uploaded first (with `upsert: true` to handle same-filename replacements), then the old storage object is deleted only after the new upload succeeds. This prevents orphaning the old file if the upload fails. The DB record is updated in place (`file_name`, `storage_path`, `content_type`, `size_bytes`, `updated_at`). There is no version history — if version tracking is needed later, a `version` column can be added.
 
 ## Audit Logging
 

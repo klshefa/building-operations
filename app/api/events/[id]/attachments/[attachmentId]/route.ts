@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 import { logAudit } from '@/lib/audit'
 
 const BUCKET = 'ops-event-attachments'
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 export async function DELETE(
   request: Request,
@@ -52,6 +43,7 @@ export async function DELETE(
     .from('ops_event_attachments')
     .delete()
     .eq('id', attachmentId)
+    .eq('event_id', id)
 
   if (dbErr) {
     return NextResponse.json({ error: dbErr.message }, { status: 500 })
@@ -114,22 +106,25 @@ export async function PATCH(
       return NextResponse.json({ error: 'No file provided for replace' }, { status: 400 })
     }
 
-    // Delete old storage object
-    await supabase.storage.from(BUCKET).remove([attachment.storage_path])
-
-    // Upload new file at a new path (same attachment ID, new filename)
+    // Upload new file FIRST so we don't orphan the old one if upload fails.
+    // upsert: true handles the case where the replacement has the same filename.
     const newPath = `events/${id}/${attachmentId}/${file.name}`
     const arrayBuffer = await file.arrayBuffer()
     const { error: uploadErr } = await supabase.storage
       .from(BUCKET)
       .upload(newPath, arrayBuffer, {
         contentType: file.type || 'application/octet-stream',
-        upsert: false,
+        upsert: true,
       })
 
     if (uploadErr) {
       console.error('[Attachments] Storage replace error:', uploadErr)
       return NextResponse.json({ error: `Replace upload failed: ${uploadErr.message}` }, { status: 500 })
+    }
+
+    // New file uploaded successfully — now delete the old one
+    if (attachment.storage_path !== newPath) {
+      await supabase.storage.from(BUCKET).remove([attachment.storage_path])
     }
 
     const updateFields: Record<string, unknown> = {
@@ -147,6 +142,7 @@ export async function PATCH(
       .from('ops_event_attachments')
       .update(updateFields)
       .eq('id', attachmentId)
+      .eq('event_id', id)
       .select()
       .single()
 
@@ -186,6 +182,7 @@ export async function PATCH(
       updated_at: new Date().toISOString(),
     })
     .eq('id', attachmentId)
+    .eq('event_id', id)
     .select()
     .single()
 

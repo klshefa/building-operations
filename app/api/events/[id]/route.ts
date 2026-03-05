@@ -471,10 +471,10 @@ export async function PATCH(
 
     const isSelfServiceEvent = currentEvent.requested_by != null
 
-    // Admin gate: only admins may CHANGE teams_approved_at or modify needs_*
-    // on self-service events.  We compare against the current DB row so that
-    // a regular save (which sends the full event object with unchanged fields)
-    // does not accidentally trigger the gate.
+    // Admin gate: only admins may set teams_approved_at (notify/approve) or
+    // modify needs_* flags on self-service events.  We compare against the
+    // current DB row so that a regular save (which sends the full event object
+    // with unchanged fields) does not accidentally trigger the gate.
     const touchesApproval =
       'teams_approved_at' in body &&
       body.teams_approved_at !== (currentEvent.teams_approved_at ?? null)
@@ -484,7 +484,7 @@ export async function PATCH(
     if (touchesApproval || (isSelfServiceEvent && touchesTeamFlags)) {
       if (!auth.isAdmin) {
         return NextResponse.json(
-          { error: 'Forbidden - only admins can approve teams or modify team assignments on self-service events' },
+          { error: 'Forbidden - only admins can notify teams or modify team assignments on self-service events' },
           { status: 403 }
         )
       }
@@ -571,6 +571,14 @@ export async function PATCH(
       try {
         const trigger = isApprovalTransition ? 'approve' as const : 'edit' as const
         await sendTeamAssignmentEmails(supabase, data as OpsEvent, teamsToEmail, trigger)
+
+        // Auto-mark teams as notified on non-self-service events so the UI
+        // shows "Notified" and prevents a redundant "Notify Teams" click.
+        if (!isApprovalTransition && !isSelfServiceEvent && currentEvent.teams_approved_at == null) {
+          const now = new Date().toISOString()
+          await supabase.from('ops_events').update({ teams_approved_at: now }).eq('id', id)
+          data.teams_approved_at = now
+        }
       } catch (emailErr) {
         console.error('[PATCH] Team assignment email error:', emailErr)
       }

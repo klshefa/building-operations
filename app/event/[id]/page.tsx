@@ -1367,8 +1367,8 @@ export default function EventDetailPage() {
           <RelatedEvents eventId={event.id} />
         </motion.div>
 
-        {/* Self-service approval banner — always visible for self-service events */}
-        {event.requested_by && (
+        {/* Team notification panel — visible to admins on all events */}
+        {isAdmin && (
           <div className={`p-4 rounded-xl border ${
             event.teams_approved_at
               ? 'bg-green-50 border-green-200'
@@ -1382,43 +1382,49 @@ export default function EventDetailPage() {
               <div className="flex-1">
                 {event.teams_approved_at ? (
                   <>
-                    <h3 className="font-medium text-green-800">Self-Service Request — Teams Approved</h3>
+                    <h3 className="font-medium text-green-800">Teams Notified</h3>
                     <p className="text-sm text-green-700 mt-1">
-                      Requested by <strong>{event.requested_by}</strong>.
-                      Teams approved {new Date(event.teams_approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
+                      {event.requested_by && <>Requested by <strong>{event.requested_by}</strong>. </>}
+                      Teams notified {new Date(event.teams_approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
+                      {!event.requested_by && <> Newly added teams will be emailed on Save.</>}
                     </p>
                   </>
                 ) : (
                   <>
-                    <h3 className="font-medium text-blue-800">Self-Service Request — Teams Pending Approval</h3>
+                    <h3 className="font-medium text-blue-800">
+                      {event.requested_by ? 'Self-Service Request — Teams Pending Approval' : 'Team Notifications'}
+                    </h3>
                     <p className="text-sm text-blue-700 mt-1">
-                      This event was requested by <strong>{event.requested_by}</strong>. 
-                      Team members will <strong>not</strong> be notified until an admin approves the team assignments below.
+                      {event.requested_by ? (
+                        <>This event was requested by <strong>{event.requested_by}</strong>. Team members will <strong>not</strong> be notified until an admin approves the team assignments below.</>
+                      ) : (
+                        <>Click below to notify all assigned team members. After notifying, newly added teams will be emailed automatically on Save.</>
+                      )}
                     </p>
                   </>
                 )}
-                {isAdmin && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <button
-                      onClick={approveTeams}
-                      disabled={approving || !!event.teams_approved_at}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
-                        event.teams_approved_at
-                          ? 'bg-green-200 text-green-800 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      {approving
-                        ? 'Approving...'
-                        : event.teams_approved_at
-                          ? 'Approved'
-                          : 'Approve & Notify Teams'}
-                    </button>
-                    {approveError && (
-                      <span className="text-sm text-red-600">{approveError}</span>
-                    )}
-                  </div>
-                )}
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    onClick={approveTeams}
+                    disabled={approving || !!event.teams_approved_at}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                      event.teams_approved_at
+                        ? 'bg-green-200 text-green-800 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {approving
+                      ? 'Notifying...'
+                      : event.teams_approved_at
+                        ? 'Notified'
+                        : event.requested_by
+                          ? 'Approve & Notify Teams'
+                          : 'Notify Teams'}
+                  </button>
+                  {approveError && (
+                    <span className="text-sm text-red-600">{approveError}</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

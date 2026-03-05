@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
+import { verifyApiAuth, isAuthError, createAdminClient } from '@/lib/api-auth'
 
 const BUCKET = 'ops-event-attachments'
-const SIGNED_URL_EXPIRY = 3600 // 1 hour
-
-function createAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+const SIGNED_URL_EXPIRY = 3600
 
 export async function GET(
   request: Request,
