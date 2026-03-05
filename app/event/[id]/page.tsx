@@ -708,28 +708,31 @@ export default function EventDetailPage() {
     setApproveError(null)
     try {
       const headers = await getAuthHeaders()
+      const payload = {
+        needs_program_director: event.needs_program_director ?? false,
+        needs_office: event.needs_office ?? false,
+        needs_it: event.needs_it ?? false,
+        needs_security: event.needs_security ?? false,
+        needs_facilities: event.needs_facilities ?? false,
+        teams_approved_at: new Date().toISOString(),
+      }
+      console.log('[NotifyTeams] payload:', JSON.stringify(payload))
       const res = await fetch(`/api/events/${event.id}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({
-          needs_program_director: event.needs_program_director ?? false,
-          needs_office: event.needs_office ?? false,
-          needs_it: event.needs_it ?? false,
-          needs_security: event.needs_security ?? false,
-          needs_facilities: event.needs_facilities ?? false,
-          teams_approved_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify(payload),
       })
+      const result = await res.json()
+      console.log('[NotifyTeams] response:', res.status, JSON.stringify(result))
       if (!res.ok) {
-        const data = await res.json()
-        setApproveError(data.error || 'Failed to approve')
+        setApproveError(result.error || 'Failed to notify')
         setApproving(false)
         return
       }
-      const { data: updated } = await res.json()
-      setEvent(updated)
+      setEvent(result.data)
       setHasChanges(false)
-    } catch {
+    } catch (err) {
+      console.error('[NotifyTeams] error:', err)
       setApproveError('Network error')
     } finally {
       setApproving(false)
