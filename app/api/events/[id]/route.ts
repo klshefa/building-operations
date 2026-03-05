@@ -544,14 +544,22 @@ export async function PATCH(
       currentEvent.teams_approved_at == null &&
       updateData.teams_approved_at != null
 
+    const isPendingSelfService =
+      isSelfServiceEvent && currentEvent.teams_approved_at == null
+
     let teamsToEmail: TeamType[] = []
 
     if (isApprovalTransition) {
       // On approval: email ALL currently-true teams (they were set by the requester, not just toggled)
       teamsToEmail = getAssignedTeams(data)
       console.log(`[PATCH] Approval transition — emailing all current teams: ${teamsToEmail.join(',')}`)
+    } else if (isPendingSelfService) {
+      // Self-service event not yet approved: never send team emails on Save.
+      // Emails are deferred until the admin explicitly approves.
+      console.log('[PATCH] Self-service event pending approval — skipping team emails on save')
     } else {
-      // Normal edit: only email teams that transition false -> true
+      // Normal edit (admin-created event, or already-approved self-service):
+      // only email teams that transition false -> true
       for (const [field, team] of Object.entries(TEAM_FIELDS)) {
         if (updateData[field] === true && currentEvent[field] !== true) {
           teamsToEmail.push(team)

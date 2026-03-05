@@ -128,3 +128,57 @@ This is a [known issue](https://github.com/supabase/ssr/issues/107) with `@supab
 ### Why the earlier Bearer token fix didn't work
 
 The Bearer token fix was correct in concept but incomplete in execution. `getAuthHeaders()` calls `getSession()` which reads from cookies. If the cookie contains an expired access token, `getSession()` in `@supabase/ssr` v0.8 returns the expired session. The expired token is then sent as a Bearer token, which the server correctly rejects. The middleware fixes this by ensuring cookies always contain fresh tokens before any page or API route runs.
+
+---
+
+## Double-send + Approve button disappear fix (2026-02-25)
+
+### Symptoms
+
+1. **Team assignment emails sent twice**: toggling a team on Save emailed that team immediately (even pre-approval), then clicking Approve emailed all teams again — including the ones already notified.
+2. **Approve button disappeared after approval**: once `teams_approved_at` was set, the entire approval banner was replaced by a small "Approved" badge with no button, making it impossible to confirm the approval action was taken.
+
+### Root cause: double emails
+
+The PATCH handler's team email logic had two branches but no gate for unapproved self-service events:
+
+```
+if (isApprovalTransition) → email all currently-true teams
+else → email teams that transition false→true
+```
+
+The `else` branch fired on Save even when the self-service event hadn't been approved yet, sending emails to newly-toggled teams. Then Approve sent to ALL teams again (including those already notified by Save).
+
+### Root cause: disappearing button
+
+The UI used two mutually-exclusive render blocks:
+
+```
+{requested_by && !teams_approved_at && (...button...)}
+{requested_by && teams_approved_at && (...badge only...)}
+```
+
+Once approved, the first block (with the button) unmounted entirely.
+
+### Fix
+
+**Server** (`app/api/events/[id]/route.ts`): Added an `isPendingSelfService` gate. When `isSelfServiceEvent && currentEvent.teams_approved_at == null`, the `else` branch is skipped — no team emails on Save. Only the `isApprovalTransition` branch can send emails for unapproved self-service events.
+
+**UI** (`app/event/[id]/page.tsx`): Merged the two blocks into a single `{event.requested_by && (...)}` block. When pending: blue banner + active Approve button. When approved: green banner + disabled "Approved" button with timestamp.
+
+### Final email behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Self-service, not approved: Save with team changes | Teams saved, **no emails** |
+| Self-service, Approve clicked | Emails ALL currently-true teams once |
+| Self-service, already approved: add new team + Save | Emails **only** the newly-added team |
+| Admin-created event: add team + Save | Emails the newly-added team |
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `app/api/events/[id]/route.ts` | Added `isPendingSelfService` gate to skip emails on Save |
+| `app/event/[id]/page.tsx` | Unified approval banner; button stays visible + disabled after approval |
+| `docs/auth-notes.md` | This section |
