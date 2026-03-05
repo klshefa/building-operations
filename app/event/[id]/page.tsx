@@ -883,63 +883,6 @@ export default function EventDetailPage() {
           </div>
         )}
 
-        {/* Self-service approval banner — always visible for self-service events */}
-        {event.requested_by && (
-          <div className={`mb-6 p-4 rounded-xl border ${
-            event.teams_approved_at
-              ? 'bg-green-50 border-green-200'
-              : 'bg-blue-50 border-blue-200'
-          }`}>
-            <div className="flex items-start gap-3">
-              {event.teams_approved_at
-                ? <CheckIcon className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                : <BellIcon className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              }
-              <div className="flex-1">
-                {event.teams_approved_at ? (
-                  <>
-                    <h3 className="font-medium text-green-800">Self-Service Request — Teams Approved</h3>
-                    <p className="text-sm text-green-700 mt-1">
-                      Requested by <strong>{event.requested_by}</strong>.
-                      Teams approved {new Date(event.teams_approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="font-medium text-blue-800">Self-Service Request — Teams Pending Approval</h3>
-                    <p className="text-sm text-blue-700 mt-1">
-                      This event was requested by <strong>{event.requested_by}</strong>. 
-                      Team members will <strong>not</strong> be notified until an admin approves the team assignments below.
-                    </p>
-                  </>
-                )}
-                {isAdmin && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <button
-                      onClick={approveTeams}
-                      disabled={approving || !!event.teams_approved_at}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
-                        event.teams_approved_at
-                          ? 'bg-green-200 text-green-800 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      {approving
-                        ? 'Approving...'
-                        : event.teams_approved_at
-                          ? 'Approved'
-                          : 'Approve & Notify Teams'}
-                    </button>
-                    {approveError && (
-                      <span className="text-sm text-red-600">{approveError}</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content - Left Column */}
           <div className="lg:col-span-2 space-y-6">
@@ -1297,6 +1240,63 @@ export default function EventDetailPage() {
         >
           <RelatedEvents eventId={event.id} />
         </motion.div>
+
+        {/* Self-service approval banner — always visible for self-service events */}
+        {event.requested_by && (
+          <div className={`p-4 rounded-xl border ${
+            event.teams_approved_at
+              ? 'bg-green-50 border-green-200'
+              : 'bg-blue-50 border-blue-200'
+          }`}>
+            <div className="flex items-start gap-3">
+              {event.teams_approved_at
+                ? <CheckIcon className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                : <BellIcon className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              }
+              <div className="flex-1">
+                {event.teams_approved_at ? (
+                  <>
+                    <h3 className="font-medium text-green-800">Self-Service Request — Teams Approved</h3>
+                    <p className="text-sm text-green-700 mt-1">
+                      Requested by <strong>{event.requested_by}</strong>.
+                      Teams approved {new Date(event.teams_approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-medium text-blue-800">Self-Service Request — Teams Pending Approval</h3>
+                    <p className="text-sm text-blue-700 mt-1">
+                      This event was requested by <strong>{event.requested_by}</strong>. 
+                      Team members will <strong>not</strong> be notified until an admin approves the team assignments below.
+                    </p>
+                  </>
+                )}
+                {isAdmin && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      onClick={approveTeams}
+                      disabled={approving || !!event.teams_approved_at}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${
+                        event.teams_approved_at
+                          ? 'bg-green-200 text-green-800 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {approving
+                        ? 'Approving...'
+                        : event.teams_approved_at
+                          ? 'Approved'
+                          : 'Approve & Notify Teams'}
+                    </button>
+                    {approveError && (
+                      <span className="text-sm text-red-600">{approveError}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Team Assignments - Tabbed Interface */}
         <motion.div 
