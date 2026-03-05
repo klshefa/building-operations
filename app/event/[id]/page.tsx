@@ -467,10 +467,21 @@ export default function EventDetailPage() {
 
   async function getAuthHeaders(): Promise<Record<string, string>> {
     const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+
+    // Try getSession first (auto-refreshes if token is near expiry)
+    let { data: { session } } = await supabase.auth.getSession()
+
+    // If no session from cookies, force a refresh in case tokens are stale
+    if (!session) {
+      const refreshResult = await supabase.auth.refreshSession()
+      session = refreshResult.data.session
+    }
+
     if (session?.access_token) {
       headers['Authorization'] = `Bearer ${session.access_token}`
+    } else {
+      console.warn('[getAuthHeaders] No session available - PATCH will fail with 401')
     }
     return headers
   }

@@ -39,22 +39,33 @@ async function resolveUser(request?: Request) {
   // 1. Try Bearer token from request headers
   if (request) {
     const authHeader = request.headers.get('authorization') || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
+    const hasBearer = authHeader.startsWith('Bearer ')
 
-    if (token) {
+    if (hasBearer) {
+      const token = authHeader.slice(7).trim()
       const adminClient = createAdminClient()
       const { data: { user }, error } = await adminClient.auth.getUser(token)
-      if (!error && user?.email) return { user, source: 'bearer' as const }
+      if (!error && user?.email) {
+        console.log('[resolveUser] Authenticated via Bearer token:', user.email)
+        return { user, source: 'bearer' as const }
+      }
+      console.warn('[resolveUser] Bearer token present but validation failed:', error?.message)
+    } else {
+      console.log('[resolveUser] No Authorization header in request')
     }
   }
 
-  // 2. Fallback: cookie-based session (works when middleware refreshes cookies)
+  // 2. Fallback: cookie-based session (requires middleware for token refresh)
   try {
     const supabase = await createServerClient()
     const { data: { user }, error } = await supabase.auth.getUser()
-    if (!error && user?.email) return { user, source: 'cookie' as const }
-  } catch {
-    // cookies() can throw in certain contexts; fall through
+    if (!error && user?.email) {
+      console.log('[resolveUser] Authenticated via cookie session:', user.email)
+      return { user, source: 'cookie' as const }
+    }
+    console.warn('[resolveUser] Cookie session failed:', error?.message)
+  } catch (e: unknown) {
+    console.warn('[resolveUser] Cookie path threw:', e instanceof Error ? e.message : e)
   }
 
   return null
