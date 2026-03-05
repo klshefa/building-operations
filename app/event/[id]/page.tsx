@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
 import { motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
-import type { OpsEvent, EventSource, EventType } from '@/lib/types'
+import type { OpsEvent, EventSource, EventType, EventAttachment } from '@/lib/types'
 import {
   ArrowLeftIcon,
   MapPinIcon,
@@ -24,6 +24,10 @@ import {
   DocumentTextIcon,
   BellIcon,
   BellSlashIcon,
+  PaperClipIcon,
+  TrashIcon,
+  ArrowUpTrayIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { AvailabilityCheck } from '@/components/AvailabilityCheck'
 import { RelatedEvents } from '@/components/RelatedEvents'
@@ -203,9 +207,20 @@ export default function EventDetailPage() {
   const [approving, setApproving] = useState(false)
   const [approveError, setApproveError] = useState<string | null>(null)
 
+  // Attachments
+  const [attachments, setAttachments] = useState<EventAttachment[]>([])
+  const [attachFile, setAttachFile] = useState<File | null>(null)
+  const [attachDesc, setAttachDesc] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [replacingId, setReplacingId] = useState<string | null>(null)
+  const [replaceFile, setReplaceFile] = useState<File | null>(null)
+
   useEffect(() => {
     fetchEvent()
     fetchResources()
+    fetchAttachments()
   }, [params.id])
 
   // Check admin status
@@ -710,6 +725,117 @@ export default function EventDetailPage() {
       setApproveError('Network error')
     } finally {
       setApproving(false)
+    }
+  }
+
+  async function fetchAttachments() {
+    if (!params.id) return
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/events/${params.id}/attachments`, { headers })
+      if (res.ok) {
+        const { data } = await res.json()
+        setAttachments(data || [])
+      }
+    } catch {
+      console.error('[Attachments] fetch error')
+    }
+  }
+
+  async function uploadAttachment() {
+    if (!attachFile || !params.id) return
+    setUploading(true)
+    setAttachError(null)
+    try {
+      const headers = await getAuthHeaders()
+      delete headers['Content-Type']
+      const fd = new FormData()
+      fd.append('file', attachFile)
+      fd.append('description', attachDesc)
+      const res = await fetch(`/api/events/${params.id}/attachments`, {
+        method: 'POST',
+        headers,
+        body: fd,
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        setAttachError(result.error || 'Upload failed')
+      } else {
+        setAttachFile(null)
+        setAttachDesc('')
+        await fetchAttachments()
+      }
+    } catch {
+      setAttachError('Network error')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function deleteAttachment(attachmentId: string) {
+    if (!confirm('Delete this attachment? This cannot be undone.')) return
+    setDeletingId(attachmentId)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/events/${params.id}/attachments/${attachmentId}`, {
+        method: 'DELETE',
+        headers,
+      })
+      if (!res.ok) {
+        const result = await res.json()
+        setAttachError(result.error || 'Delete failed')
+      } else {
+        await fetchAttachments()
+      }
+    } catch {
+      setAttachError('Network error')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  async function replaceAttachment(attachmentId: string) {
+    if (!replaceFile) return
+    setReplacingId(attachmentId)
+    setAttachError(null)
+    try {
+      const headers = await getAuthHeaders()
+      delete headers['Content-Type']
+      const fd = new FormData()
+      fd.append('file', replaceFile)
+      const res = await fetch(`/api/events/${params.id}/attachments/${attachmentId}`, {
+        method: 'PATCH',
+        headers,
+        body: fd,
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        setAttachError(result.error || 'Replace failed')
+      } else {
+        setReplaceFile(null)
+        setReplacingId(null)
+        await fetchAttachments()
+      }
+    } catch {
+      setAttachError('Network error')
+    } finally {
+      setReplacingId(null)
+    }
+  }
+
+  async function viewAttachment(attachmentId: string) {
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/events/${params.id}/attachments/${attachmentId}/signed-url`, { headers })
+      if (res.ok) {
+        const { url } = await res.json()
+        window.open(url, '_blank')
+      } else {
+        const result = await res.json()
+        setAttachError(result.error || 'Failed to get download URL')
+      }
+    } catch {
+      setAttachError('Network error')
     }
   }
 
@@ -1564,13 +1690,134 @@ export default function EventDetailPage() {
           </div>
 
           {/* Sidebar - Right Column */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-6">
             <div className="sticky top-24">
               <ResourceScheduleSidebar
                 resourceId={selectedResourceId}
                 resourceName={cleanLocation(event.location)}
                 date={event.start_date}
               />
+            </div>
+
+            {/* Attachments */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-3">
+                <PaperClipIcon className="w-4 h-4" />
+                Attachments
+              </h3>
+
+              {attachError && (
+                <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {attachError}
+                  <button onClick={() => setAttachError(null)} className="ml-2 underline text-xs">dismiss</button>
+                </div>
+              )}
+
+              {attachments.length === 0 && (
+                <p className="text-sm text-slate-400 mb-3">No attachments yet.</p>
+              )}
+
+              {attachments.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {attachments.map(att => (
+                    <div key={att.id} className="border border-slate-100 rounded-lg p-3 text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          onClick={() => viewAttachment(att.id)}
+                          className="text-shefa-blue-600 hover:underline font-medium text-left break-all"
+                        >
+                          {att.file_name}
+                        </button>
+                        {isAdmin && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <label className="cursor-pointer p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700" title="Replace file">
+                              <ArrowPathIcon className="w-4 h-4" />
+                              <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0]
+                                  if (f) {
+                                    setReplaceFile(f)
+                                    setReplacingId(att.id)
+                                  }
+                                }}
+                              />
+                            </label>
+                            <button
+                              onClick={() => deleteAttachment(att.id)}
+                              disabled={deletingId === att.id}
+                              className="p-1 rounded hover:bg-red-50 text-slate-500 hover:text-red-600 disabled:opacity-50"
+                              title="Delete"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {att.description && (
+                        <p className="text-slate-500 mt-1">{att.description}</p>
+                      )}
+                      <p className="text-xs text-slate-400 mt-1">
+                        {att.uploaded_by?.split('@')[0]} · {new Date(att.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {att.size_bytes ? ` · ${(att.size_bytes / 1024).toFixed(0)} KB` : ''}
+                      </p>
+
+                      {/* Inline replace confirmation */}
+                      {replacingId === att.id && replaceFile && (
+                        <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
+                          <p className="text-amber-700 mb-1">Replace with: <strong>{replaceFile.name}</strong></p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => replaceAttachment(att.id)}
+                              className="px-2 py-1 bg-amber-600 text-white rounded font-medium hover:bg-amber-700"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => { setReplacingId(null); setReplaceFile(null) }}
+                              className="px-2 py-1 bg-white border border-slate-200 rounded text-slate-600 hover:bg-slate-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload form (admin only) */}
+              {isAdmin && (
+                <div className="border-t border-slate-100 pt-3">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Upload file</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setAttachFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-shefa-blue-50 file:text-shefa-blue-700 hover:file:bg-shefa-blue-100"
+                  />
+                  {attachFile && (
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={attachDesc}
+                        onChange={(e) => setAttachDesc(e.target.value)}
+                        placeholder="Description (optional)"
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:border-shefa-blue-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={uploadAttachment}
+                        disabled={uploading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-shefa-blue-600 text-white rounded-lg text-sm font-medium hover:bg-shefa-blue-700 disabled:opacity-50"
+                      >
+                        <ArrowUpTrayIcon className="w-4 h-4" />
+                        {uploading ? 'Uploading...' : 'Upload'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

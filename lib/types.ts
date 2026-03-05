@@ -163,6 +163,20 @@ export interface CalendarSyncMeta {
   last_error?: string
 }
 
+// Event attachment
+export interface EventAttachment {
+  id: string
+  event_id: string
+  storage_path: string
+  file_name: string
+  content_type?: string
+  size_bytes?: number
+  description?: string
+  uploaded_by?: string
+  created_at: string
+  updated_at: string
+}
+
 // Audit log entry
 export type AuditEntityType = 
   | 'ops_events'
