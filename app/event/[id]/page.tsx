@@ -197,10 +197,33 @@ export default function EventDetailPage() {
   const [maintMatchType, setMaintMatchType] = useState<string | null>(null)
   const [maintError, setMaintError] = useState<string | null>(null)
 
+  // Admin approval workflow
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [approving, setApproving] = useState(false)
+  const [approveError, setApproveError] = useState<string | null>(null)
+
   useEffect(() => {
     fetchEvent()
     fetchResources()
   }, [params.id])
+
+  // Check admin status
+  useEffect(() => {
+    async function checkAdmin() {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user?.email) {
+        try {
+          const res = await fetch(`/api/auth/check-access?email=${encodeURIComponent(session.user.email.toLowerCase())}`)
+          const data = await res.json()
+          setIsAdmin(data.role === 'admin')
+        } catch {
+          setIsAdmin(false)
+        }
+      }
+    }
+    checkAdmin()
+  }, [])
 
   // Resolve resource ID from location when event or resources change
   useEffect(() => {
@@ -639,6 +662,31 @@ export default function EventDetailPage() {
     }
   }
 
+  async function approveTeams() {
+    if (!event || approving) return
+    setApproving(true)
+    setApproveError(null)
+    try {
+      const res = await fetch(`/api/events/${event.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teams_approved_at: new Date().toISOString() }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setApproveError(data.error || 'Failed to approve')
+        setApproving(false)
+        return
+      }
+      const { data: updated } = await res.json()
+      setEvent(updated)
+    } catch {
+      setApproveError('Network error')
+    } finally {
+      setApproving(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -805,6 +853,47 @@ export default function EventDetailPage() {
                   To manage this event, run a data sync from Admin → Data Sync → Resources to import it.
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Self-service approval banner */}
+        {event.requested_by && !event.teams_approved_at && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <BellIcon className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-medium text-blue-800">Self-Service Request — Teams Pending Approval</h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  This event was requested by <strong>{event.requested_by}</strong>. 
+                  Team members will <strong>not</strong> be notified until an admin approves the team assignments below.
+                </p>
+                {isAdmin && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      onClick={approveTeams}
+                      disabled={approving}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      {approving ? 'Approving...' : 'Approve & Notify Teams'}
+                    </button>
+                    {approveError && (
+                      <span className="text-sm text-red-600">{approveError}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {event.requested_by && event.teams_approved_at && (
+          <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-center gap-2">
+              <CheckIcon className="w-4 h-4 text-green-600" />
+              <span className="text-sm text-green-700 font-medium">
+                Teams approved {new Date(event.teams_approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+              </span>
             </div>
           </div>
         )}

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { TeamType, OpsEvent } from '@/lib/types'
-import { buildTeamAssignmentEmail, buildEventUpdateEmail, getTeamDisplayName } from '@/lib/notifications'
+import { sendEmail, buildEventUpdateEmail, sendTeamAssignmentEmails, getAssignedTeams } from '@/lib/notifications'
 import { logAudit, getChangedFields, extractEventAuditFields } from '@/lib/audit'
 import { parseVcResourceField } from '@/lib/utils/resourceResolver'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 
@@ -96,36 +97,6 @@ function formatTimeDisplay(timeStr: string | null | undefined): string {
   return mins === 0 ? `${hour}:00 ${ampm}` : `${hour}:${String(mins).padStart(2, '0')} ${ampm}`
 }
 
-async function sendEmail(to: string[], subject: string, html: string) {
-  if (!RESEND_API_KEY) {
-    console.error('RESEND_API_KEY not configured')
-    return false
-  }
-  
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: 'Building Operations <ops@shefaschool.org>',
-      to,
-      subject,
-      html
-    })
-  })
-  
-  if (!response.ok) {
-    const error = await response.text()
-    console.error('Email send failed:', error)
-    return false
-  }
-  
-  console.log('Email sent to:', to.join(', '))
-  return true
-}
-
 // Team field mapping
 const TEAM_FIELDS: Record<string, TeamType> = {
   needs_program_director: 'program_director',
@@ -168,7 +139,8 @@ const ALLOWED_UPDATE_FIELDS = new Set([
   'program_director_notes', 'office_notes', 'it_notes', 'security_notes', 'facilities_notes',
   'setup_instructions', 'security_personnel_needed', 'building_open', 'elevator_notes',
   'techs_needed', 'av_equipment', 'tech_notes',
-  'general_notes', 'is_hidden', 'has_conflict', 'conflict_ok', 'conflict_notes'
+  'general_notes', 'is_hidden', 'has_conflict', 'conflict_ok', 'conflict_notes',
+  'teams_approved_at'
 ])
 
 export async function GET(
@@ -474,8 +446,14 @@ export async function PATCH(
   const { id } = await params
   
   try {
+    // Baseline auth: every PATCH must come from an authenticated ops user
+    const auth = await verifyApiAuth()
+    if (isAuthError(auth)) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
     const body = await request.json()
-    console.log('PATCH request for event:', id)
+    console.log('PATCH request for event:', id, 'by:', auth.user.email)
     console.log('Body keys:', Object.keys(body))
     
     const supabase = createAdminClient()
@@ -491,6 +469,20 @@ export async function PATCH(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     }
 
+    const isSelfServiceEvent = currentEvent.requested_by != null
+
+    // Admin gate: only admins may set teams_approved_at or modify needs_* on self-service events
+    const touchesApproval = 'teams_approved_at' in body
+    const touchesTeamFlags = Object.keys(TEAM_FIELDS).some(f => f in body)
+    if (touchesApproval || (isSelfServiceEvent && touchesTeamFlags)) {
+      if (!auth.isAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden — only admins can approve teams or modify team assignments on self-service events' },
+          { status: 403 }
+        )
+      }
+    }
+
     // Remove fields that shouldn't be updated directly and filter to allowed fields only
     const { id: _, created_at, source_events, primary_source, sources, ...rawUpdateData } = body
 
@@ -502,11 +494,11 @@ export async function PATCH(
       }
     }
 
-    // Add updated timestamp
+    // Add updated metadata
     updateData.updated_at = new Date().toISOString()
+    updateData.updated_by = auth.user.email
     
     console.log('Filtered update data keys:', Object.keys(updateData))
-    console.log('Update data:', JSON.stringify(updateData, null, 2))
 
     const { data, error } = await supabase
       .from('ops_events')
@@ -530,7 +522,7 @@ export async function PATCH(
         entityType: 'ops_events',
         entityId: id,
         action: 'UPDATE',
-        userEmail: body.updated_by,
+        userEmail: auth.user.email,
         changedFields: auditChangedFields,
         oldValues: oldAuditValues,
         newValues: newAuditValues,
@@ -539,30 +531,33 @@ export async function PATCH(
       })
     }
 
-    // Check for newly assigned teams and send notifications
-    const newlyAssignedTeams: TeamType[] = []
-    for (const [field, team] of Object.entries(TEAM_FIELDS)) {
-      if (updateData[field] === true && currentEvent[field] !== true) {
-        newlyAssignedTeams.push(team)
+    // --- Team assignment email logic ---
+    const isApprovalTransition =
+      touchesApproval &&
+      currentEvent.teams_approved_at == null &&
+      updateData.teams_approved_at != null
+
+    let teamsToEmail: TeamType[] = []
+
+    if (isApprovalTransition) {
+      // On approval: email ALL currently-true teams (they were set by the requester, not just toggled)
+      teamsToEmail = getAssignedTeams(data)
+      console.log(`[PATCH] Approval transition — emailing all current teams: ${teamsToEmail.join(',')}`)
+    } else {
+      // Normal edit: only email teams that transition false -> true
+      for (const [field, team] of Object.entries(TEAM_FIELDS)) {
+        if (updateData[field] === true && currentEvent[field] !== true) {
+          teamsToEmail.push(team)
+        }
       }
     }
 
-    // Send team assignment notifications directly
-    for (const team of newlyAssignedTeams) {
-      const { data: teamMembers } = await supabase
-        .from('ops_users')
-        .select('email, name')
-        .contains('teams', [team])
-        .eq('is_active', true)
-      
-      if (teamMembers && teamMembers.length > 0) {
-        const html = buildTeamAssignmentEmail(data as OpsEvent, team)
-        const teamName = getTeamDisplayName(team)
-        await sendEmail(
-          teamMembers.map(m => m.email),
-          `[Ops] ${teamName} Team Assigned: ${data.title}`,
-          html
-        )
+    if (teamsToEmail.length > 0 && RESEND_API_KEY) {
+      try {
+        const trigger = isApprovalTransition ? 'approve' as const : 'edit' as const
+        await sendTeamAssignmentEmails(supabase, data as OpsEvent, teamsToEmail, trigger)
+      } catch (emailErr) {
+        console.error('[PATCH] Team assignment email error:', emailErr)
       }
     }
 
@@ -580,7 +575,6 @@ export async function PATCH(
       }
     }
 
-    // Also check team assignments for subscriber notifications
     for (const [field, team] of Object.entries(TEAM_FIELDS)) {
       if (field in updateData && updateData[field] !== currentEvent[field]) {
         const teamName = team.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
@@ -588,8 +582,8 @@ export async function PATCH(
       }
     }
 
-    // Send update notifications to subscribers directly
-    if (changes.length > 0) {
+    // Send update notifications to subscribers
+    if (changes.length > 0 && RESEND_API_KEY) {
       const { data: subscribers } = await supabase
         .from('event_subscriptions')
         .select('user_email, user_name')
@@ -599,11 +593,11 @@ export async function PATCH(
         console.log('Sending update notifications to:', subscribers.map(s => s.user_email))
         for (const sub of subscribers) {
           const html = buildEventUpdateEmail(data as OpsEvent, changes, sub.user_name || undefined)
-          await sendEmail(
-            [sub.user_email],
-            `[Ops] Event Updated: ${data.title}`,
-            html
-          )
+          await sendEmail({
+            to: [{ email: sub.user_email, name: sub.user_name || undefined }],
+            subject: `[Ops] Event Updated: ${data.title}`,
+            html,
+          })
         }
       }
     }
@@ -613,7 +607,7 @@ export async function PATCH(
       message: 'Event updated successfully',
       data,
       notifications: {
-        teamsNotified: newlyAssignedTeams,
+        teamsNotified: teamsToEmail,
         changesDetected: changes
       }
     })

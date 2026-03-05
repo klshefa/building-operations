@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit, extractEventAuditFields, getChangedFields } from '@/lib/audit'
-import { sendEmail, buildNewEventEmail } from '@/lib/notifications'
+import { sendEmail, buildNewEventEmail, sendTeamAssignmentEmails, getAssignedTeams } from '@/lib/notifications'
 import { Resend } from 'resend'
+import type { OpsEvent } from '@/lib/types'
 
 function createAdminClient() {
   return createClient(
@@ -244,6 +245,25 @@ export async function POST(request: Request) {
         apiRoute: '/api/events/manual',
         httpMethod: 'POST',
       })
+    }
+
+    // Diagnostic logging (Phase 0)
+    console.log(`[ManualEvent] path=${createdNew ? 'create' : 'update-existing'} isSelfService=${isSelfService} hasResendKey=${!!process.env.RESEND_API_KEY}`)
+    console.log(`[ManualEvent] teams: PD=${data.needs_program_director} Office=${data.needs_office} IT=${data.needs_it} Security=${data.needs_security} Facilities=${data.needs_facilities}`)
+
+    // Send team assignment emails for admin-created events (not self-service).
+    // Self-service events defer team emails until admin approval (Phase 2).
+    if (!isSelfService && process.env.RESEND_API_KEY) {
+      const supabaseForEmail = createAdminClient()
+      const assignedTeams = getAssignedTeams(data)
+      if (assignedTeams.length > 0) {
+        try {
+          const result = await sendTeamAssignmentEmails(supabaseForEmail, data as OpsEvent, assignedTeams, 'create')
+          console.log(`[ManualEvent] Team emails sent: ${result.teamsNotified.join(',')} (${result.recipientCount} recipients)`)
+        } catch (err) {
+          console.error('[ManualEvent] Failed to send team assignment emails:', err)
+        }
+      }
     }
 
     // Send new-event notification to users with notify_on_new_event enabled

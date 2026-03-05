@@ -101,6 +101,7 @@ export interface OpsEvent {
   // Self-service request tracking
   requested_by?: string  // Email of requester
   requested_at?: string  // When requested
+  teams_approved_at?: string  // When admin approved team assignments
   veracross_reservation_id?: string  // Reservation ID from Veracross API
   
   // Source tracking

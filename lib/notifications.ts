@@ -1,7 +1,86 @@
 import { OpsEvent, TeamType } from './types'
+import { logAudit } from './audit'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ops.shefaschool.org'
+
+const TEAM_FIELD_MAP: Record<string, TeamType> = {
+  needs_program_director: 'program_director',
+  needs_office: 'office',
+  needs_it: 'it',
+  needs_security: 'security',
+  needs_facilities: 'facilities',
+}
+
+export function getAssignedTeams(event: Record<string, unknown>): TeamType[] {
+  const teams: TeamType[] = []
+  for (const [field, team] of Object.entries(TEAM_FIELD_MAP)) {
+    if (event[field] === true) teams.push(team)
+  }
+  return teams
+}
+
+export async function sendTeamAssignmentEmails(
+  supabase: SupabaseClient,
+  event: OpsEvent,
+  teams: TeamType[],
+  trigger: 'create' | 'approve' | 'edit'
+): Promise<{ teamsNotified: TeamType[]; recipientCount: number }> {
+  if (teams.length === 0) return { teamsNotified: [], recipientCount: 0 }
+
+  const teamsNotified: TeamType[] = []
+  let recipientCount = 0
+
+  for (const team of teams) {
+    const { data: members } = await supabase
+      .from('ops_users')
+      .select('email, name')
+      .contains('teams', [team])
+      .eq('is_active', true)
+      .eq('notify_on_team_assignment', true)
+
+    if (!members || members.length === 0) {
+      console.log(`[TeamEmail] No eligible recipients for team ${team}`)
+      continue
+    }
+
+    const html = buildTeamAssignmentEmail(event, team)
+    const teamName = getTeamDisplayName(team)
+    const result = await sendEmail({
+      to: members.map(m => ({ email: m.email, name: m.name })),
+      subject: `[Ops] ${teamName} Team Assigned: ${event.title}`,
+      html,
+    })
+
+    if (result.success) {
+      teamsNotified.push(team)
+      recipientCount += members.length
+    } else {
+      console.error(`[TeamEmail] Failed for team ${team}:`, result.error)
+    }
+  }
+
+  console.log(`[TeamEmail] trigger=${trigger} teams=${teamsNotified.join(',')} recipients=${recipientCount}`)
+
+  if (teamsNotified.length > 0) {
+    await logAudit({
+      entityType: 'ops_events',
+      entityId: event.id,
+      action: 'UPDATE',
+      apiRoute: trigger === 'create' ? '/api/events/manual' : '/api/events/[id]',
+      httpMethod: trigger === 'create' ? 'POST' : 'PATCH',
+      metadata: {
+        notification: 'team_assignment',
+        trigger,
+        teams_notified: teamsNotified,
+        recipient_count: recipientCount,
+      },
+    })
+  }
+
+  return { teamsNotified, recipientCount }
+}
 
 export interface NotificationRecipient {
   email: string
