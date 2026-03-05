@@ -27,6 +27,21 @@ export async function GET(request: Request) {
       .single()
 
     if (error || !data) {
+      // Fallback: check super_admins (matches verifyApiAuth behavior)
+      const { data: superAdmin } = await supabase
+        .from('super_admins')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .maybeSingle()
+
+      if (superAdmin) {
+        return NextResponse.json({
+          hasAccess: true,
+          role: 'admin',
+          teams: [],
+        })
+      }
+
       return NextResponse.json({ 
         hasAccess: false, 
         role: null, 

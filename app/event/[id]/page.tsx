@@ -176,6 +176,7 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
   const [activeTeamTab, setActiveTeamTab] = useState<string | null>(null)
   const [subscribed, setSubscribed] = useState(false)
@@ -479,6 +480,7 @@ export default function EventDetailPage() {
     
     setSaving(true)
     setSaveStatus('idle')
+    setSaveError(null)
     
     try {
       const headers = await getAuthHeaders()
@@ -492,6 +494,7 @@ export default function EventDetailPage() {
       
       if (result.error) {
         setSaveStatus('error')
+        setSaveError(result.error)
         console.error('Error saving:', result.error)
       } else {
         setSaveStatus('success')
@@ -750,7 +753,7 @@ export default function EventDetailPage() {
                 </span>
               )}
               {saveStatus === 'error' && (
-                <span className="text-sm text-red-600">Save failed</span>
+                <span className="text-sm text-red-600">{saveError || 'Save failed'}</span>
               )}
               
               {/* Subscribe button */}

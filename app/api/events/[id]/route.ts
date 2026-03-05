@@ -471,13 +471,20 @@ export async function PATCH(
 
     const isSelfServiceEvent = currentEvent.requested_by != null
 
-    // Admin gate: only admins may set teams_approved_at or modify needs_* on self-service events
-    const touchesApproval = 'teams_approved_at' in body
-    const touchesTeamFlags = Object.keys(TEAM_FIELDS).some(f => f in body)
+    // Admin gate: only admins may CHANGE teams_approved_at or modify needs_*
+    // on self-service events.  We compare against the current DB row so that
+    // a regular save (which sends the full event object with unchanged fields)
+    // does not accidentally trigger the gate.
+    const touchesApproval =
+      'teams_approved_at' in body &&
+      body.teams_approved_at !== (currentEvent.teams_approved_at ?? null)
+    const touchesTeamFlags = Object.keys(TEAM_FIELDS).some(
+      f => f in body && Boolean(body[f]) !== Boolean(currentEvent[f])
+    )
     if (touchesApproval || (isSelfServiceEvent && touchesTeamFlags)) {
       if (!auth.isAdmin) {
         return NextResponse.json(
-          { error: 'Forbidden — only admins can approve teams or modify team assignments on self-service events' },
+          { error: 'Forbidden - only admins can approve teams or modify team assignments on self-service events' },
           { status: 403 }
         )
       }
