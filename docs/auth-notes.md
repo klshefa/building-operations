@@ -235,3 +235,30 @@ Non-admin users do not see the panel at all (server enforces 403 if attempted).
 | `app/api/events/[id]/route.ts` | Auto-sets `teams_approved_at` after sending team emails on non-self-service events |
 | `app/api/events/manual/route.ts` | Auto-sets `teams_approved_at` after sending team emails on create |
 | `docs/auth-notes.md` | This section |
+
+---
+
+## Notify Teams is atomic save+notify (2026-02-25)
+
+### What changed
+
+"Notify Teams" (and "Approve & Notify Teams" for self-service) now sends the current team flags (`needs_*`) alongside `teams_approved_at` in a single PATCH. Previously it only sent `teams_approved_at`, meaning any unsaved team toggles were lost — the admin had to click Save first, then Notify separately.
+
+### How it works now
+
+| Button | Payload | Result |
+|--------|---------|--------|
+| **Notify Teams** / **Approve & Notify Teams** | `{ needs_program_director, needs_office, needs_it, needs_security, needs_facilities, teams_approved_at }` | Persists team flags + sets notification timestamp + emails all currently-true teams in one request |
+| **Save Changes** | Full event object | Persists all edits; if a team transitions false→true on an already-notified event, that team is emailed |
+
+### Rule
+
+- **Notify Teams** is an atomic save+notify. No separate Save required.
+- **Save Changes** is for non-notify edits (or adding new teams after initial notification).
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `app/event/[id]/page.tsx` | `approveTeams()` now includes all `needs_*` fields in PATCH payload; clears `hasChanges` on success |
+| `docs/auth-notes.md` | This section |

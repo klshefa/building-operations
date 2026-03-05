@@ -711,7 +711,14 @@ export default function EventDetailPage() {
       const res = await fetch(`/api/events/${event.id}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ teams_approved_at: new Date().toISOString() }),
+        body: JSON.stringify({
+          needs_program_director: event.needs_program_director ?? false,
+          needs_office: event.needs_office ?? false,
+          needs_it: event.needs_it ?? false,
+          needs_security: event.needs_security ?? false,
+          needs_facilities: event.needs_facilities ?? false,
+          teams_approved_at: new Date().toISOString(),
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -721,6 +728,7 @@ export default function EventDetailPage() {
       }
       const { data: updated } = await res.json()
       setEvent(updated)
+      setHasChanges(false)
     } catch {
       setApproveError('Network error')
     } finally {
