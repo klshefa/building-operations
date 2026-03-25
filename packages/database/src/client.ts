@@ -44,7 +44,7 @@ export function createClient() {
             ...options,
             domain: cookieDomain,
             secure: true,
-            sameSite: 'lax' as const,
+            sameSite: 'none' as const,
             path: '/',
           }
 

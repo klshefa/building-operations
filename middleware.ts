@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest) {
             ...(options as Record<string, unknown>),
             domain: cookieDomain,
             secure: true,
-            sameSite: 'lax',
+            sameSite: 'none',
             path: '/',
           })
         })
