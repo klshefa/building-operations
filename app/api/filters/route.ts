@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit, getChangedFields, extractFilterAuditFields } from '@/lib/audit'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 // Use service role to bypass RLS
 function createAdminClient() {
@@ -25,7 +26,12 @@ async function ensureTableExists(supabase: ReturnType<typeof createAdminClient>)
 }
 
 // GET - List all filters
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await verifyApiAuth(request)
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const supabase = createAdminClient()
   
   const tableExists = await ensureTableExists(supabase)
@@ -53,6 +59,11 @@ export async function GET() {
 
 // POST - Create a new filter
 export async function POST(request: Request) {
+  const auth = await verifyApiAuth(request)
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const supabase = createAdminClient()
   
   try {
@@ -99,6 +110,11 @@ export async function POST(request: Request) {
 
 // PUT - Update a filter
 export async function PUT(request: Request) {
+  const auth = await verifyApiAuth(request)
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const supabase = createAdminClient()
   
   try {
@@ -157,6 +173,11 @@ export async function PUT(request: Request) {
 
 // DELETE - Remove a filter
 export async function DELETE(request: Request) {
+  const auth = await verifyApiAuth(request)
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const supabase = createAdminClient()
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')

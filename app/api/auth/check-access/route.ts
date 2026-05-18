@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 function createAdminClient() {
   return createClient(
@@ -9,6 +10,11 @@ function createAdminClient() {
 }
 
 export async function GET(request: Request) {
+  const auth = await verifyApiAuth(request)
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const { searchParams } = new URL(request.url)
   const email = searchParams.get('email')
 

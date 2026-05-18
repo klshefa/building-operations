@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 function createAdminClient() {
   return createClient(
@@ -11,6 +12,11 @@ function createAdminClient() {
 // GET - Fetch audit logs with filtering and pagination
 export async function GET(request: Request) {
   try {
+    const auth = await verifyApiAuth(request)
+    if (isAuthError(auth)) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
     const { searchParams } = new URL(request.url)
     
     // Pagination

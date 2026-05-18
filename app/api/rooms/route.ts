@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 // Veracross API config
 const VERACROSS_API_BASE = 'https://api.veracross.com/shefa/v3'
@@ -71,6 +72,11 @@ function patternIncludesDay(pattern: string, dayOfWeek: number): boolean {
 // GET - Fetch rooms with their events for a date range
 export async function GET(request: Request) {
   try {
+    const auth = await verifyApiAuth(request)
+    if (isAuthError(auth)) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')

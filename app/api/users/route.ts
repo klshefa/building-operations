@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit, getChangedFields, extractUserAuditFields } from '@/lib/audit'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 function createAdminClient() {
   return createClient(
@@ -10,8 +11,13 @@ function createAdminClient() {
 }
 
 // GET all users
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await verifyApiAuth(request)
+    if (isAuthError(auth)) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
     const supabase = createAdminClient()
     
     const { data, error } = await supabase
@@ -32,6 +38,11 @@ export async function GET() {
 // POST - add new user
 export async function POST(request: Request) {
   try {
+    const auth = await verifyApiAuth(request)
+    if (isAuthError(auth)) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
     const body = await request.json()
     const { email, name, role, teams, performed_by } = body
 
@@ -80,6 +91,11 @@ export async function POST(request: Request) {
 // PATCH - update user
 export async function PATCH(request: Request) {
   try {
+    const auth = await verifyApiAuth(request)
+    if (isAuthError(auth)) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
     const body = await request.json()
     const { id, performed_by, ...updates } = body
 
@@ -137,6 +153,11 @@ export async function PATCH(request: Request) {
 // DELETE - remove user
 export async function DELETE(request: Request) {
   try {
+    const auth = await verifyApiAuth(request)
+    if (isAuthError(auth)) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const performed_by = searchParams.get('performed_by')

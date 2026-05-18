@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseISO, isSameDay, format } from 'date-fns'
+import { verifyApiAuth, isAuthError } from '@/lib/api-auth'
 
 function getSupabaseClient() {
   return createClient(
@@ -94,6 +95,11 @@ function determineEventType(rawEvent: any): string {
 }
 
 export async function POST(request: Request) {
+  const auth = await verifyApiAuth(request)
+  if (isAuthError(auth)) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
+  }
+
   const startTime = Date.now()
   const supabase = getSupabaseClient()
   const today = format(new Date(), 'yyyy-MM-dd')
