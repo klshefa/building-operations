@@ -1,0 +1,21 @@
+-- ============================================================
+-- STATUS: SUPERSEDED — DO NOT APPLY
+-- Decision date: 2026-05-18
+-- Reviewed by: Platform Engineering
+-- 
+-- This migration was written to disable RLS on ops_users.
+-- The live production database has RLS ENABLED on ops_users
+-- with email-scoped policies that are working correctly.
+-- The Building Operations portal operates correctly with 
+-- RLS ON. Applying this migration would remove that 
+-- protection and is not authorized.
+--
+-- Live state as of 2026-05-18:
+--   ops_users RLS: ENABLED
+--   Policies:
+--     - "Users can read own record" (SELECT, public) — email = auth.jwt() ->> 'email'
+--     - "Admins can manage all" (ALL, public) — ops_users admin role + matching email
+-- ============================================================
+
+-- Disable RLS on ops_users to match enrollment_admins pattern
+ALTER TABLE ops_users DISABLE ROW LEVEL SECURITY;
